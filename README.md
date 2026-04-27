@@ -64,6 +64,16 @@ This project is built with:
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
+## Vercel deployment
+
+This project is Vercel-ready as a Vite single-page app.
+
+1. Import the GitHub repository into Vercel.
+2. Keep the build command as `npm run build` and the output directory as `dist`.
+3. Add the Firebase values from `.env.example` as Vercel Environment Variables using the same `VITE_` names.
+4. Do not commit a real `.env` file. Keep secrets in Vercel or in your local untracked `.env` only.
+5. The `vercel.json` rewrite keeps client-side routing working on refresh and direct links.
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!
