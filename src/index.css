@@ -1,0 +1,366 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Manrope:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 1. Foundation & Surfaces */
+    --app-background: #F8FAFC;
+    --bg-mesh-warm: #FFF0E5;
+    --surface-glass: rgba(255, 255, 255, 0.65);
+    --elevated-glass: rgba(255, 255, 255, 0.85);
+
+    /* 2. Brand Accents */
+    --brand-primary: #F37021;
+    --brand-glow: #FF8A47;
+    --brand-secondary: #007EA7;
+    --tangerine-glow: rgba(243, 112, 33, 0.60);
+    --cerulean-glow: rgba(0, 126, 167, 0.60);
+
+    /* 3. Typography Hierarchy */
+    --text-primary: #1E293B;
+    --text-secondary: #64748B;
+    --text-muted: #94A3B8;
+
+    /* 4. Borders & Shadows */
+    --border-glass: rgba(255, 255, 255, 1);
+    --shadow-primary: 0 8px 24px rgba(243, 112, 33, 0.15);
+    --shadow-glass: 0 12px 40px rgba(30, 41, 59, 0.06);
+
+    /* 5. Semantic States */
+    --success-emerald: #10B981;
+    --warning-amber: #F59E0B;
+    --error-ruby: #E11D48;
+
+    /* ── Shadcn HSL tokens ── */
+    --background:            210 40% 98%;   /* bg-app #F8FAFC */
+    --foreground:            217 33% 17%;   /* text-primary #1E293B */
+    --card:                  26 100% 95%;   /* bg-mesh-warm #FFF0E5 */
+    --card-foreground:       217 33% 17%;
+    --popover:               0 0% 100%;
+    --popover-foreground:    217 33% 17%;
+    --primary:               23 90% 54%;    /* brand-primary #F37021 */
+    --primary-foreground:    0 0% 100%;
+    --secondary:             195 100% 33%;  /* brand-secondary #007EA7 */
+    --secondary-foreground:  0 0% 100%;
+    --muted:                 214 32% 91%;   
+    --muted-foreground:      215 16% 47%;   /* text-secondary #64748B */
+    --accent:                23 100% 64%;   /* brand-glow #FF8A47 */
+    --accent-foreground:     0 0% 100%;
+    --destructive:           347 77% 50%;
+    --destructive-foreground:0 0% 100%;
+    --border:                214 32% 91%;
+    --input:                 214 32% 91%;
+    --ring:                  23 90% 54%;
+    --radius:                0.875rem;
+
+    /* Animated orb glow vars - adjusted for light theme */
+    --orb-a: rgba(243, 112, 33, 0.25);
+    --orb-b: rgba(0, 126, 167, 0.20);
+    --orb-c: rgba(243, 112, 33, 0.15);
+    --orb-d: rgba(0, 126, 167, 0.15);
+  }
+
+  * { @apply border-border; }
+
+  html {
+    scroll-behavior: smooth;
+    overflow-y: auto !important;
+  }
+
+  body {
+    @apply font-sans antialiased;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    background-color: var(--app-background);
+    color: var(--text-primary);
+  }
+
+  #root { min-height: 100vh; }
+
+  ::selection {
+    background: rgba(232, 93, 4, 0.40);
+    color: var(--text-primary);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Cormorant Garamond", serif;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+}
+
+/* ══════════ PREMIUM DARK BACKGROUND ══════════ */
+.light-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  background: var(--app-background);
+  overflow: hidden;
+}
+
+/* Tangerine top-left orb */
+.light-bg::before {
+  content: '';
+  position: absolute;
+  width: 70vw; height: 70vw;
+  top: -20vw; left: -15vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--orb-a) 0%, transparent 70%);
+  animation: orb-drift-a 20s ease-in-out infinite alternate;
+  filter: blur(80px);
+}
+
+/* Cerulean bottom-right orb */
+.light-bg::after {
+  content: '';
+  position: absolute;
+  width: 60vw; height: 60vw;
+  bottom: -10vw; right: -10vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--orb-b) 0%, transparent 70%);
+  animation: orb-drift-b 25s ease-in-out infinite alternate;
+  filter: blur(80px);
+}
+
+/* Mid-page subtle tangerine */
+.orb-gold {
+  position: absolute;
+  width: 50vw; height: 50vw;
+  top: 40%; left: 30%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--orb-c) 0%, transparent 70%);
+  animation: orb-drift-c 30s ease-in-out infinite alternate;
+  filter: blur(70px);
+  pointer-events: none;
+}
+
+/* Upper-right cerulean accent */
+.orb-violet {
+  position: absolute;
+  width: 40vw; height: 40vw;
+  top: 10%; right: 10%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--orb-d) 0%, transparent 70%);
+  animation: orb-drift-d 22s ease-in-out infinite alternate;
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+@keyframes orb-drift-a {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(8vw, 10vh) scale(1.15); }
+}
+@keyframes orb-drift-b {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-6vw, -8vh) scale(1.1); }
+}
+@keyframes orb-drift-c {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-5vw, 6vh) scale(0.9); }
+}
+@keyframes orb-drift-d {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(4vw, 12vh) scale(1.2); }
+}
+
+/* ══════════ SMOKED GLASS COMPONENTS ══════════ */
+.glass-panel {
+  background: var(--surface-glass);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+  position: relative;
+  will-change: transform, opacity;
+  border-radius: 1.5rem;
+}
+
+.glass-nav {
+  background: rgba(255, 255, 255, 0.70);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-bottom: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+}
+
+.glass-card {
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px) saturate(130%);
+  -webkit-backdrop-filter: blur(20px) saturate(130%);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+  border-radius: 16px;
+}
+
+/* ── Gradient text ── */
+.gradient-text-primary {
+  background: linear-gradient(135deg, #E85D04 0%, #FF8C42 60%, #007A9F 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #FF8C42 0%, #E85D04 50%, #007A9F 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-gold {
+  background: linear-gradient(90deg, #E85D04, #FF8C42, #007A9F);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Gradient background ── */
+.gradient-bg {
+  background: linear-gradient(135deg, #E85D04 0%, #007A9F 100%);
+}
+
+/* ── Glowing input ── */
+.input-glass {
+  background: rgba(255, 255, 255, 0.80);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+}
+
+.input-glass::placeholder { color: var(--text-muted); }
+
+.input-glass:focus {
+  outline: none;
+  background: white;
+  border-color: var(--brand-primary);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.02),
+    0 0 0 2px rgba(243, 112, 33, 0.2),
+    0 4px 20px rgba(243, 112, 33, 0.15);
+}
+
+/* ── Primary button – tangerine fire ── */
+.btn-glass-primary {
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-glow) 100%);
+  color: white;
+  border: none;
+  box-shadow: var(--shadow-primary);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  font-weight: 800;
+}
+
+.btn-glass-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+  pointer-events: none;
+}
+
+.btn-glass-primary:hover {
+  box-shadow:
+    0 8px 32px rgba(232, 93, 4, 0.60),
+    0 1px 0 rgba(255, 255, 255, 0.20) inset;
+  transform: translateY(-2px);
+}
+
+.btn-glass-secondary {
+  background: rgba(255, 255, 255, 0.90);
+  color: var(--text-primary);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  transition: all 0.3s ease;
+}
+
+.btn-glass-secondary:hover {
+  background: white;
+  border-color: var(--brand-primary);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+/* ── Scrollbar ── */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(243, 112, 33, 0.30);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(243, 112, 33, 0.60);
+}
+
+/* ── Scroll reveal ── */
+.fade-in-panel {
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* ── Film grain ── */
+.film-grain {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  opacity: 0.022;
+  mix-blend-mode: screen;
+}
+
+/* ══════════ ARTIST CARD HOVER GLOW ══════════ */
+.artist-card-animate {
+  transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+.artist-card-animate:hover {
+  box-shadow:
+    0 0 0 1px rgba(243, 112, 33, 0.35),
+    0 16px 48px rgba(243, 112, 33, 0.10),
+    0 4px 16px rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(243, 112, 33, 0.35) !important;
+  transform: translateY(-6px) !important;
+}
+
+/* ══════════ BADGE ══════════ */
+.badge-orange {
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+  color: white;
+  border-radius: 9999px;
+  padding: 0.2rem 0.75rem;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* ══════════ PASTEL CARD ══════════ */
+.pastel-card {
+  background: var(--glass-surface);
+  border-radius: 2rem;
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(20px);
+}
+
+/* ══════════ SECTION DIVIDER ══════════ */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(232, 93, 4, 0.40), rgba(0, 122, 159, 0.40), transparent);
+}
+
+/* ══════════ GLOW PULSE ANIMATION ══════════ */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(232, 93, 4, 0.30); }
+  50%       { box-shadow: 0 0 40px rgba(232, 93, 4, 0.55); }
+}
+
+.glow-tangerine {
+  animation: glow-pulse 3s ease-in-out infinite;
+}

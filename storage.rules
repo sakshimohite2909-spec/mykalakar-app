@@ -1,0 +1,11 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Temporarily allow public read/write to allow uploads before the user is fully 
+    // initialized in Firestore, since we are using a custom username auth flow.
+    // Replace with stricter rules in production once auth flow is hardened.
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+}
