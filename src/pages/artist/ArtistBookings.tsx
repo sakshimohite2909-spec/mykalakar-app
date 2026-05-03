@@ -4,9 +4,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarCheck, Clock, MapPin, User, Phone, Mail, Loader2, Calendar } from "lucide-react";
+import { CalendarCheck, Clock, MapPin, Phone, Loader2, Calendar } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, updateDoc, doc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { toast } from "@/hooks/use-toast";
 
 export default function ArtistBookings() {
@@ -31,7 +31,7 @@ export default function ArtistBookings() {
 
     const updateBookingStatus = async (bookingId: string, status: string) => {
         try {
-            await updateDoc(doc(db, "bookings", bookingId), { status });
+            await updateDoc(doc(db, "bookings", bookingId), { status, updatedAt: serverTimestamp() });
             toast({ title: `Booking ${status === "accepted" ? "Accepted ✅" : "Declined ❌"}` });
         } catch (error) {
             toast({ variant: "destructive", title: "Error", description: "Could not update booking." });

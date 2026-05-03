@@ -13,11 +13,11 @@
     --elevated-glass: rgba(255, 255, 255, 0.85);
 
     /* 2. Brand Accents */
-    --brand-primary: #F37021;
-    --brand-glow: #FF8A47;
-    --brand-secondary: #007EA7;
-    --tangerine-glow: rgba(243, 112, 33, 0.60);
-    --cerulean-glow: rgba(0, 126, 167, 0.60);
+    --brand-primary: #E86F3A;
+    --brand-glow: #F69A5E;
+    --brand-secondary: #B85C7A;
+    --tangerine-glow: rgba(232, 111, 58, 0.55);
+    --rose-glow: rgba(184, 92, 122, 0.55);
 
     /* 3. Typography Hierarchy */
     --text-primary: #1E293B;
@@ -26,7 +26,7 @@
 
     /* 4. Borders & Shadows */
     --border-glass: rgba(255, 255, 255, 1);
-    --shadow-primary: 0 8px 24px rgba(243, 112, 33, 0.15);
+    --shadow-primary: 0 8px 24px rgba(232, 111, 58, 0.14);
     --shadow-glass: 0 12px 40px rgba(30, 41, 59, 0.06);
 
     /* 5. Semantic States */
@@ -41,9 +41,9 @@
     --card-foreground:       217 33% 17%;
     --popover:               0 0% 100%;
     --popover-foreground:    217 33% 17%;
-    --primary:               23 90% 54%;    /* brand-primary #F37021 */
+    --primary:               20 79% 57%;    /* brand-primary #E86F3A */
     --primary-foreground:    0 0% 100%;
-    --secondary:             195 100% 33%;  /* brand-secondary #007EA7 */
+    --secondary:             341 39% 54%;   /* brand-secondary #B85C7A */
     --secondary-foreground:  0 0% 100%;
     --muted:                 214 32% 91%;   
     --muted-foreground:      215 16% 47%;   /* text-secondary #64748B */
@@ -53,14 +53,14 @@
     --destructive-foreground:0 0% 100%;
     --border:                214 32% 91%;
     --input:                 214 32% 91%;
-    --ring:                  23 90% 54%;
+    --ring:                  20 79% 57%;
     --radius:                0.875rem;
 
     /* Animated orb glow vars - adjusted for light theme */
-    --orb-a: rgba(243, 112, 33, 0.25);
-    --orb-b: rgba(0, 126, 167, 0.20);
-    --orb-c: rgba(243, 112, 33, 0.15);
-    --orb-d: rgba(0, 126, 167, 0.15);
+    --orb-a: rgba(232, 111, 58, 0.22);
+    --orb-b: rgba(184, 92, 122, 0.18);
+    --orb-c: rgba(246, 154, 94, 0.14);
+    --orb-d: rgba(184, 92, 122, 0.13);
   }
 
   * { @apply border-border; }
@@ -82,7 +82,7 @@
   #root { min-height: 100vh; }
 
   ::selection {
-    background: rgba(232, 93, 4, 0.40);
+    background: rgba(232, 111, 58, 0.35);
     color: var(--text-primary);
   }
 
@@ -198,21 +198,21 @@
 
 /* ── Gradient text ── */
 .gradient-text-primary {
-  background: linear-gradient(135deg, #E85D04 0%, #FF8C42 60%, #007A9F 100%);
+  background: linear-gradient(135deg, #E86F3A 0%, #F6A15A 55%, #B85C7A 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #FF8C42 0%, #E85D04 50%, #007A9F 100%);
+  background: linear-gradient(135deg, #F6A15A 0%, #E86F3A 48%, #B85C7A 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .gradient-text-gold {
-  background: linear-gradient(90deg, #E85D04, #FF8C42, #007A9F);
+  background: linear-gradient(90deg, #E86F3A, #F6A15A, #B85C7A);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -220,7 +220,7 @@
 
 /* ── Gradient background ── */
 .gradient-bg {
-  background: linear-gradient(135deg, #E85D04 0%, #007A9F 100%);
+  background: linear-gradient(135deg, #E86F3A 0%, #F6A15A 52%, #B85C7A 100%);
 }
 
 /* ── Glowing input ── */
@@ -242,8 +242,8 @@
   border-color: var(--brand-primary);
   box-shadow:
     inset 0 2px 5px rgba(0, 0, 0, 0.02),
-    0 0 0 2px rgba(243, 112, 33, 0.2),
-    0 4px 20px rgba(243, 112, 33, 0.15);
+    0 0 0 2px rgba(232, 111, 58, 0.18),
+    0 4px 20px rgba(184, 92, 122, 0.14);
 }
 
 /* ── Primary button – tangerine fire ── */
@@ -268,7 +268,7 @@
 
 .btn-glass-primary:hover {
   box-shadow:
-    0 8px 32px rgba(232, 93, 4, 0.60),
+    0 8px 32px rgba(232, 111, 58, 0.38),
     0 1px 0 rgba(255, 255, 255, 0.20) inset;
   transform: translateY(-2px);
 }
@@ -291,11 +291,43 @@
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(243, 112, 33, 0.30);
+  background: rgba(232, 111, 58, 0.28);
   border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(243, 112, 33, 0.60);
+  background: rgba(232, 111, 58, 0.52);
+}
+
+.dropdown-scroll-area {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(232, 111, 58, 0.48) transparent;
+  -webkit-overflow-scrolling: touch;
+  contain: content;
+  transform: translateZ(0);
+}
+
+.dropdown-scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dropdown-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dropdown-scroll-area::-webkit-scrollbar-thumb {
+  background: rgba(232, 111, 58, 0.40);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.dropdown-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: rgba(232, 111, 58, 0.62);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 /* ── Scroll reveal ── */
@@ -321,10 +353,10 @@
 
 .artist-card-animate:hover {
   box-shadow:
-    0 0 0 1px rgba(243, 112, 33, 0.35),
-    0 16px 48px rgba(243, 112, 33, 0.10),
+    0 0 0 1px rgba(232, 111, 58, 0.30),
+    0 16px 48px rgba(184, 92, 122, 0.12),
     0 4px 16px rgba(0, 0, 0, 0.05) !important;
-  border-color: rgba(243, 112, 33, 0.35) !important;
+  border-color: rgba(232, 111, 58, 0.30) !important;
   transform: translateY(-6px) !important;
 }
 
@@ -352,13 +384,13 @@
 /* ══════════ SECTION DIVIDER ══════════ */
 .section-divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(232, 93, 4, 0.40), rgba(0, 122, 159, 0.40), transparent);
+  background: linear-gradient(90deg, transparent, rgba(232, 111, 58, 0.34), rgba(184, 92, 122, 0.30), transparent);
 }
 
 /* ══════════ GLOW PULSE ANIMATION ══════════ */
 @keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 20px rgba(232, 93, 4, 0.30); }
-  50%       { box-shadow: 0 0 40px rgba(232, 93, 4, 0.55); }
+  0%, 100% { box-shadow: 0 0 20px rgba(232, 111, 58, 0.28); }
+  50%       { box-shadow: 0 0 40px rgba(184, 92, 122, 0.34); }
 }
 
 .glow-tangerine {

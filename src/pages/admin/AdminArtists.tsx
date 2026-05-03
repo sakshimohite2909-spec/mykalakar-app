@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,14 +8,15 @@ import { Search, Edit, Trash2, BadgeCheck, Eye, Loader2, Database, Star, Trendin
 import { Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, updateDoc, doc, deleteDoc, writeBatch, serverTimestamp, addDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, updateDoc, doc, deleteDoc, writeBatch, serverTimestamp, setDoc } from "firebase/firestore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { State, City } from "country-state-city";
 import { initialArtists } from "@/data/mockData";
+import { firebaseErrorMessage } from "@/lib/firebaseSafe";
+import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
 
 
 export default function AdminArtists() {
@@ -35,6 +36,7 @@ export default function AdminArtists() {
     name: "",
     category: "",
     subcategory: "",
+    state: "",
     city: "",
     bio: "",
     contactNumber: "",
@@ -48,7 +50,8 @@ export default function AdminArtists() {
     trending: false
   });
 
-  const cities = ["Mumbai", "Pune", "Nashik", "Nagpur", "Aurangabad", "Kolhapur", "Thane", "Solapur"];
+  const stateOptions = useMemo(() => getIndiaStates().map((state) => state.name), []);
+  const [districtOptions, setDistrictOptions] = useState<string[]>([]);
   const categories = [
     "Music Artists",
     "Dance Artists",
@@ -63,13 +66,42 @@ export default function AdminArtists() {
   ];
 
   useEffect(() => {
-    const q = query(collection(db, "pending_registrations"), where("status", "==", "approved"));
+    let active = true;
+
+    if (!newArtist.state) {
+      setDistrictOptions([]);
+      return () => {
+        active = false;
+      };
+    }
+
+    setDistrictOptions([]);
+    getIndiaDistrictsByStateName(newArtist.state)
+      .then((options) => {
+        if (active) setDistrictOptions(options);
+      })
+      .catch((error) => {
+        console.error("Failed to load districts", error);
+        if (active) setDistrictOptions([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [newArtist.state]);
+
+  useEffect(() => {
+    const q = query(collection(db, "artists"), where("status", "==", "active"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       setArtists(data);
+      setLoading(false);
+    }, (error) => {
+      console.error(error);
+      toast({ variant: "destructive", title: "Artists unavailable", description: firebaseErrorMessage(error, "Could not load artists.") });
       setLoading(false);
     });
 
@@ -84,7 +116,7 @@ export default function AdminArtists() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this artist?")) return;
     try {
-      await deleteDoc(doc(db, "pending_registrations", id));
+      await deleteDoc(doc(db, "artists", id));
       toast({ title: "Artist Deleted", description: "Artist has been removed." });
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Could not delete artist." });
@@ -94,8 +126,8 @@ export default function AdminArtists() {
   const openEditModal = (artist: any) => {
     setEditingArtist(artist);
     setEditData({
-      rating: artist.rating || 0,
-      reviews: artist.reviews || 0,
+      rating: artist.stats?.rating || artist.rating || 0,
+      reviews: artist.stats?.reviews || artist.reviews || 0,
       trending: artist.trending || false,
       verified: artist.verified || false
     });
@@ -106,11 +138,12 @@ export default function AdminArtists() {
     if (!editingArtist) return;
     setLoading(true);
     try {
-      await updateDoc(doc(db, "pending_registrations", editingArtist.id), {
-        rating: Number(editData.rating),
-        reviews: Number(editData.reviews),
+      await updateDoc(doc(db, "artists", editingArtist.id), {
+        "stats.rating": Number(editData.rating),
+        "stats.reviews": Number(editData.reviews),
         trending: editData.trending,
-        verified: editData.verified
+        verified: editData.verified,
+        updatedAt: serverTimestamp()
       });
       toast({ title: "Artist Updated ✅", description: "Artist details have been saved." });
       setEditModalOpen(false);
@@ -122,7 +155,7 @@ export default function AdminArtists() {
   };
 
   const handleAddArtist = async () => {
-    if (!newArtist.name || !newArtist.category || !newArtist.city) {
+    if (!newArtist.name || !newArtist.category || !newArtist.state || !newArtist.city) {
       toast({ variant: "destructive", title: "Missing Fields", description: "Please fill in all required fields." });
       return;
     }
@@ -131,28 +164,52 @@ export default function AdminArtists() {
     try {
       const servicesArray = newArtist.services.split(',').map(s => s.trim()).filter(Boolean);
 
-      await addDoc(collection(db, "pending_registrations"), {
+      const artistRef = doc(collection(db, "artists"));
+      await setDoc(artistRef, {
+        uid: artistRef.id,
         name: newArtist.name,
         category: newArtist.category,
         subcategory: newArtist.subcategory,
-        city: newArtist.city,
+        categories: [newArtist.category],
+        artsList: [{
+          category: newArtist.category,
+          subcategory: newArtist.subcategory,
+          types: [],
+          soloPrice: 0,
+          duoPrice: 0,
+          teamPrice: 0
+        }],
+        state: newArtist.state,
+        district: newArtist.city,
         bio: newArtist.bio,
-        contactNumber: newArtist.contactNumber,
+        mobileNumber: newArtist.contactNumber,
         experience: Number(newArtist.experience),
         services: servicesArray,
-        profilePhoto: newArtist.profilePhoto,
-        coverImages: [newArtist.profilePhoto],
-        galleryPhotos: [newArtist.profilePhoto],
-        youtubeLinks: [],
+        media: {
+          profilePhoto: newArtist.profilePhoto,
+          coverPhoto: newArtist.profilePhoto,
+          galleryPhotos: [newArtist.profilePhoto]
+        },
+        pricing: {
+          soloPrice: 0,
+          duoPrice: 0,
+          teamPrice: 0,
+          feeNotes: ""
+        },
         availability: newArtist.availability,
-        rating: Number(newArtist.rating),
-        reviews: Number(newArtist.reviews),
+        stats: {
+          rating: Number(newArtist.rating),
+          reviews: Number(newArtist.reviews),
+          followers: 0,
+          profileViews: 0,
+          totalBookings: 0
+        },
         verified: newArtist.verified,
         trending: newArtist.trending,
-        followers: 0,
-        socialLinks: {},
-        status: "approved",
-        createdAt: serverTimestamp()
+        socialLinks: [],
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
 
       toast({ title: "Artist Added ✅", description: `${newArtist.name} has been added successfully.` });
@@ -161,6 +218,7 @@ export default function AdminArtists() {
         name: "",
         category: "",
         subcategory: "",
+        state: "",
         city: "",
         bio: "",
         contactNumber: "",
@@ -189,11 +247,13 @@ export default function AdminArtists() {
     try {
       const batch = writeBatch(db);
       initialArtists.forEach((a) => {
-        const docRef = doc(collection(db, "pending_registrations"));
+        const docRef = doc(collection(db, "artists"));
         batch.set(docRef, {
+          uid: docRef.id,
           ...a,
-          status: "approved",
-          createdAt: serverTimestamp()
+          status: "active",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
       });
       await batch.commit();
@@ -209,19 +269,20 @@ export default function AdminArtists() {
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      const indianStates = State.getStatesOfCountry("IN");
+      const indianStates = getIndiaStates();
 
-      indianStates.forEach((stateInfo) => {
+      for (const stateInfo of indianStates) {
         const docRef = doc(db, "states", stateInfo.isoCode);
-        const stateCities = City.getCitiesOfState("IN", stateInfo.isoCode);
-        const districts = Array.from(new Set(stateCities.map((c: any) => c.name))).sort();
+        const districts = await getIndiaDistrictsByStateName(stateInfo.name);
 
         batch.set(docRef, {
           name: stateInfo.name,
           isoCode: stateInfo.isoCode,
-          districts: districts
+          districts: districts,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
-      });
+      }
 
       await batch.commit();
       toast({ title: "States Seeded ✅", description: "Indian states and districts have been seeded." });
@@ -290,7 +351,7 @@ export default function AdminArtists() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <img
-                          src={a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
+                          src={a.media?.profilePhoto || a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
                           alt={a.name}
                           className="w-9 h-9 rounded-lg object-cover"
                         />
@@ -304,8 +365,8 @@ export default function AdminArtists() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">{a.category}</TableCell>
-                    <TableCell className="text-sm">{a.city}</TableCell>
-                    <TableCell className="text-sm">⭐ {a.rating}</TableCell>
+                    <TableCell className="text-sm">{a.district || a.city}</TableCell>
+                    <TableCell className="text-sm">⭐ {a.stats?.rating || a.rating || 0}</TableCell>
                     <TableCell>
                       <Badge variant={a.availability === "available" ? "default" : "secondary"} className={a.availability === "available" ? "bg-green-600 text-primary-foreground border-0" : ""}>
                         {a.availability}
@@ -445,18 +506,41 @@ export default function AdminArtists() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>City *</Label>
-                <Select value={newArtist.city} onValueChange={(v) => setNewArtist({ ...newArtist, city: v })}>
+                <Label>State *</Label>
+                <Select
+                  value={newArtist.state}
+                  onValueChange={(v) => setNewArtist({ ...newArtist, state: v, city: "" })}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select city" />
+                    <SelectValue placeholder="Select state" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {cities.map((city) => (
-                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                  <SelectContent className="max-h-72">
+                    {stateOptions.map((state) => (
+                      <SelectItem key={state} value={state}>{state}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label>District *</Label>
+                <Select
+                  value={newArtist.city}
+                  onValueChange={(v) => setNewArtist({ ...newArtist, city: v })}
+                  disabled={!newArtist.state}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={newArtist.state ? "Select district" : "Select state first"} />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {districtOptions.map((district) => (
+                      <SelectItem key={district} value={district}>{district}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Experience (years)</Label>
                 <Input

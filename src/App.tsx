@@ -8,6 +8,7 @@ import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ArtistProtectedRoute from "@/components/ArtistProtectedRoute";
+import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ScrollToTop from "@/components/ScrollToTop";
 import GlobalLayout from "@/components/GlobalLayout";
@@ -20,6 +21,7 @@ const EventRequirements = lazy(() => import("./pages/EventRequirements"));
 const ArtistProfile = lazy(() => import("./pages/ArtistProfile"));
 const ArtistRegister = lazy(() => import("./pages/ArtistRegister"));
 const ArtistLogin = lazy(() => import("./pages/ArtistLogin"));
+const UserProfile = lazy(() => import("./pages/UserProfile"));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminArtists = lazy(() => import("./pages/admin/AdminArtists"));
@@ -67,8 +69,14 @@ const App = () => (
                 {/* Public Routes */}
                 <Route path="/" element={<Index />} />
                 <Route path="/register" element={<ArtistRegister />} />
+                <Route path="/artist-register" element={<ArtistRegister />} />
+                <Route path="/admin-register" element={<ArtistRegister />} />
+                <Route path="/user-register" element={<ArtistRegister />} />
                 <Route path="/login" element={<ArtistLogin />} />
                 <Route path="/artist-login" element={<ArtistLogin />} />
+                <Route path="/admin-login" element={<ArtistLogin />} />
+                <Route path="/user-login" element={<ArtistLogin />} />
+                <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
                 <Route path="/antigravity" element={<AntiGravity />} />
 
                 {/* Public Browsing Routes — no auth required */}
@@ -96,7 +104,7 @@ const App = () => (
                 </Route>
 
                 {/* Admin */}
-                <Route path="/admin" element={<AdminLayout />}>
+                <Route path="/admin" element={<AdminProtectedRoute><AdminLayout /></AdminProtectedRoute>}>
                   <Route index element={<AdminDashboard />} />
                   <Route path="artists" element={<AdminArtists />} />
                   <Route path="pending" element={<AdminPending />} />

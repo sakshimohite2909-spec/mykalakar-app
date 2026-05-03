@@ -31,8 +31,10 @@ export default function ArtistProtectedRoute({ children, requireApproval = true 
         return <Navigate to="/artist-login" replace />;
     }
 
+    const isApprovedArtist = artistData.status === "approved" || artistData.status === "active";
+
     // Needs approval but not approved yet
-    if (requireApproval && artistData.status !== "approved") {
+    if (requireApproval && !isApprovedArtist) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-transparent">
                 <div className="text-center space-y-4 max-w-md mx-auto p-8">

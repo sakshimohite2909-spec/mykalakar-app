@@ -1,6 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { auth, db } from "@/lib/firebase";
 import {
+    FIREBASE_READ_TIMEOUT_MS,
+    FIREBASE_WRITE_TIMEOUT_MS,
+    firebaseErrorMessage,
+    getFirebaseErrorCode,
+    withTimeout,
+} from "@/lib/firebaseSafe";
+import {
     onAuthStateChanged,
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
@@ -10,24 +17,24 @@ import {
     EmailAuthProvider,
     reauthenticateWithCredential,
 } from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs, setDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 
-type UserRole = "admin" | "artist" | "customer" | null;
+type UserRole = "admin" | "artist" | "customer" | "admin_request" | null;
 
 interface ArtistData {
     id: string;
     uid: string;
     name: string;
     email: string;
-    status: "pending" | "approved" | "rejected";
-    [key: string]: any;
+    status: "pending" | "approved" | "rejected" | "active" | "hidden" | "suspended";
+    [key: string]: unknown;
 }
 
 interface AuthContextType {
     currentUser: User | null;
     artistData: ArtistData | null;
     userRole: UserRole;
-    userProfile: Record<string, any> | null;
+    userProfile: Record<string, unknown> | null;
     loading: boolean;
     login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
     register: (email: string, password: string) => Promise<{ success: boolean; uid: string; message: string }>;
@@ -49,16 +56,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [artistData, setArtistData] = useState<ArtistData | null>(null);
     const [userRole, setUserRole] = useState<UserRole>(null);
-    const [userProfile, setUserProfile] = useState<Record<string, any> | null>(null);
+    const [userProfile, setUserProfile] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Fetch artist data from Firestore by UID
     const fetchArtistData = async (uid: string) => {
         try {
-            const q = query(collection(db, "pending_registrations"), where("uid", "==", uid));
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) {
-                const docData = snapshot.docs[0];
+            const artistDoc = await withTimeout(
+                getDoc(doc(db, "artists", uid)),
+                FIREBASE_READ_TIMEOUT_MS,
+                "Could not load artist profile."
+            );
+            if (artistDoc.exists()) {
+                setArtistData({ id: artistDoc.id, ...artistDoc.data() } as ArtistData);
+                return;
+            }
+
+            const qActive = query(collection(db, "artists"), where("uid", "==", uid));
+            const snapActive = await withTimeout(
+                getDocs(qActive),
+                FIREBASE_READ_TIMEOUT_MS,
+                "Could not load artist profile."
+            );
+            if (!snapActive.empty) {
+                const docData = snapActive.docs[0];
+                setArtistData({ id: docData.id, ...docData.data() } as ArtistData);
+                return;
+            }
+
+            const qApp = query(collection(db, "artist_applications"), where("uid", "==", uid));
+            const snapApp = await withTimeout(
+                getDocs(qApp),
+                FIREBASE_READ_TIMEOUT_MS,
+                "Could not load artist application."
+            );
+            if (!snapApp.empty) {
+                const docData = snapApp.docs[0];
                 setArtistData({ id: docData.id, ...docData.data() } as ArtistData);
             } else {
                 setArtistData(null);
@@ -71,24 +104,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const fetchRoleProfile = async (uid: string) => {
         try {
-            const adminDoc = await getDoc(doc(db, "admins", uid));
+            const adminDoc = await withTimeout(
+                getDoc(doc(db, "admins", uid)),
+                FIREBASE_READ_TIMEOUT_MS,
+                "Could not load admin profile."
+            );
             if (adminDoc.exists()) {
                 setUserRole("admin");
                 setUserProfile({ id: adminDoc.id, ...adminDoc.data() });
                 return;
             }
 
-            const artistDoc = await getDoc(doc(db, "artists", uid));
+            const artistDoc = await withTimeout(
+                getDoc(doc(db, "artists", uid)),
+                FIREBASE_READ_TIMEOUT_MS,
+                "Could not load artist profile."
+            );
             if (artistDoc.exists()) {
                 setUserRole("artist");
                 setUserProfile({ id: artistDoc.id, ...artistDoc.data() });
                 return;
             }
 
-            const userDoc = await getDoc(doc(db, "users", uid));
+            const userDoc = await withTimeout(
+                getDoc(doc(db, "users", uid)),
+                FIREBASE_READ_TIMEOUT_MS,
+                "Could not load user profile."
+            );
             if (userDoc.exists()) {
-                setUserRole("customer");
-                setUserProfile({ id: userDoc.id, ...userDoc.data() });
+                const profile = { id: userDoc.id, ...userDoc.data() } as Record<string, unknown>;
+                const role = profile.role === "artist"
+                    ? "artist"
+                    : profile.role === "admin_request"
+                        ? "admin_request"
+                        : "customer";
+                setUserRole(role);
+                setUserProfile(profile);
                 return;
             }
 
@@ -101,30 +152,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const syncUserToFirestore = async (user: User) => {
-        try {
-            const userRef = doc(db, 'users', user.uid);
-            const userDoc = await getDoc(userRef);
-            if (!userDoc.exists()) {
-                await setDoc(userRef, {
-                    uid: user.uid,
-                    email: user.email,
-                    displayName: user.displayName || user.email?.split('@')[0] || "User",
-                    createdAt: new Date().toISOString()
-                }, { merge: true });
-            }
-        } catch (error) {
-            console.error("Error syncing user to Firestore:", error);
-        }
-    };
-
     // Listen to auth state changes
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            setLoading(true);
             setCurrentUser(user);
             if (user) {
-                syncUserToFirestore(user);
-                await Promise.all([fetchArtistData(user.uid), fetchRoleProfile(user.uid)]);
+                try {
+                    await withTimeout(
+                        Promise.allSettled([fetchArtistData(user.uid), fetchRoleProfile(user.uid)]),
+                        FIREBASE_READ_TIMEOUT_MS + 3000,
+                        "Profile loading took too long."
+                    );
+                } catch (error) {
+                    console.warn("Auth profile load timed out:", error);
+                }
             } else {
                 setArtistData(null);
                 setUserRole(null);
@@ -138,17 +180,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Login function
     const login = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
         try {
-            const result = await signInWithEmailAndPassword(auth, email, password);
-            await fetchArtistData(result.user.uid);
+            const result = await withTimeout(
+                signInWithEmailAndPassword(auth, email, password),
+                FIREBASE_WRITE_TIMEOUT_MS,
+                "Login is taking too long. Please check your connection and try again."
+            );
+            try {
+                await withTimeout(
+                    Promise.allSettled([fetchArtistData(result.user.uid), fetchRoleProfile(result.user.uid)]),
+                    FIREBASE_READ_TIMEOUT_MS + 3000,
+                    "Profile loading took too long."
+                );
+            } catch (profileError) {
+                console.warn("Login profile load timed out:", profileError);
+            }
             return { success: true, message: "Login successful!" };
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Firebase Auth Login Error:", error);
-            let message = "Login failed. Please try again.";
-            if (error.code === "auth/user-not-found") message = "No account found with this email.";
-            else if (error.code === "auth/wrong-password") message = "Incorrect password.";
-            else if (error.code === "auth/invalid-email") message = "Invalid email address.";
-            else if (error.code === "auth/invalid-credential") message = "Invalid email or password.";
-            else if (error.code === "auth/too-many-requests") message = "Too many attempts. Please try again later.";
+            const errorCode = getFirebaseErrorCode(error);
+            let message = firebaseErrorMessage(error, "Login failed. Please try again.");
+            if (errorCode === "auth/user-not-found") message = "No account found with this email.";
+            else if (errorCode === "auth/wrong-password") message = "Incorrect password.";
+            else if (errorCode === "auth/invalid-email") message = "Invalid email address.";
+            else if (errorCode === "auth/invalid-credential") message = "Invalid email or password.";
+            else if (errorCode === "auth/too-many-requests") message = "Too many attempts. Please try again later.";
             return { success: false, message };
         }
     };
@@ -156,17 +211,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Register function (creates Firebase Auth account)
     const register = async (email: string, password: string): Promise<{ success: boolean; uid: string; message: string }> => {
         try {
-            const result = await createUserWithEmailAndPassword(auth, email, password);
+            const result = await withTimeout(
+                createUserWithEmailAndPassword(auth, email, password),
+                FIREBASE_WRITE_TIMEOUT_MS,
+                "Account creation is taking too long. Please check your connection and try again."
+            );
             return { success: true, uid: result.user.uid, message: "Account created!" };
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Firebase Auth Registration Error:", error);
-            let message = "Registration failed. Please try again.";
-            if (error.code === "auth/email-already-in-use") message = "This email is already registered.";
-            else if (error.code === "auth/weak-password") message = "Password must be at least 6 characters.";
-            else if (error.code === "auth/invalid-email") message = "Invalid email address.";
-            else if (error.code === "auth/operation-not-allowed") {
+            const errorCode = getFirebaseErrorCode(error);
+            let message = firebaseErrorMessage(error, "Registration failed. Please try again.");
+            if (errorCode === "auth/email-already-in-use") message = "This email is already registered.";
+            else if (errorCode === "auth/weak-password") message = "Password must be at least 6 characters.";
+            else if (errorCode === "auth/invalid-email") message = "Invalid email address.";
+            else if (errorCode === "auth/operation-not-allowed") {
                 message = "Email/Password sign-in is not enabled in Firebase. Please enable it in Firebase Console.";
-            } else if (error.code === "auth/configuration-not-found") {
+            } else if (errorCode === "auth/configuration-not-found") {
                 message = "Firebase Auth configuration is missing. Please ensure you have clicked 'Get Started' in the Firebase Authentication console and enabled Email/Password.";
             }
             return { success: false, uid: "", message };
@@ -175,7 +235,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Logout function
     const logout = async () => {
-        await signOut(auth);
+        await withTimeout(
+            signOut(auth),
+            FIREBASE_WRITE_TIMEOUT_MS,
+            "Logout is taking too long. Please refresh the page if it does not complete."
+        );
         setArtistData(null);
         setUserRole(null);
         setUserProfile(null);
@@ -189,8 +253,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await reauthenticateWithCredential(currentUser, credential);
             await updatePassword(currentUser, newPassword);
             return { success: true, message: "Password updated successfully!" };
-        } catch (error: any) {
-            if (error.code === "auth/wrong-password") return { success: false, message: "Current password is incorrect." };
+        } catch (error: unknown) {
+            if (getFirebaseErrorCode(error) === "auth/wrong-password") return { success: false, message: "Current password is incorrect." };
             return { success: false, message: "Could not change password. Please try again." };
         }
     };

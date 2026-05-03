@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { db, storage } from "@/lib/firebase";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { uploadImageFile } from "@/lib/uploadService";
+import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
 import {
     Save,
     Loader2,
@@ -79,12 +80,12 @@ export default function ArtistEditProfile() {
                 availability: artistData.availability || "available",
                 travelWillingness: artistData.travelWillingness || "local",
                 languageSpoken: artistData.languageSpoken || [],
-                bankName: artistData.bankName || "",
-                ifscCode: artistData.ifscCode || "",
-                accountNumber: artistData.accountNumber || "",
+                bankName: artistData.bankDetails?.bankName || artistData.bankName || "",
+                ifscCode: artistData.bankDetails?.ifscCode || artistData.ifscCode || "",
+                accountNumber: artistData.bankDetails?.accountNumber || artistData.accountNumber || "",
             });
             setSocialLinks(artistData.socialLinks || [{ platform: "youtube", url: "" }]);
-            setGalleryPreviews(artistData.galleryPhotos || []);
+            setGalleryPreviews(artistData.media?.galleryPhotos || artistData.galleryPhotos || []);
         }
     }, [artistData]);
 
@@ -108,9 +109,7 @@ export default function ArtistEditProfile() {
 
     // Upload a file to Firebase Storage
     const uploadFile = async (file: File, path: string) => {
-        const storageRef = ref(storage, `${path}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        return await getDownloadURL(storageRef);
+        return uploadImageFile(file, path);
     };
 
     // Handle profile/cover photo change
@@ -120,16 +119,36 @@ export default function ArtistEditProfile() {
 
         setUploadingPhoto(type);
         try {
-            const url = await uploadFile(file, type === "profile" ? "profiles" : "covers");
-            const updateField = type === "profile" ? "profilePhoto" : "coverPhoto";
-            await updateDoc(doc(db, "pending_registrations", artistData.id), {
-                [updateField]: url,
-                updatedAt: serverTimestamp(),
-            });
+            const ownerId = artistData.uid || artistData.id;
+            const url = await uploadFile(file, type === "profile" ? `avatars/${ownerId}` : `covers/${ownerId}`);
+            const updateData = type === "profile"
+                ? { "media.profilePhoto": url, profilePhoto: url, updatedAt: serverTimestamp() }
+                : { "media.coverPhoto": url, coverPhoto: url, updatedAt: serverTimestamp() };
+            await withTimeout(
+                updateDoc(doc(db, "artists", artistData.id), updateData),
+                FIREBASE_WRITE_TIMEOUT_MS,
+                "Could not save this photo."
+            );
+            if (type === "profile") {
+                await withTimeout(
+                    setDoc(doc(db, "users", ownerId), {
+                        uid: ownerId,
+                        name: artistData.name || "",
+                        email: artistData.email || "",
+                        phone: artistData.mobileNumber || artistData.phone || "",
+                        role: "artist",
+                        status: artistData.status === "pending" ? "pending" : "active",
+                        profilePhoto: url,
+                        updatedAt: serverTimestamp(),
+                    }, { merge: true }),
+                    FIREBASE_WRITE_TIMEOUT_MS,
+                    "Could not sync your user profile photo."
+                );
+            }
             await refreshArtistData();
-            toast({ title: `${type === "profile" ? "Profile" : "Cover"} Photo Updated! 📸` });
+            toast({ title: `${type === "profile" ? "Profile" : "Cover"} photo updated` });
         } catch (error) {
-            toast({ variant: "destructive", title: "Error", description: "Could not upload photo." });
+            toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not upload photo.") });
         } finally {
             setUploadingPhoto(null);
         }
@@ -140,7 +159,7 @@ export default function ArtistEditProfile() {
         const files = e.target.files;
         if (!files || !artistData) return;
 
-        const currentPhotos = artistData.galleryPhotos || [];
+        const currentPhotos = artistData.media?.galleryPhotos || artistData.galleryPhotos || [];
         if (currentPhotos.length + files.length > 10) {
             toast({ variant: "destructive", title: "Limit Exceeded", description: "Maximum 10 gallery photos allowed." });
             return;
@@ -148,17 +167,23 @@ export default function ArtistEditProfile() {
 
         setUploadingPhoto("gallery");
         try {
-            const newUrls = await Promise.all(Array.from(files).map((f) => uploadFile(f, "galleries")));
+            const ownerId = artistData.uid || artistData.id;
+            const newUrls = await Promise.all(Array.from(files).map((f) => uploadFile(f, `galleries/${ownerId}`)));
             const updatedGallery = [...currentPhotos, ...newUrls];
-            await updateDoc(doc(db, "pending_registrations", artistData.id), {
-                galleryPhotos: updatedGallery,
-                updatedAt: serverTimestamp(),
-            });
+            await withTimeout(
+                updateDoc(doc(db, "artists", artistData.id), {
+                    "media.galleryPhotos": updatedGallery,
+                    galleryPhotos: updatedGallery,
+                    updatedAt: serverTimestamp(),
+                }),
+                FIREBASE_WRITE_TIMEOUT_MS,
+                "Could not save gallery photos."
+            );
             await refreshArtistData();
             setGalleryPreviews(updatedGallery);
-            toast({ title: "Gallery Updated! 🖼️" });
+            toast({ title: "Gallery updated" });
         } catch (error) {
-            toast({ variant: "destructive", title: "Error", description: "Could not upload gallery photos." });
+            toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not upload gallery photos.") });
         } finally {
             setUploadingPhoto(null);
         }
@@ -167,19 +192,24 @@ export default function ArtistEditProfile() {
     // Remove gallery photo
     const removeGalleryPhoto = async (index: number) => {
         if (!artistData) return;
-        const updatedGallery = [...(artistData.galleryPhotos || [])];
+        const updatedGallery = [...(artistData.media?.galleryPhotos || artistData.galleryPhotos || [])];
         updatedGallery.splice(index, 1);
 
         try {
-            await updateDoc(doc(db, "pending_registrations", artistData.id), {
-                galleryPhotos: updatedGallery,
-                updatedAt: serverTimestamp(),
-            });
+            await withTimeout(
+                updateDoc(doc(db, "artists", artistData.id), {
+                    "media.galleryPhotos": updatedGallery,
+                    galleryPhotos: updatedGallery,
+                    updatedAt: serverTimestamp(),
+                }),
+                FIREBASE_WRITE_TIMEOUT_MS,
+                "Could not remove this photo."
+            );
             await refreshArtistData();
             setGalleryPreviews(updatedGallery);
             toast({ title: "Photo Removed" });
         } catch (error) {
-            toast({ variant: "destructive", title: "Error", description: "Could not remove photo." });
+            toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not remove photo.") });
         }
     };
 
@@ -198,15 +228,47 @@ export default function ArtistEditProfile() {
 
         setLoading(true);
         try {
-            await updateDoc(doc(db, "pending_registrations", artistData.id), {
-                ...formData,
-                socialLinks,
-                updatedAt: serverTimestamp(),
-            });
+            const ownerId = artistData.uid || artistData.id;
+            await withTimeout(
+                updateDoc(doc(db, "artists", artistData.id), {
+                    name: formData.name,
+                    phone: formData.phone,
+                    mobileNumber: formData.mobileNumber,
+                    emergencyNumber: formData.emergencyNumber,
+                    age: Number(formData.age),
+                    dob: formData.dob,
+                    gender: formData.gender,
+                    bio: formData.bio,
+                    experience: Number(formData.experience),
+                    availability: formData.availability,
+                    travelWillingness: formData.travelWillingness,
+                    "bankDetails.bankName": formData.bankName,
+                    "bankDetails.ifscCode": formData.ifscCode,
+                    "bankDetails.accountNumber": formData.accountNumber,
+                    socialLinks,
+                    updatedAt: serverTimestamp(),
+                }),
+                FIREBASE_WRITE_TIMEOUT_MS,
+                "Could not save profile changes."
+            );
+            await withTimeout(
+                setDoc(doc(db, "users", ownerId), {
+                    uid: ownerId,
+                    name: formData.name,
+                    email: artistData.email || "",
+                    phone: formData.mobileNumber || formData.phone,
+                    profilePhoto: artistData.media?.profilePhoto || artistData.profilePhoto || "",
+                    role: "artist",
+                    status: "active",
+                    updatedAt: serverTimestamp(),
+                }, { merge: true }),
+                FIREBASE_WRITE_TIMEOUT_MS,
+                "Could not sync your account profile."
+            );
             await refreshArtistData();
-            toast({ title: "Profile Updated! ✅", description: "Your changes have been saved." });
+            toast({ title: "Profile updated", description: "Your changes have been saved." });
         } catch (error) {
-            toast({ variant: "destructive", title: "Error", description: "Could not save changes." });
+            toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not save changes.") });
         } finally {
             setLoading(false);
         }
@@ -245,7 +307,7 @@ export default function ArtistEditProfile() {
                                     className="relative border-2 border-dashed border-border rounded-xl h-44 cursor-pointer hover:border-primary/50 transition-colors overflow-hidden group"
                                 >
                                     <img
-                                        src={artistData.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
+                                        src={artistData.media?.profilePhoto || artistData.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
                                         className="w-full h-full object-cover"
                                         alt="Profile"
                                     />
@@ -276,8 +338,8 @@ export default function ArtistEditProfile() {
                                     onClick={() => coverInputRef.current?.click()}
                                     className="relative border-2 border-dashed border-border rounded-xl h-44 cursor-pointer hover:border-primary/50 transition-colors overflow-hidden group"
                                 >
-                                    {artistData.coverPhoto ? (
-                                        <img src={artistData.coverPhoto} className="w-full h-full object-cover" alt="Cover" />
+                                    {artistData.media?.coverPhoto || artistData.coverPhoto ? (
+                                        <img src={artistData.media?.coverPhoto || artistData.coverPhoto} className="w-full h-full object-cover" alt="Cover" />
                                     ) : (
                                         <div className="flex items-center justify-center h-full">
                                             <div className="text-center text-muted-foreground">

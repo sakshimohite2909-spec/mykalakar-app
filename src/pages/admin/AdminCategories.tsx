@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Plus, Edit, Trash2, ChevronDown, ChevronRight, Loader2, Database } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from "firebase/firestore";
-import { initialCategories } from "@/data/mockData";
+import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, orderBy } from "firebase/firestore";
+import { initialCategories, platformCategories } from "@/data/mockData";
+import { firebaseErrorMessage } from "@/lib/firebaseSafe";
 
 
 export default function AdminCategories() {
@@ -26,13 +27,18 @@ export default function AdminCategories() {
   const [newType, setNewType] = useState("");
 
   useEffect(() => {
-    const q = query(collection(db, "categories"));
+    const q = query(collection(db, "categories"), orderBy("sortOrder"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setCats(data);
+      setCats(data.length > 0 ? data : platformCategories);
+      setLoading(false);
+    }, (error) => {
+      console.error(error);
+      toast({ variant: "destructive", title: "Categories unavailable", description: firebaseErrorMessage(error, "Could not load categories.") });
+      setCats(platformCategories);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -44,9 +50,15 @@ export default function AdminCategories() {
       await addDoc(collection(db, "categories"), {
         name: newCatName,
         icon: newCatIcon,
+        slug: newCatName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+        image: "",
         subcategories: [],
+        subcategoryTypes: {},
         count: 0,
-        createdAt: serverTimestamp()
+        sortOrder: cats.length + 1,
+        isActive: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
       setNewCatName("");
       setNewCatIcon("🎵");
@@ -79,7 +91,9 @@ export default function AdminCategories() {
     try {
       await updateDoc(doc(db, "categories", editingCategory.id), {
         name: newCatName,
-        icon: newCatIcon
+        slug: newCatName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+        icon: newCatIcon,
+        updatedAt: serverTimestamp()
       });
       toast({ title: "Category Updated" });
       setEditDialogOpen(false);
@@ -99,7 +113,8 @@ export default function AdminCategories() {
     try {
       const updatedSubcategories = [...(category.subcategories || []), newSubcategory];
       await updateDoc(doc(db, "categories", categoryId), {
-        subcategories: updatedSubcategories
+        subcategories: updatedSubcategories,
+        updatedAt: serverTimestamp()
       });
       toast({ title: "Subcategory Added", description: `${newSubcategory} added to ${category.name}` });
       setNewSubcategory("");
@@ -119,7 +134,8 @@ export default function AdminCategories() {
       delete updatedTypes[subcategory];
       await updateDoc(doc(db, "categories", categoryId), {
         subcategories: updatedSubcategories,
-        subcategoryTypes: updatedTypes
+        subcategoryTypes: updatedTypes,
+        updatedAt: serverTimestamp()
       });
       toast({ title: "Subcategory Removed" });
     } catch (error) {
@@ -143,7 +159,8 @@ export default function AdminCategories() {
       const updatedTypes = { ...(category.subcategoryTypes || {}) };
       updatedTypes[subcategory] = [...existingTypes, ...toAdd].sort();
       await updateDoc(doc(db, "categories", categoryId), {
-        subcategoryTypes: updatedTypes
+        subcategoryTypes: updatedTypes,
+        updatedAt: serverTimestamp()
       });
       toast({ title: `${toAdd.length} type(s) added to ${subcategory}` });
       setNewType("");
@@ -159,7 +176,8 @@ export default function AdminCategories() {
       const updatedTypes = { ...(category.subcategoryTypes || {}) };
       updatedTypes[subcategory] = (updatedTypes[subcategory] || []).filter((t: string) => t !== type);
       await updateDoc(doc(db, "categories", categoryId), {
-        subcategoryTypes: updatedTypes
+        subcategoryTypes: updatedTypes,
+        updatedAt: serverTimestamp()
       });
       toast({ title: "Type Removed" });
     } catch (error) {
@@ -175,11 +193,12 @@ export default function AdminCategories() {
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      initialCategories.forEach((cat) => {
-        const docRef = doc(collection(db, "categories"));
+      platformCategories.forEach((cat) => {
+        const docRef = doc(db, "categories", cat.id);
         batch.set(docRef, {
           ...cat,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
       });
       await batch.commit();
@@ -201,7 +220,7 @@ export default function AdminCategories() {
         const matchingData = initialCategories.find(ic => ic.name === cat.name);
         if (matchingData?.subcategoryTypes) {
           const mergedTypes = { ...(cat.subcategoryTypes || {}), ...matchingData.subcategoryTypes };
-          batch.update(doc(db, "categories", cat.id), { subcategoryTypes: mergedTypes });
+          batch.update(doc(db, "categories", cat.id), { subcategoryTypes: mergedTypes, updatedAt: serverTimestamp() });
           updated++;
         }
       });

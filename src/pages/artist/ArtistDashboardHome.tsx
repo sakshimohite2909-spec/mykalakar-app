@@ -17,6 +17,7 @@ import {
     MapPin,
     Phone,
     Clock,
+    Settings,
 } from "lucide-react";
 
 export default function ArtistDashboard() {
@@ -25,15 +26,23 @@ export default function ArtistDashboard() {
     if (!artistData) return null;
 
     // Calculate profile completion
-    const requiredFields = ["name", "phone", "bio", "profilePhoto", "subcategory", "city", "experience"];
-    const filledFields = requiredFields.filter((f) => artistData[f] && artistData[f] !== "");
+    const requiredFields = [
+        artistData.name,
+        artistData.mobileNumber || artistData.phone,
+        artistData.bio,
+        artistData.media?.profilePhoto || artistData.profilePhoto,
+        artistData.subcategory || artistData.category,
+        artistData.district || artistData.city,
+        artistData.experience,
+    ];
+    const filledFields = requiredFields.filter(Boolean);
     const completionPercent = Math.round((filledFields.length / requiredFields.length) * 100);
 
     const stats = [
-        { label: "Profile Views", value: artistData.profileViews || 0, icon: Eye, color: "text-blue-500", bg: "bg-blue-500/10" },
+        { label: "Profile Views", value: artistData.stats?.profileViews || artistData.profileViews || 0, icon: Eye, color: "text-blue-500", bg: "bg-blue-500/10" },
         { label: "Rating", value: `${artistData.rating || 0} ⭐`, icon: Star, color: "text-yellow-500", bg: "bg-yellow-500/10" },
-        { label: "Total Bookings", value: artistData.totalBookings || 0, icon: CalendarCheck, color: "text-green-500", bg: "bg-green-500/10" },
-        { label: "Followers", value: artistData.followers || 0, icon: Users, color: "text-purple-500", bg: "bg-purple-500/10" },
+        { label: "Total Bookings", value: artistData.stats?.totalBookings || artistData.totalBookings || 0, icon: CalendarCheck, color: "text-green-500", bg: "bg-green-500/10" },
+        { label: "Followers", value: artistData.stats?.followers || artistData.followers || 0, icon: Users, color: "text-purple-500", bg: "bg-purple-500/10" },
     ];
 
     return (
@@ -111,7 +120,7 @@ export default function ArtistDashboard() {
                             {/* Photo */}
                             <div className="flex-shrink-0">
                                 <img
-                                    src={artistData.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
+                                    src={artistData.media?.profilePhoto || artistData.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
                                     alt={artistData.name}
                                     className="w-28 h-28 rounded-2xl object-cover border-2 border-border"
                                 />
@@ -140,7 +149,7 @@ export default function ArtistDashboard() {
                                         <Clock className="h-3.5 w-3.5" /> {artistData.experience} yrs exp
                                     </span>
                                     <span className="flex items-center gap-1">
-                                        <Phone className="h-3.5 w-3.5" /> {artistData.phone}
+                                        <Phone className="h-3.5 w-3.5" /> {artistData.mobileNumber || artistData.phone}
                                     </span>
                                 </div>
 
@@ -157,18 +166,18 @@ export default function ArtistDashboard() {
                                     </span>
                                     <span className="flex items-center gap-1">
                                         <Star className="h-3.5 w-3.5 fill-yellow-500 text-yellow-500" />
-                                        {artistData.rating || 0} ({artistData.reviews || 0} reviews)
+                                        {artistData.stats?.rating || artistData.rating || 0} ({artistData.stats?.reviews || artistData.reviews || 0} reviews)
                                     </span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Gallery Preview */}
-                        {artistData.galleryPhotos && artistData.galleryPhotos.length > 0 && (
+                        {(artistData.media?.galleryPhotos || artistData.galleryPhotos)?.length > 0 && (
                             <div className="mt-5">
-                                <p className="text-sm font-medium mb-2">Gallery ({artistData.galleryPhotos.length} photos)</p>
+                                <p className="text-sm font-medium mb-2">Gallery ({(artistData.media?.galleryPhotos || artistData.galleryPhotos).length} photos)</p>
                                 <div className="flex gap-2 overflow-x-auto pb-2">
-                                    {artistData.galleryPhotos.slice(0, 6).map((p: string, i: number) => (
+                                    {(artistData.media?.galleryPhotos || artistData.galleryPhotos).slice(0, 6).map((p: string, i: number) => (
                                         <img
                                             key={i}
                                             src={p}
@@ -176,9 +185,9 @@ export default function ArtistDashboard() {
                                             alt={`Gallery ${i + 1}`}
                                         />
                                     ))}
-                                    {artistData.galleryPhotos.length > 6 && (
+                                    {(artistData.media?.galleryPhotos || artistData.galleryPhotos).length > 6 && (
                                         <div className="w-20 h-20 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0 border text-sm font-medium">
-                                            +{artistData.galleryPhotos.length - 6}
+                                            +{(artistData.media?.galleryPhotos || artistData.galleryPhotos).length - 6}
                                         </div>
                                     )}
                                 </div>

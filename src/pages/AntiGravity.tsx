@@ -50,7 +50,7 @@ function Scene() {
     floatRange: { value: 2, min: 0.1, max: 5, step: 0.1 },
     particleCount: { value: 150, min: 10, max: 500, step: 10 },
     lightIntensity: { value: 1.2, min: 0, max: 5, step: 0.1 },
-    glowColor: '#007A9F',
+    glowColor: '#B85C7A',
   });
 
   const geometries = useMemo(() => [
@@ -62,7 +62,7 @@ function Scene() {
   ], []);
 
   const items = useMemo(() => {
-    const colors = ['#E85D04', '#007A9F', '#FF7A29', '#10B981', '#F8FAFC'];
+    const colors = ['#E86F3A', '#B85C7A', '#F6A15A', '#C77D8D', '#F8FAFC'];
     return Array.from({ length: 8 }).map((_, i) => ({
       position: [
         (Math.random() - 0.5) * 10,
@@ -83,7 +83,7 @@ function Scene() {
     <>
       <ambientLight intensity={lightIntensity * 0.4} />
       <directionalLight position={[10, 10, 5]} intensity={lightIntensity} color={glowColor} />
-      <pointLight position={[-10, -10, -5]} intensity={lightIntensity * 0.8} color="#FF7A29" />
+      <pointLight position={[-10, -10, -5]} intensity={lightIntensity * 0.8} color="#F6A15A" />
       
       <Sparkles count={particleCount} scale={15} size={2} speed={0.4} opacity={0.6} color="#ffffff" noise={Array.from({ length: particleCount }).map(() => Math.random()) as unknown as number} />
       <Sparkles count={particleCount / 2} scale={20} size={4} speed={0.2} opacity={0.3} color={glowColor} noise={Array.from({ length: particleCount / 2 }).map(() => Math.random()) as unknown as number} />

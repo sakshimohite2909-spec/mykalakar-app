@@ -1,0 +1,178 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.status == "active";
+    }
+
+    function validOwnedUser(uid) {
+      return isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.role in ["customer", "artist", "admin_request"]
+        && request.resource.data.status in ["active", "pending", "blocked"];
+    }
+
+    function userKeepsIdentity(uid) {
+      return isOwner(uid)
+        && resource.data.uid == uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role;
+    }
+
+    function validArtistApplicationOwner() {
+      return signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.role == "artist"
+        && request.resource.data.status == "pending";
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if validOwnedUser(uid) || isAdmin();
+      allow update: if (validOwnedUser(uid) && userKeepsIdentity(uid)) || isAdmin();
+      allow delete: if isAdmin();
+
+      match /savedArtists/{artistId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+    }
+
+    match /admins/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /admin_requests/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == "pending";
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /artist_applications/{applicationId} {
+      allow create: if validArtistApplicationOwner();
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /pending_registrations/{registrationId} {
+      allow create: if validArtistApplicationOwner()
+        || (
+          signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.status == "pending"
+        );
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.uid == request.auth.uid
+          && resource.data.status == "pending"
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.status == resource.data.status
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /artists/{artistId} {
+      allow read: if (signedIn() && artistId == request.auth.uid)
+        || resource.data.status == "active"
+        || isAdmin()
+        || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.verified == resource.data.verified
+          && request.resource.data.trending == resource.data.trending
+        );
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /states/{stateId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /event_category_mappings/{mappingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /inquiries/{inquiryId} {
+      allow create: if request.resource.data.status == "pending"
+        && request.resource.data.artistId is string
+        && request.resource.data.customerPhone is string;
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && (
+            resource.data.artistUid == request.auth.uid
+            || resource.data.artistId == request.auth.uid
+            || resource.data.customerId == request.auth.uid
+          )
+        );
+      allow update, delete: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && (
+            resource.data.artistUid == request.auth.uid
+            || resource.data.artistId == request.auth.uid
+            || resource.data.customerId == request.auth.uid
+          )
+        );
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && (resource.data.artistUid == request.auth.uid || resource.data.artistId == request.auth.uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])
+          && request.resource.data.status in ["accepted", "declined", "completed", "cancelled"]
+        );
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if resource.data.isPublic == true || isAdmin();
+      allow create: if signedIn() && request.resource.data.customerId == request.auth.uid;
+      allow update, delete: if isAdmin() || (signedIn() && resource.data.customerId == request.auth.uid);
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update, delete: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
+    }
+
+    match /app_settings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

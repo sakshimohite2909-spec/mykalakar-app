@@ -28,20 +28,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, query, where, updateDoc, doc, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { approveArtist, rejectArtist } from "@/lib/adminQueries";
+import { firebaseErrorMessage } from "@/lib/firebaseSafe";
 
 export default function AdminPending() {
   const [pending, setPending] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, "pending_registrations"), where("status", "==", "pending"));
+    const q = query(collection(db, "artist_applications"), where("status", "==", "pending"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       setPending(data);
+      setLoading(false);
+    }, (error) => {
+      console.error(error);
+      toast({ variant: "destructive", title: "Pending approvals unavailable", description: firebaseErrorMessage(error, "Could not load pending approvals.") });
       setLoading(false);
     });
 
@@ -50,10 +56,7 @@ export default function AdminPending() {
 
   const handleApprove = async (id: string) => {
     try {
-      await updateDoc(doc(db, "pending_registrations", id), {
-        status: "approved",
-        verified: true
-      });
+      await approveArtist(id);
       toast({ title: "Artist Verified! ✅", description: "Artist is now live and verified on the platform." });
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Could not verify artist." });
@@ -62,9 +65,7 @@ export default function AdminPending() {
 
   const handleReject = async (id: string) => {
     try {
-      await updateDoc(doc(db, "pending_registrations", id), {
-        status: "rejected"
-      });
+      await rejectArtist(id);
       toast({ title: "Artist Rejected", description: "Registration has been rejected." });
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Could not reject artist." });
@@ -120,7 +121,7 @@ export default function AdminPending() {
               <div className="flex flex-col md:flex-row gap-4 items-start">
                 <div className="relative group">
                   <img
-                    src={a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
+                    src={a.media?.profilePhoto || a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
                     alt={a.name}
                     className="w-24 h-24 rounded-2xl object-cover border-2 border-background shadow-md"
                   />
@@ -141,10 +142,10 @@ export default function AdminPending() {
                       <Mail className="h-3.5 w-3.5" /> {a.email || "No email"}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Phone className="h-3.5 w-3.5" /> {a.phone}
+                      <Phone className="h-3.5 w-3.5" /> {a.mobileNumber || a.phone}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="h-3.5 w-3.5" /> {a.district}, {a.state}
+                      <MapPin className="h-3.5 w-3.5" /> {a.district || a.city}, {a.state}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Briefcase className="h-3.5 w-3.5" /> {a.experience} years experience
@@ -196,11 +197,11 @@ export default function AdminPending() {
                                   <InfoRow label="Registration ID" value={a.id.slice(0, 10) + "..."} />
                                   <InfoRow label="Email Address" value={a.email} icon={Mail} />
                                   <InfoRow label="UID" value={a.uid ? "Account Created" : "Not Linked"} icon={Check} />
-                                  <InfoRow label="Aadhar Number" value={a.aadharNumber} icon={CreditCard} />
-                                  {a.aadharPhoto && (
+                                  <InfoRow label="Aadhar Number" value={a.identity?.aadharNumber || a.aadharNumber} icon={CreditCard} />
+                                  {(a.media?.aadharPhoto || a.aadharPhoto) && (
                                     <div className="mt-4 pt-2 border-t">
                                       <p className="text-[10px] text-muted-foreground uppercase font-bold mb-2">Aadhar Photo</p>
-                                      <img src={a.aadharPhoto} className="w-full h-auto rounded-lg border shadow-sm" alt="Aadhar" />
+                                      <img src={a.media?.aadharPhoto || a.aadharPhoto} className="w-full h-auto rounded-lg border shadow-sm" alt="Aadhar" />
                                     </div>
                                   )}
                                 </CardContent>
@@ -211,9 +212,9 @@ export default function AdminPending() {
                                   <h4 className="font-bold flex items-center gap-2 text-primary mb-3 pb-2 border-b">
                                     <Building2 className="h-4 w-4" /> Bank Account Info
                                   </h4>
-                                  <InfoRow label="Bank Name" value={a.bankName} />
-                                  <InfoRow label="Account Number" value={a.accountNumber} />
-                                  <InfoRow label="IFSC Code" value={a.ifscCode} />
+                                  <InfoRow label="Bank Name" value={a.bankDetails?.bankName || a.bankName} />
+                                  <InfoRow label="Account Number" value={a.bankDetails?.accountNumber || a.accountNumber} />
+                                  <InfoRow label="IFSC Code" value={a.bankDetails?.ifscCode || a.ifscCode} />
                                   <InfoRow label="Availability" value={a.availability} />
                                   <div className="p-3 mt-4 bg-primary/5 rounded-lg border border-primary/10">
                                     <p className="text-[10px] text-primary uppercase font-bold mb-1">Internal Note</p>
@@ -240,7 +241,7 @@ export default function AdminPending() {
                                   <InfoRow label="Languages" value={a.languageSpoken?.join(", ")} icon={Languages} />
                                   <InfoRow label="Willingness to Travel" value={a.travelWillingness} />
 
-                                  <InfoRow label="District" value={a.district} />
+                                  <InfoRow label="District" value={a.district || a.city} />
                                   <InfoRow label="State" value={a.state} />
                                 </div>
                               </CardContent>
@@ -278,11 +279,11 @@ export default function AdminPending() {
                             </Card>
 
                             {/* Gallery */}
-                            {a.galleryPhotos && (
+                            {(a.media?.galleryPhotos || a.galleryPhotos) && (
                               <div className="space-y-4">
                                 <h4 className="text-lg font-bold flex items-center gap-2"><Upload className="h-5 w-5 text-primary" /> Portfolio Media</h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-                                  {a.galleryPhotos.map((p: string, i: number) => (
+                                  {(a.media?.galleryPhotos || a.galleryPhotos).map((p: string, i: number) => (
                                     <div key={i} className="group relative aspect-square rounded-xl overflow-hidden border">
                                       <img src={p} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt={`Media ${i}`} />
                                     </div>
@@ -322,10 +323,10 @@ export default function AdminPending() {
                             <div className="max-w-3xl mx-auto border rounded-2xl overflow-hidden shadow-2xl bg-background">
                               {/* Fake Profile Header */}
                               <div className="relative h-48 bg-muted">
-                                {a.coverPhoto && <img src={a.coverPhoto} className="w-full h-full object-cover" />}
+                                {(a.media?.coverPhoto || a.coverPhoto) && <img src={a.media?.coverPhoto || a.coverPhoto} className="w-full h-full object-cover" />}
                                 <div className="absolute -bottom-12 left-8">
                                   <img
-                                    src={a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
+                                    src={a.media?.profilePhoto || a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
                                     className="w-32 h-32 rounded-2xl border-4 border-background object-cover shadow-xl"
                                   />
                                 </div>
@@ -354,7 +355,7 @@ export default function AdminPending() {
                                   <p className="text-sm leading-relaxed">{a.bio || "No biography provided yet."}</p>
                                 </div>
                                 <div className="grid grid-cols-4 gap-2">
-                                  {a.galleryPhotos?.slice(0, 4).map((p: string, i: number) => (
+                                  {(a.media?.galleryPhotos || a.galleryPhotos)?.slice(0, 4).map((p: string, i: number) => (
                                     <img key={i} src={p} className="aspect-square rounded-xl object-cover hover:opacity-80 cursor-pointer transition-opacity" />
                                   ))}
                                 </div>

@@ -12,6 +12,7 @@ import { Plus, Edit, Trash2, Calendar, Database, Loader2 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from "firebase/firestore";
 import { toast } from "@/hooks/use-toast";
+import { firebaseErrorMessage } from "@/lib/firebaseSafe";
 
 // Define data locally
 const events = [
@@ -71,6 +72,10 @@ const AdminEvents = () => {
       }));
       setEventList(data);
       setLoading(false);
+    }, (error) => {
+      console.error(error);
+      toast({ variant: "destructive", title: "Events unavailable", description: firebaseErrorMessage(error, "Could not load events.") });
+      setLoading(false);
     });
 
     const mappingsQuery = query(collection(db, "event_category_mappings"));
@@ -80,6 +85,9 @@ const AdminEvents = () => {
         ...doc.data()
       }));
       setMappings(data);
+    }, (error) => {
+      console.error(error);
+      toast({ variant: "destructive", title: "Event mappings unavailable", description: firebaseErrorMessage(error, "Could not load event mappings.") });
     });
 
     return () => {
@@ -97,9 +105,11 @@ const AdminEvents = () => {
         // Update existing event in Firestore
         await updateDoc(doc(db, "events", editingEvent.id), {
           name: formData.name,
+          slug: formData.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
           icon: formData.icon,
           description: formData.description,
-          requiredCategories: formData.requiredCategories
+          requiredCategories: formData.requiredCategories,
+          updatedAt: serverTimestamp()
         });
         
         // Delete old mappings
@@ -126,10 +136,13 @@ const AdminEvents = () => {
         // Add new event to Firestore
         const eventDoc = await addDoc(collection(db, "events"), {
           name: formData.name,
+          slug: formData.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
           icon: formData.icon,
           description: formData.description,
           requiredCategories: formData.requiredCategories,
-          createdAt: serverTimestamp()
+          isActive: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
         
         // Add mappings
@@ -223,10 +236,13 @@ const AdminEvents = () => {
         eventIds[event.id] = docRef.id;
         batch.set(docRef, {
           name: event.name,
+          slug: event.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
           icon: event.icon,
           description: event.description,
           requiredCategories: event.requiredCategories,
-          createdAt: serverTimestamp()
+          isActive: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
       });
       

@@ -6,7 +6,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Check, X, Calendar, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, onSnapshot, updateDoc, doc } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { cancelInquiry, confirmInquiry } from "@/lib/adminQueries";
+import { firebaseErrorMessage } from "@/lib/firebaseSafe";
 
 import { MapPin, Home, MessageSquare } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -25,6 +27,10 @@ export default function AdminBookings() {
       }));
       setInquiries(data);
       setLoading(false);
+    }, (error) => {
+      console.error(error);
+      toast({ variant: "destructive", title: "Inquiries unavailable", description: firebaseErrorMessage(error, "Could not load inquiries.") });
+      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -32,7 +38,11 @@ export default function AdminBookings() {
 
   const updateStatus = async (id: string, status: "confirmed" | "cancelled") => {
     try {
-      await updateDoc(doc(db, "inquiries", id), { status });
+      if (status === "confirmed") {
+        await confirmInquiry(id);
+      } else {
+        await cancelInquiry(id);
+      }
       toast({ title: status === "confirmed" ? "Inquiry Confirmed ✅" : "Inquiry Cancelled" });
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Could not update status." });

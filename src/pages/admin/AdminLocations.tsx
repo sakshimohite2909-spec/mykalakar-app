@@ -5,10 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, ChevronDown, ChevronRight, Loader2, MapPin, X, Search } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Loader2, MapPin, X, Search, Database } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, orderBy } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, orderBy, writeBatch } from "firebase/firestore";
+import { firebaseErrorMessage } from "@/lib/firebaseSafe";
+import { getDefaultIndiaStateDocuments } from "@/lib/indiaLocations";
 
 export default function AdminLocations() {
     const [states, setStates] = useState<any[]>([]);
@@ -26,16 +28,34 @@ export default function AdminLocations() {
     const [addDistrictInput, setAddDistrictInput] = useState("");
 
     useEffect(() => {
+        let mounted = true;
+        const useDefaultLocations = async () => {
+            const defaults = await getDefaultIndiaStateDocuments();
+            if (mounted) setStates(defaults);
+        };
+
         const q = query(collection(db, "states"), orderBy("name"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
-            setStates(data);
+            if (data.length > 0) {
+                setStates(data);
+            } else {
+                void useDefaultLocations();
+            }
+            setLoading(false);
+        }, (error) => {
+            console.error(error);
+            toast({ variant: "destructive", title: "Locations unavailable", description: firebaseErrorMessage(error, "Could not load states and districts.") });
+            void useDefaultLocations();
             setLoading(false);
         });
-        return () => unsubscribe();
+        return () => {
+            mounted = false;
+            unsubscribe();
+        };
     }, []);
 
     // --- Add State Flow ---
@@ -81,7 +101,8 @@ export default function AdminLocations() {
             await addDoc(collection(db, "states"), {
                 name: newStateName.trim(),
                 districts: newDistricts,
-                createdAt: serverTimestamp()
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
             });
             toast({ title: "State Added ✅", description: `${newStateName} with ${newDistricts.length} districts saved.` });
             setNewStateName("");
@@ -102,6 +123,10 @@ export default function AdminLocations() {
         if (!raw) return;
         const state = states.find(s => s.id === stateId);
         if (!state) return;
+        if (state.localFallback) {
+            toast({ title: "Default location", description: "Seed locations to Firebase before editing this state." });
+            return;
+        }
         // Support comma, newline, or semicolon separated input
         const names = raw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
         const existing = state.districts || [];
@@ -113,7 +138,7 @@ export default function AdminLocations() {
         }
         try {
             const updatedDistricts = [...existing, ...toAdd].sort();
-            await updateDoc(doc(db, "states", stateId), { districts: updatedDistricts });
+            await updateDoc(doc(db, "states", stateId), { districts: updatedDistricts, updatedAt: serverTimestamp() });
             toast({ title: `${toAdd.length} district(s) added to ${state.name}` });
             if (duplicates.length > 0) {
                 toast({ variant: "destructive", title: "Duplicates Skipped", description: `${duplicates.join(", ")} already existed.` });
@@ -127,9 +152,13 @@ export default function AdminLocations() {
     const handleRemoveDistrictFromState = async (stateId: string, district: string) => {
         const state = states.find(s => s.id === stateId);
         if (!state) return;
+        if (state.localFallback) {
+            toast({ title: "Default location", description: "Seed locations to Firebase before editing this state." });
+            return;
+        }
         try {
             const updatedDistricts = state.districts.filter((d: string) => d !== district);
-            await updateDoc(doc(db, "states", stateId), { districts: updatedDistricts });
+            await updateDoc(doc(db, "states", stateId), { districts: updatedDistricts, updatedAt: serverTimestamp() });
             toast({ title: "District Removed" });
         } catch (error) {
             toast({ variant: "destructive", title: "Error" });
@@ -137,12 +166,39 @@ export default function AdminLocations() {
     };
 
     const handleDeleteState = async (id: string) => {
+        const state = states.find(s => s.id === id);
+        if (state?.localFallback) {
+            toast({ title: "Default location", description: "Seed locations to Firebase before editing or deleting this state." });
+            return;
+        }
         if (!confirm("Delete this state and all its districts?")) return;
         try {
             await deleteDoc(doc(db, "states", id));
             toast({ title: "State Deleted" });
         } catch (error) {
             toast({ variant: "destructive", title: "Error" });
+        }
+    };
+
+    const handleSeedDefaultLocations = async () => {
+        setLoading(true);
+        try {
+            const defaults = await getDefaultIndiaStateDocuments();
+            const batch = writeBatch(db);
+            defaults.forEach(({ localFallback, ...state }) => {
+                batch.set(doc(db, "states", state.isoCode), {
+                    ...state,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+            });
+            await batch.commit();
+            toast({ title: "Locations seeded", description: "All Indian states and districts are now saved in Firebase." });
+        } catch (error) {
+            console.error(error);
+            toast({ variant: "destructive", title: "Seeding failed", description: firebaseErrorMessage(error, "Could not seed locations.") });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -158,6 +214,10 @@ export default function AdminLocations() {
                     <h1 className="font-display text-2xl font-bold mb-1">States & Districts</h1>
                     <p className="text-sm text-muted-foreground">{states.length} states · Add Indian states and their districts</p>
                 </div>
+                <div className="flex gap-2">
+                <Button onClick={handleSeedDefaultLocations} variant="secondary" size="sm">
+                    <Database className="h-4 w-4 mr-2" /> Seed India Defaults
+                </Button>
                 <Dialog open={dialogOpen} onOpenChange={(open) => {
                     setDialogOpen(open);
                     if (!open) { setNewStateName(""); setNewDistricts([]); setNewDistrictInput(""); }
@@ -247,6 +307,7 @@ export default function AdminLocations() {
                         </div>
                     </DialogContent>
                 </Dialog>
+                </div>
             </div>
 
             {/* Search */}

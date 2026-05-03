@@ -4,6 +4,7 @@ import { ChevronRight, Loader2, Sparkles, ArrowRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
+import { platformCategories } from "@/data/mockData";
 
 const pastelColors = [
   "bg-orange-50 border-orange-100/50 text-orange-500",
@@ -32,10 +33,14 @@ export default function CategoriesGrid() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const qCats = query(collection(db, "categories"), orderBy("name"));
+    const qCats = query(collection(db, "categories"), orderBy("sortOrder"));
     const unsubCats = onSnapshot(qCats, (catSnap) => {
       const cats = catSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setCategories(cats);
+      setCategories(cats.length > 0 ? cats : platformCategories);
+      setLoading(false);
+    }, (error) => {
+      console.warn("Categories unavailable, using local defaults.", error);
+      setCategories(platformCategories);
       setLoading(false);
     });
     return () => unsubCats();

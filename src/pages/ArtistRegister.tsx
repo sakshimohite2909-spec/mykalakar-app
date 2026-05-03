@@ -1,1281 +1,2021 @@
+import {
+  type ChangeEvent,
+  type ComponentType,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useMemo, useRef, useEffect } from "react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { toast } from "@/hooks/use-toast";
-import { Upload, Send, User, Music, MapPin, Search as SearchIcon, Plus, Trash2, Globe, Youtube, Instagram, Facebook, CreditCard, Building2, Check, ChevronsUpDown, Loader2, X, AtSign, Lock, Eye, EyeOff, IndianRupee, Users, Headphones, MessageSquare, CheckCircle2, XCircle, Sparkles } from "lucide-react";
+import { Controller, type FieldValues, type Path, type UseFormRegister, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  ArrowLeft,
+  AtSign,
+  BadgeCheck,
+  Building2,
+  ChevronDown,
+  CreditCard,
+  Eye,
+  EyeOff,
+  FileImage,
+  Globe,
+  IndianRupee,
+  Landmark,
+  Loader2,
+  Lock,
+  MapPin,
+  MessageSquare,
+  Music,
+  Phone,
+  Plus,
+  Search,
+  Send,
+  Sparkles,
+  Trash2,
+  Upload,
+  User,
+  Users,
+  X,
+  Youtube,
+  ExternalLink,
+} from "lucide-react";
+import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, getDocs, where } from "firebase/firestore";
-import { uploadImageFile } from "@/lib/uploadService";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate, Link } from "react-router-dom";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import CreatableSelect from "react-select/creatable";
+import { toast } from "@/hooks/use-toast";
+import { getExternalUrl, getYoutubeEmbedUrl } from "@/lib/youtube";
+import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
 
-const categoryOptions = [
-  {
-    label: "General Categories",
-    options: [
-      { value: "Actors", label: "Actors" },
-      { value: "Singer", label: "Singer" },
-      { value: "Karaoke Singers", label: "Karaoke Singers" },
-      { value: "Orchestra", label: "Orchestra" },
-      { value: "Magicians", label: "Magicians" },
-      { value: "Pappate show", label: "Pappate show" },
-      { value: "DJ's", label: "DJ's" },
-      { value: "Anchors / Hosts", label: "Anchors / Hosts" },
-      { value: "Motivational speakers", label: "Motivational speakers" },
-      { value: "Photo & Videography", label: "Photo & Videography" },
-      { value: "Makeup / Mehndi Artist", label: "Makeup / Mehndi Artist" }
-    ]
-  },
-  {
-    label: "Folk Art",
-    options: [
-      { value: "Folk Art", label: "Folk Art (General)" },
-      { value: "Gondhal", label: "Gondhal" },
-      { value: "Jagran", label: "Jagran" },
-      { value: "Bharud", label: "Bharud" },
-      { value: "Shahir & Powada", label: "Shahir & Powada" },
-      { value: "Lezim pathak", label: "Lezim pathak" },
-      { value: "Zanz pathak", label: "Zanz pathak" },
-      { value: "Dhol pathak", label: "Dhol pathak" },
-      { value: "Waghya-Murali", label: "Waghya-Murali" },
-      { value: "Jalsa & Dashavtar", label: "Jalsa & Dashavtar" },
-      { value: "Dhagari & dhol ovi", label: "Dhagari & dhol ovi" },
-      { value: "Bahurupiya", label: "Bahurupiya" }
-    ]
-  },
-  {
-    label: "Varkari Sampraday",
-    options: [
-      { value: "Varkari Sampraday", label: "Varkari Sampraday (General)" },
-      { value: "Kirtankar", label: "Kirtankar" },
-      { value: "Pravachankar", label: "Pravachankar" },
-      { value: "Vyaspethchalak", label: "Vyaspethchalak" },
-      { value: "Chopdar", label: "Chopdar" },
-      { value: "Gayak", label: "Gayak" },
-      { value: "Mrudangmani", label: "Mrudangmani" },
-      { value: "Bharudkar", label: "Bharudkar" },
-      { value: "Soundsystem", label: "Soundsystem" },
-      { value: "Mandap & decoration", label: "Mandap & decoration" },
-      { value: "Venekari", label: "Venekari" },
-      { value: "Taalkari", label: "Taalkari" },
-      { value: "Varkari Sanstha", label: "Varkari Sanstha" },
-      { value: "Bhajani Mandal", label: "Bhajani Mandal" },
-      { value: "Shastriya Bhajan", label: "Shastriya Bhajan" },
-      { value: "Tabla vadak", label: "Tabla vadak" },
-      { value: "Harmonium vadak", label: "Harmonium vadak" },
-      { value: "Dholki vadak", label: "Dholki vadak" }
-    ]
-  }
+type AuthRole = "admin" | "artist" | "user";
+type PortfolioPlatform = "youtube" | "instagram" | "facebook" | "website";
+type PortfolioLink = { platform: PortfolioPlatform; url: string };
+type ExtraArtEntry = {
+  id: string;
+  category: string;
+  soloPrice: string;
+  duoPrice: string;
+  teamPrice: string;
+};
+
+const roleTabs: Array<{ id: AuthRole; label: string; icon: ComponentType<{ className?: string }>; color: string }> = [
+  { id: "admin", label: "Admin", icon: Building2, color: "from-orange-500 via-amber-400 to-rose-500" },
+  { id: "artist", label: "Artist", icon: Music, color: "from-orange-500 to-amber-400" },
+  { id: "user", label: "User", icon: User, color: "from-rose-500 to-amber-400" },
 ];
 
-export default function ArtistRegister() {
-  const { register: authRegister } = useAuth();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("artist");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [dbCategories, setDbCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [catOpen, setCatOpen] = useState(false);
-  const [subOpen, setSubOpen] = useState(false);
-  const [dbStates, setDbStates] = useState<any[]>([]);
-  const [stateOpen, setStateOpen] = useState(false);
-  const [districtOpen, setDistrictOpen] = useState(false);
-  const [username, setUsername] = useState("");
-  const USERNAME_REGEX = /^[a-z0-9_]{3,16}$/;
-  const usernameValid = username === "" ? null : USERNAME_REGEX.test(username);
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+const portfolioPlatformOptions: Array<{ value: PortfolioPlatform; label: string }> = [
+  { value: "youtube", label: "YouTube" },
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Facebook" },
+  { value: "website", label: "Website" },
+];
 
-  // User tab state
-  const [userFullName, setUserFullName] = useState("");
-  const [userUsername, setUserUsername] = useState("");
-  const [userPhone, setUserPhone] = useState("");
-  const [userPassword, setUserPassword] = useState("");
-  const [userLoading, setUserLoading] = useState(false);
+const artCategoryOptions = [
+  "Actors",
+  "Singer",
+  "Karaoke Singers",
+  "Orchestra",
+  "Magicians",
+  "Puppet Show",
+  "DJ's",
+  "Anchors / Hosts",
+  "Motivational Speakers",
+  "Photo & Videography",
+  "Makeup / Mehndi Artist",
+  "Folk Art",
+  "Gondhal",
+  "Jagran",
+  "Bharud",
+  "Shahir & Powada",
+  "Lezim Pathak",
+  "Zanz Pathak",
+  "Dhol Pathak",
+  "Waghya-Murali",
+  "Jalsa & Dashavtar",
+  "Dhangari & Dhol Ovi",
+  "Bahurupiya",
+  "Varkari Sampraday",
+  "Kirtankar",
+  "Pravachankar",
+  "Vyaspethchalak",
+  "Chopdar",
+  "Gayak",
+  "Mrudangmani",
+  "Bharudkar",
+  "Soundsystem",
+  "Mandap & Decoration",
+  "Venekari",
+  "Taalkari",
+  "Varkari Sanstha",
+  "Bhajani Mandal",
+  "Shastriya Bhajan",
+  "Tabla Vadak",
+  "Harmonium Vadak",
+  "Dholki Vadak",
+];
 
-  const handleUserRegistration = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userFullName || !userUsername || !userPassword) {
-      toast({ variant: "destructive", title: "Error", description: "All fields are required." });
-      return;
-    }
-    const syntheticEmail = `${userUsername.toLowerCase().trim()}@mykalakar.app`;
-    setUserLoading(true);
-    const result = await authRegister(syntheticEmail, userPassword);
-    if (result.success) {
-      // Save full name and phone number to the users collection, alongside base user data.
-      // role defaults to customer per AuthContext fetching.
-      try {
-        const { doc, setDoc } = await import("firebase/firestore");
-        await setDoc(doc(db, "users", result.uid), {
-          uid: result.uid,
-          name: userFullName,
-          username: userUsername,
-          email: syntheticEmail,
-          phone: userPhone,
-          role: "customer",
-          createdAt: new Date().toISOString()
-        }, { merge: true });
-        toast({ title: "Account Created! 🎉", description: "You are now logged in." });
-        navigate("/artists"); // Redirect to artists
-      } catch (err) {
-        toast({ variant: "destructive", title: "Error Saving Profile", description: "Account created but failed to save profile details." });
-      }
-    } else {
-      toast({ variant: "destructive", title: "Registration Failed", description: result.message });
-    }
-    setUserLoading(false);
+const fullNameRule = z
+  .string()
+  .min(3, "Full name must be at least 3 characters.")
+  .regex(/^[a-zA-Z\s]*$/, "Full name can contain letters and spaces only.");
+
+const usernameRule = z
+  .string()
+  .min(4, "Username must be at least 4 characters.")
+  .regex(/^[a-z0-9_]*$/, "Username can contain lowercase letters, numbers, and underscores only. No spaces.");
+
+const passwordRule = z
+  .string()
+  .min(8, "Password must be at least 8 characters.")
+  .regex(/[A-Z]/, "Password must contain at least one uppercase letter.")
+  .regex(/[a-z]/, "Password must contain at least one lowercase letter.")
+  .regex(/\d/, "Password must contain at least one number.")
+  .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character.");
+
+const mobileRule = z.string().regex(/^\d{10}$/, "Mobile number must be exactly 10 digits.");
+const emergencyRule = z.string().regex(/^\d{10}$/, "Emergency number must be exactly 10 digits.");
+const optionalPhoneRule = z
+  .string()
+  .optional()
+  .refine((value) => !value || /^\d{10}$/.test(value), {
+    message: "Optional phone number must be exactly 10 digits.",
+  });
+const aadharRule = z.preprocess(
+  (value) => String(value ?? "").replace(/\s/g, ""),
+  z.string().regex(/^\d{12}$/, "Aadhar number must be exactly 12 digits.")
+);
+const bankNameRule = z.string().min(2, "Bank name must be at least 2 characters.");
+const ifscRule = z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "IFSC code must strictly match Indian IFSC format.");
+const accountRule = z
+  .string()
+  .min(9, "Account number must be at least 9 digits.")
+  .max(18, "Account number must be at most 18 digits.")
+  .regex(/^\d+$/, "Account number must contain digits only.");
+const stateRule = z.string().min(1, "State is required.");
+const districtRule = z.string().min(1, "District is required.");
+
+const artistRegistrationSchema = z
+  .object({
+    fullName: fullNameRule,
+    username: usernameRule,
+    password: passwordRule,
+    confirmPassword: z.string().min(1, "Confirm password is required."),
+    brandName: z.string().optional(),
+    mobileNumber: mobileRule,
+    emergencyNumber: emergencyRule,
+    phoneOptional: optionalPhoneRule,
+    dob: z.string().min(1, "Date of birth is required."),
+    gender: z.string().min(1, "Gender is required."),
+    travelWillingness: z.string().min(1, "Travel willingness is required."),
+    artCategory: z.string().min(1, "Category / art form is required."),
+    soloPrice: z.string().optional(),
+    duoPrice: z.string().optional(),
+    teamPrice: z.string().optional(),
+    state: stateRule,
+    district: districtRule,
+    experience: z.string().min(1, "Experience is required.").regex(/^\d+$/, "Experience must be a number."),
+    bio: z.string().optional(),
+    aadharNumber: aadharRule,
+    bankName: bankNameRule,
+    ifscCode: ifscRule,
+    accountNumber: accountRule,
+    portfolioUrl: z.string().optional(),
+    liveLink: z.string().optional(),
+    hasAssistant: z.boolean(),
+    assistantName: z.string().optional(),
+    assistantContact: z.string().optional(),
+    suggestionComment: z.string().optional(),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
+
+const userRegistrationSchema = z
+  .object({
+    fullName: fullNameRule,
+    username: usernameRule,
+    password: passwordRule,
+    confirmPassword: z.string().min(1, "Confirm password is required."),
+    phoneOptional: optionalPhoneRule,
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
+
+const adminRegistrationSchema = z
+  .object({
+    fullName: fullNameRule,
+    username: usernameRule,
+    password: passwordRule,
+    confirmPassword: z.string().min(1, "Confirm password is required."),
+    mobileNumber: mobileRule,
+    capName: z.string().min(2, "Cap name must be at least 2 characters."),
+    bloodGroup: z.string().min(1, "Blood group is required."),
+    about: z.string().min(10, "Tell us about yourself in at least 10 characters."),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
+
+type ArtistRegistrationValues = z.infer<typeof artistRegistrationSchema>;
+type UserRegistrationValues = z.infer<typeof userRegistrationSchema>;
+type AdminRegistrationValues = z.infer<typeof adminRegistrationSchema>;
+
+const artistDefaults: ArtistRegistrationValues = {
+  fullName: "",
+  username: "",
+  password: "",
+  confirmPassword: "",
+  brandName: "",
+  mobileNumber: "",
+  emergencyNumber: "",
+  phoneOptional: "",
+  dob: "",
+  gender: "",
+  travelWillingness: "local",
+  artCategory: "",
+  soloPrice: "",
+  duoPrice: "",
+  teamPrice: "",
+  state: "",
+  district: "",
+  experience: "",
+  bio: "",
+  aadharNumber: "",
+  bankName: "",
+  ifscCode: "",
+  accountNumber: "",
+  portfolioUrl: "",
+  liveLink: "",
+  hasAssistant: false,
+  assistantName: "",
+  assistantContact: "",
+  suggestionComment: "",
+};
+
+const userDefaults: UserRegistrationValues = {
+  fullName: "",
+  username: "",
+  password: "",
+  confirmPassword: "",
+  phoneOptional: "",
+};
+
+const adminDefaults: AdminRegistrationValues = {
+  fullName: "",
+  username: "",
+  password: "",
+  confirmPassword: "",
+  mobileNumber: "",
+  capName: "",
+  bloodGroup: "",
+  about: "",
+};
+
+const inputClass =
+  "input-glass w-full px-4 py-3 text-sm text-[#1A1A1A] placeholder:text-slate-400";
+const errorInputClass = "border-red-400 focus:border-red-500 focus:ring-red-200";
+
+function digitsOnly(value: string, maxLength: number) {
+  return value.replace(/\D/g, "").slice(0, maxLength);
+}
+
+function formatAadhar(value: string) {
+  return digitsOnly(value, 12).replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+function getAgeLabel(dob: string) {
+  if (!dob) return "Select DOB to auto-calculate";
+  const birthDate = new Date(dob);
+  if (Number.isNaN(birthDate.getTime())) return "Select DOB to auto-calculate";
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDelta = today.getMonth() - birthDate.getMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+  return `${Math.max(age, 0)} Years Old`;
+}
+
+function syntheticEmail(username: string) {
+  return `${username.toLowerCase().trim()}@mykalakar.app`;
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-1.5 text-xs font-semibold text-red-500">{message}</p>;
+}
+
+function SectionHeading({
+  icon: Icon,
+  title,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 border-b border-slate-200/70 pb-4">
+      <Icon className="h-5 w-5 text-orange-500" />
+      <h2 className="font-display text-xl font-bold text-[#2E3A47]">{title}</h2>
+    </div>
+  );
+}
+
+type TextFieldProps<T extends FieldValues> = {
+  label: string;
+  name: Path<T>;
+  register: UseFormRegister<T>;
+  error?: string;
+  icon?: ComponentType<{ className?: string }>;
+  type?: string;
+  placeholder?: string;
+  inputMode?: "text" | "numeric" | "tel" | "url";
+  maxLength?: number;
+  autoComplete?: string;
+  className?: string;
+};
+
+function TextField<T extends FieldValues>({
+  label,
+  name,
+  register,
+  error,
+  icon: Icon,
+  type = "text",
+  placeholder,
+  inputMode,
+  maxLength,
+  autoComplete,
+  className = "",
+}: TextFieldProps<T>) {
+  return (
+    <div className={className}>
+      <label htmlFor={name} className="mb-1.5 flex items-center gap-2 text-sm font-bold text-slate-700">
+        {Icon ? <Icon className="h-4 w-4 text-orange-500" /> : null}
+        {label}
+      </label>
+      <input
+        id={name}
+        type={type}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        autoComplete={autoComplete}
+        placeholder={placeholder}
+        aria-invalid={Boolean(error)}
+        {...register(name)}
+        className={`${inputClass} ${error ? errorInputClass : ""}`}
+      />
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  onBlur,
+  error,
+  show,
+  onToggle,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+  error?: string;
+  show: boolean;
+  onToggle: () => void;
+  placeholder: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 flex items-center gap-2 text-sm font-bold text-slate-700">
+        <Lock className="h-4 w-4 text-orange-500" />
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          type={show ? "text" : "password"}
+          value={value}
+          onBlur={onBlur}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          autoComplete="new-password"
+          className={`${inputClass} pr-11 ${error ? errorInputClass : ""}`}
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+          aria-label={show ? "Hide password" : "Show password"}
+        >
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function SearchableDropdown({
+  label,
+  value,
+  options,
+  placeholder,
+  disabled = false,
+  allowCustom = false,
+  error,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  placeholder: string;
+  disabled?: boolean;
+  allowCustom?: boolean;
+  error?: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const filteredOptions = useMemo(() => {
+    const query = searchValue.trim().toLowerCase();
+    if (!query) return options;
+    return options.filter((option) => option.toLowerCase().includes(query));
+  }, [options, searchValue]);
+  const customValue = searchValue.trim();
+  const canAddCustom =
+    allowCustom &&
+    customValue.length > 1 &&
+    !options.some((option) => option.toLowerCase() === customValue.toLowerCase());
+  const selectValue = (nextValue: string) => {
+    onChange(nextValue);
+    setOpen(false);
+    setSearchValue("");
   };
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let unsubStates: (() => void) | undefined;
-
-    try {
-      const q = query(collection(db, "categories"));
-      unsubscribe = onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setDbCategories(data);
-      }, (error) => {
-        console.warn("Categories snapshot error:", error.message);
-      });
-    } catch (e) {
-      console.warn("Could not subscribe to categories:", e);
-    }
-
-    try {
-      const qStates = query(collection(db, "states"), orderBy("name"));
-      unsubStates = onSnapshot(qStates, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setDbStates(data);
-      }, (error) => {
-        console.warn("States snapshot error:", error.message);
-      });
-    } catch (e) {
-      console.warn("Could not subscribe to states:", e);
-    }
-
-    return () => {
-      if (unsubscribe) unsubscribe();
-      if (unsubStates) unsubStates();
+    const onMouseDown = (event: MouseEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setSearchValue("");
+      }
     };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
 
-  const [formData, setFormData] = useState({
-    name: "",
-    brandName: "",
-    emergencyNumber: "",
-    mobileNumber: "",
-    age: "",
-    gender: "",
-    dob: "",
-    travelWillingness: "local",
-    state: "",
-    district: "",
-    experience: "",
-    bio: "",
-    availability: "available",
-    accountNumber: "",
-    ifscCode: "",
-    bankName: "",
-    aadharNumber: "",
-    // Pricing
+  useEffect(() => {
+    if (open) window.requestAnimationFrame(() => inputRef.current?.focus());
+  }, [open]);
+
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+      setSearchValue("");
+    }
+  }, [disabled]);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <label className="mb-1.5 block text-sm font-bold text-slate-700">{label}</label>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) setOpen((current) => !current);
+        }}
+        className={`input-glass flex h-[50px] w-full items-center justify-between px-4 text-left text-sm ${
+          disabled ? "cursor-not-allowed opacity-60" : ""
+        } ${error ? errorInputClass : ""}`}
+      >
+        <span className={value ? "text-[#1A1A1A]" : "text-slate-400"}>{value || placeholder}</span>
+        <ChevronDown className={`h-4 w-4 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && !disabled ? (
+        <div className="absolute left-0 right-0 z-50 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+          <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                ref={inputRef}
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value)}
+                placeholder={`Search ${label.toLowerCase()}`}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-100"
+              />
+            </div>
+          </div>
+          <ul className="dropdown-scroll-area max-h-[min(320px,48vh)] py-1" role="listbox">
+            {canAddCustom ? (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => selectValue(customValue)}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-orange-600 transition hover:bg-orange-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add "{customValue}"
+                </button>
+              </li>
+            ) : null}
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => (
+                <li key={option}>
+                  <button
+                    type="button"
+                    onClick={() => selectValue(option)}
+                    className={`w-full px-4 py-2.5 text-left text-sm transition ${
+                      option === value ? "bg-orange-50 font-bold text-orange-600" : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                </li>
+              ))
+            ) : (
+              <li className="px-4 py-3 text-sm text-slate-500">{allowCustom ? "Type a new art form to add it." : "No results found."}</li>
+            )}
+          </ul>
+        </div>
+      ) : null}
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function ArtCategoryCard({
+  art,
+  index,
+  removable = false,
+  error,
+  onUpdate,
+  onRemove,
+}: {
+  art: ExtraArtEntry;
+  index: number;
+  removable?: boolean;
+  error?: string;
+  onUpdate: (next: ExtraArtEntry) => void;
+  onRemove?: () => void;
+}) {
+  const update = (field: keyof ExtraArtEntry, value: string) => {
+    onUpdate({ ...art, [field]: value });
+  };
+
+  return (
+    <div className="rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-sm font-black text-slate-500">Art #{index + 1}</p>
+        {removable ? (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-red-100 bg-white/70 px-3 text-[10px] font-black uppercase tracking-wider text-red-500 transition hover:bg-red-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Remove
+          </button>
+        ) : null}
+      </div>
+
+      <SearchableDropdown
+        label="Category / Art Form *"
+        value={art.category}
+        options={artCategoryOptions}
+        placeholder="Search or add your art form..."
+        error={error}
+        allowCustom
+        onChange={(value) => update("category", value)}
+      />
+
+      <div className="my-5 h-px bg-white/80" />
+
+      <div className="mb-4 flex items-center gap-2">
+        <IndianRupee className="h-4 w-4 text-orange-500" />
+        <h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Performance Pricing</h3>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <div>
+          <label className="mb-1.5 block text-sm font-bold text-slate-700">Solo Performance</label>
+          <input
+            value={art.soloPrice}
+            onChange={(event) => update("soloPrice", digitsOnly(event.target.value, 8))}
+            inputMode="numeric"
+            placeholder="e.g. 10000"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-bold text-slate-700">Duo Performance</label>
+          <input
+            value={art.duoPrice}
+            onChange={(event) => update("duoPrice", digitsOnly(event.target.value, 8))}
+            inputMode="numeric"
+            placeholder="e.g. 15000"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-bold text-slate-700">Team Performance</label>
+          <input
+            value={art.teamPrice}
+            onChange={(event) => update("teamPrice", digitsOnly(event.target.value, 8))}
+            inputMode="numeric"
+            placeholder="e.g. 25000"
+            className={inputClass}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PortfolioLinksEditor({
+  links,
+  onAdd,
+  onRemove,
+  onUpdate,
+}: {
+  links: PortfolioLink[];
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+  onUpdate: (index: number, next: PortfolioLink) => void;
+}) {
+  return (
+    <div className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
+      {links.map((link, index) => {
+        const trimmedUrl = link.url.trim();
+        const embedUrl = link.platform === "youtube" ? getYoutubeEmbedUrl(trimmedUrl) : null;
+
+        return (
+          <div key={index} className="rounded-2xl border border-white/70 bg-white/65 p-4 shadow-sm backdrop-blur-md">
+            <div className="grid gap-3 md:grid-cols-[132px_1fr_auto]">
+              <label className="relative block">
+                <span className="sr-only">Portfolio platform</span>
+                <select
+                  value={link.platform}
+                  onChange={(event) => onUpdate(index, { ...link, platform: event.target.value as PortfolioPlatform })}
+                  className="input-glass h-12 w-full appearance-none px-4 pr-9 text-sm font-semibold text-slate-700"
+                >
+                  {portfolioPlatformOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              </label>
+
+              <input
+                type="url"
+                inputMode="url"
+                value={link.url}
+                onChange={(event) => onUpdate(index, { ...link, url: event.target.value })}
+                placeholder={link.platform === "youtube" ? "youtube.com/watch?v=..." : "Paste portfolio link here..."}
+                className="input-glass h-12 w-full px-4 text-sm text-[#1A1A1A] placeholder:text-slate-400"
+                aria-label={`${portfolioPlatformOptions.find((option) => option.value === link.platform)?.label ?? "Portfolio"} link`}
+              />
+
+              {links.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => onRemove(index)}
+                  className="flex h-12 w-full items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-500 transition hover:bg-red-100 md:w-12"
+                  aria-label="Remove portfolio link"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+
+            {trimmedUrl ? (
+              <div className="mt-4">
+                {embedUrl ? (
+                  <div className="aspect-video w-full overflow-hidden rounded-2xl border border-orange-100 bg-slate-900 shadow-lg shadow-orange-200/50">
+                    <iframe
+                      width="100%"
+                      height="100%"
+                      src={embedUrl}
+                      title={`YouTube portfolio preview ${index + 1}`}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                      loading="lazy"
+                    />
+                  </div>
+                ) : link.platform === "youtube" ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-orange-100 bg-white/60 px-4 py-3 text-xs font-semibold text-slate-500">
+                    <Youtube className="h-4 w-4 text-orange-500" />
+                    Paste a valid YouTube video link to preview it here.
+                  </div>
+                ) : (
+                  <a
+                    href={getExternalUrl(trimmedUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between rounded-xl border border-orange-100 bg-white/60 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-white"
+                  >
+                    <span className="truncate">{trimmedUrl}</span>
+                    <ExternalLink className="ml-3 h-4 w-4 shrink-0 text-orange-500" />
+                  </a>
+                )}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+
+      <button
+        type="button"
+        onClick={onAdd}
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-orange-100 bg-white/65 text-sm font-black text-slate-700 shadow-sm transition hover:border-orange-200 hover:bg-white"
+      >
+        <Plus className="h-4 w-4" />
+        Add More Links
+      </button>
+    </div>
+  );
+}
+
+function FileDrop({
+  label,
+  description,
+  file,
+  preview,
+  required,
+  tone = "orange",
+  onChange,
+}: {
+  label: string;
+  description: string;
+  file: File | null;
+  preview: string;
+  required?: boolean;
+  tone?: "orange" | "blue" | "slate";
+  onChange: (file: File | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const toneClass =
+    tone === "blue"
+      ? "border-blue-200 bg-blue-50/40 text-blue-500 hover:border-blue-400"
+      : tone === "slate"
+      ? "border-slate-200 bg-slate-50/60 text-slate-500 hover:border-slate-400"
+      : "border-orange-200 bg-orange-50/40 text-orange-500 hover:border-orange-400";
+
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0] ?? null;
+    onChange(selected);
+  };
+
+  return (
+    <div>
+      <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">
+        {label} {required ? "*" : ""}
+      </label>
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleChange} />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className={`relative flex h-36 w-full flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition ${toneClass}`}
+      >
+        {preview ? (
+          <>
+            <img src={preview} alt={`${label} preview`} className="absolute inset-0 h-full w-full object-cover" />
+            <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-sm font-black text-white opacity-0 transition hover:opacity-100">
+              Change image
+            </span>
+          </>
+        ) : (
+          <>
+            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-white/70">
+              {file ? <BadgeCheck className="h-5 w-5" /> : <Upload className="h-5 w-5" />}
+            </div>
+            <span className="text-sm font-black">{description}</span>
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
+function RoleTabs({
+  activeRole,
+  onChange,
+}: {
+  activeRole: AuthRole;
+  onChange: (role: AuthRole) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-1.5 rounded-2xl border border-orange-100 bg-orange-50/60 p-1.5 shadow-sm backdrop-blur-md">
+      {roleTabs.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onChange(tab.id)}
+            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+              activeRole === tab.id
+                ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
+                : "text-slate-500 hover:bg-white/70 hover:text-slate-700"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function useRoleFromQuery(defaultRole: AuthRole = "artist") {
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const roleParam = searchParams.get("role");
+  const pathRole: AuthRole | null = location.pathname.includes("admin")
+    ? "admin"
+    : location.pathname.includes("user")
+    ? "user"
+    : location.pathname.includes("artist")
+    ? "artist"
+    : null;
+  const activeRole: AuthRole = roleParam === "admin" || roleParam === "user" || roleParam === "artist" ? roleParam : pathRole ?? defaultRole;
+
+  const setActiveRole = (role: AuthRole) => {
+    setSearchParams({ role }, { replace: true });
+  };
+
+  return [activeRole, setActiveRole] as const;
+}
+
+function createExtraArtEntry(): ExtraArtEntry {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    category: "",
     soloPrice: "",
     duoPrice: "",
     teamPrice: "",
-    // Assistant support
-    hasAssistant: false,
-    assistantName: "",
-    assistantContact: "",
-    liveLink: "",
-    needAssistant: "no",
-    telecallerName: "",
-    professionalName: "",
-    capName: "",
-    bloodGroup: "",
-    // Suggestion/comment
-    suggestionComment: "",
-    // Fee notes
-    feeNotes: "",
-  });
-
-  // Real-Time Age Synchronization — only re-run when DOB changes, NOT when age changes
-  useEffect(() => {
-    if (formData.dob) {
-      const birthDate = new Date(formData.dob);
-      const today = new Date();
-      let calculatedAge = today.getFullYear() - birthDate.getFullYear();
-      const m = today.getMonth() - birthDate.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        calculatedAge--;
-      }
-      setFormData(prev => ({ ...prev, age: calculatedAge.toString() }));
-    } else {
-      setFormData(prev => ({ ...prev, age: "" }));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.dob]);
-
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [customTypeInput, setCustomTypeInput] = useState("");
-
-  // Multiple arts support
-  const [artsList, setArtsList] = useState<Array<{
-    category: string;
-    // Per-category Pricing
-    soloPrice: string;
-    duoPrice: string;
-    teamPrice: string;
-    // Per-category Media
-    profileFile: File | null;
-    profilePreview: string;
-    coverFile: File | null;
-    coverPreview: string;
-    galleryFiles: File[];
-    galleryPreviews: string[];
-  }>>([{
-    coverFile: null, coverPreview: "",
-    galleryFiles: [], galleryPreviews: [],
-  }]);
-
-  const updateArt = (index: number, field: string, value: any) => {
-    setArtsList(prev => prev.map((art, i) => i === index ? { ...art, [field]: value } : art));
   };
+}
 
-  const addArt = () => {
-    setArtsList(prev => [...prev, {
-      category: "",
-      soloPrice: "", duoPrice: "", teamPrice: "",
-      profileFile: null, profilePreview: "",
-      coverFile: null, coverPreview: "",
-      galleryFiles: [], galleryPreviews: [],
-    }]);
-  };
-
-  const removeArt = (index: number) => {
-    if (artsList.length === 1) return;
-    setArtsList(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // Dynamic file picker per art entry
-  const handleArtFileSelect = (index: number, type: 'profile' | 'cover' | 'gallery') => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    if (type === 'gallery') input.multiple = true;
-    input.onchange = (e) => {
-      const files = (e.target as HTMLInputElement).files;
-      if (!files || files.length === 0) return;
-      if (type === 'profile') {
-        const file = files[0];
-        const preview = URL.createObjectURL(file);
-        updateArt(index, 'profileFile', file);
-        updateArt(index, 'profilePreview', preview);
-      } else if (type === 'cover') {
-        const file = files[0];
-        const preview = URL.createObjectURL(file);
-        updateArt(index, 'coverFile', file);
-        updateArt(index, 'coverPreview', preview);
-      } else {
-        const current = artsList[index];
-        const remaining = 10 - current.galleryFiles.length;
-        const newFiles = Array.from(files).slice(0, remaining);
-        const newPreviews = newFiles.map(f => URL.createObjectURL(f));
-        updateArt(index, 'galleryFiles', [...current.galleryFiles, ...newFiles]);
-        updateArt(index, 'galleryPreviews', [...current.galleryPreviews, ...newPreviews]);
-      }
-    };
-    input.click();
-  };
-
-  const [socialLinks, setSocialLinks] = useState([{ platform: "youtube", url: "" }]);
-
-  // File states
+export default function ArtistRegister() {
+  const [activeRole, setActiveRole] = useRoleFromQuery("artist");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loadingRole, setLoadingRole] = useState<AuthRole | null>(null);
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const [profilePreview, setProfilePreview] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState("");
-  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
-  const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
   const [aadharFile, setAadharFile] = useState<File | null>(null);
   const [aadharPreview, setAadharPreview] = useState("");
+  const [galleryFiles, setGalleryFiles] = useState<Array<{ file: File; preview: string }>>([]);
+  const [portfolioLinks, setPortfolioLinks] = useState<PortfolioLink[]>([{ platform: "youtube", url: "" }]);
+  const [extraArtEntries, setExtraArtEntries] = useState<ExtraArtEntry[]>([]);
+  const { register: authRegister, logout } = useAuth();
+  const navigate = useNavigate();
 
-  // Refs for file inputs
-  const profileInputRef = useRef<HTMLInputElement>(null);
-  const coverInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const aadharInputRef = useRef<HTMLInputElement>(null);
+  const artistForm = useForm<ArtistRegistrationValues>({
+    defaultValues: artistDefaults,
+    mode: "onChange",
+    resolver: zodResolver(artistRegistrationSchema),
+  });
+  const userForm = useForm<UserRegistrationValues>({
+    defaultValues: userDefaults,
+    mode: "onChange",
+    resolver: zodResolver(userRegistrationSchema),
+  });
+  const adminForm = useForm<AdminRegistrationValues>({
+    defaultValues: adminDefaults,
+    mode: "onChange",
+    resolver: zodResolver(adminRegistrationSchema),
+  });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  const selectedState = artistForm.watch("state");
+  const selectedDob = artistForm.watch("dob");
+  const hasAssistant = artistForm.watch("hasAssistant");
+  const stateOptions = useMemo(() => getIndiaStates().map((state) => state.name), []);
+  const [districts, setDistricts] = useState<string[]>([]);
 
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  useEffect(() => {
+    let active = true;
 
-  const addSocialLink = () => {
-    setSocialLinks([...socialLinks, { platform: "youtube", url: "" }]);
-  };
-
-  const removeSocialLink = (index: number) => {
-    setSocialLinks(socialLinks.filter((_, i) => i !== index));
-  };
-
-  const updateSocialLink = (index: number, field: string, value: string) => {
-    const newLinks = [...socialLinks];
-    newLinks[index] = { ...newLinks[index], [field]: value };
-    setSocialLinks(newLinks);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'gallery' | 'aadhar' | 'cover') => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    if (type === 'profile') {
-      const file = files[0];
-      setProfileFile(file);
-      setProfilePreview(URL.createObjectURL(file));
-    } else if (type === 'cover') {
-      const file = files[0];
-      setCoverFile(file);
-      setCoverPreview(URL.createObjectURL(file));
-    } else if (type === 'aadhar') {
-      const file = files[0];
-      setAadharFile(file);
-      setAadharPreview(URL.createObjectURL(file));
-    } else if (type === 'gallery') {
-      const newFiles = Array.from(files);
-      setGalleryFiles([...galleryFiles, ...newFiles]);
-      const newPreviews = newFiles.map(f => URL.createObjectURL(f));
-      setGalleryPreviews([...galleryPreviews, ...newPreviews]);
+    if (!selectedState) {
+      setDistricts([]);
+      return () => {
+        active = false;
+      };
     }
+
+    setDistricts([]);
+    getIndiaDistrictsByStateName(selectedState)
+      .then((options) => {
+        if (active) setDistricts(options);
+      })
+      .catch((error) => {
+        console.error("Failed to load districts", error);
+        if (active) setDistricts([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedState]);
+
+  useEffect(() => {
+    return () => {
+      if (profilePreview) URL.revokeObjectURL(profilePreview);
+      if (coverPreview) URL.revokeObjectURL(coverPreview);
+      if (aadharPreview) URL.revokeObjectURL(aadharPreview);
+      galleryFiles.forEach((item) => URL.revokeObjectURL(item.preview));
+    };
+  }, [aadharPreview, coverPreview, galleryFiles, profilePreview]);
+
+  const setPreviewFile = (
+    file: File | null,
+    currentPreview: string,
+    setFile: (file: File | null) => void,
+    setPreview: (preview: string) => void
+  ) => {
+    if (currentPreview) URL.revokeObjectURL(currentPreview);
+    setFile(file);
+    setPreview(file ? URL.createObjectURL(file) : "");
+  };
+
+  const addGalleryFile = (file: File | null) => {
+    if (!file) return;
+    if (galleryFiles.length >= 10) {
+      toast({ variant: "destructive", title: "Gallery limit", description: "You can upload up to 10 gallery photos." });
+      return;
+    }
+    setGalleryFiles((current) => [...current, { file, preview: URL.createObjectURL(file) }]);
   };
 
   const removeGalleryFile = (index: number) => {
-    setGalleryFiles(galleryFiles.filter((_, i) => i !== index));
-    setGalleryPreviews(galleryPreviews.filter((_, i) => i !== index));
+    setGalleryFiles((current) => {
+      const item = current[index];
+      if (item) URL.revokeObjectURL(item.preview);
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
   };
 
-  // Thin wrapper — delegates to the production upload service
-  const uploadFile = async (file: File | null | undefined, path: string) => {
-    return uploadImageFile(file, path, (pct) => setUploadProgress(pct));
+  const addArtEntry = () => {
+    setExtraArtEntries((current) => [...current, createExtraArtEntry()]);
   };
 
-  const getYoutubeEmbedUrl = (url: string) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+  const updateExtraArtEntry = (id: string, nextEntry: ExtraArtEntry) => {
+    setExtraArtEntries((current) => current.map((entry) => (entry.id === id ? nextEntry : entry)));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!artsList[0].category) {
-      toast({ variant: "destructive", title: "Missing fields", description: "Please select at least one category." });
+  const removeExtraArtEntry = (id: string) => {
+    setExtraArtEntries((current) => current.filter((entry) => entry.id !== id));
+  };
+
+  const addPortfolioLink = () => {
+    setPortfolioLinks((current) => [...current, { platform: "youtube", url: "" }]);
+  };
+
+  const updatePortfolioLink = (index: number, nextLink: PortfolioLink) => {
+    setPortfolioLinks((current) => {
+      const next = current.map((link, linkIndex) => (linkIndex === index ? nextLink : link));
+      artistForm.setValue("portfolioUrl", next[0]?.url ?? "", { shouldDirty: true });
+      return next;
+    });
+  };
+
+  const removePortfolioLink = (index: number) => {
+    setPortfolioLinks((current) => {
+      const next = current.filter((_, linkIndex) => linkIndex !== index);
+      artistForm.setValue("portfolioUrl", next[0]?.url ?? "", { shouldDirty: true });
+      return next.length > 0 ? next : [{ platform: "youtube", url: "" }];
+    });
+  };
+
+  const fallbackProfilePhoto = (name = "Artist") =>
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "Artist")}&background=f97316&color=fff&size=256`;
+
+  const getRegistrationImagePath = (
+    file: File | null,
+    path: string,
+    fallback = ""
+  ) => {
+    if (!file) return fallback;
+    const safeName = file.name.trim().replace(/[^\w.-]+/g, "_");
+    return `${path}/${Date.now()}_${safeName || "image"}`;
+  };
+
+  const submitArtist = async (values: ArtistRegistrationValues) => {
+    if (!profileFile) {
+      toast({ variant: "destructive", title: "Profile photo required", description: "Please upload a profile photo." });
+      return;
+    }
+    const preparedExtraArts = extraArtEntries
+      .map((entry) => ({
+        ...entry,
+        category: entry.category.trim(),
+        soloPrice: entry.soloPrice.trim(),
+        duoPrice: entry.duoPrice.trim(),
+        teamPrice: entry.teamPrice.trim(),
+      }))
+      .filter((entry) => entry.category || entry.soloPrice || entry.duoPrice || entry.teamPrice);
+    if (preparedExtraArts.some((entry) => !entry.category)) {
+      toast({ variant: "destructive", title: "Category missing", description: "Please select an art form for every added category." });
       return;
     }
 
-    if (!artsList[0].profileFile) {
-      toast({ variant: "destructive", title: "Profile Photo Required", description: "Please upload a profile photo." });
-      return;
-    }
+    setLoadingRole("artist");
 
-    if (!username) {
-      toast({ variant: "destructive", title: "Username Required", description: "Please enter a username for your account." });
-      return;
-    }
-    if (!USERNAME_REGEX.test(username)) {
-      toast({ variant: "destructive", title: "Invalid Username", description: "Username must be 3-16 chars: lowercase letters, numbers, underscores only." });
-      return;
-    }
-    if (!password) {
-      toast({ variant: "destructive", title: "Password Required", description: "Please enter a password to create your account." });
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      toast({ variant: "destructive", title: "Password Mismatch", description: "Passwords do not match." });
-      return;
-    }
-
-    if (password.length < 6) {
-      toast({ variant: "destructive", title: "Weak Password", description: "Password must be at least 6 characters." });
-      return;
-    }
-
-    setLoading(true);
-    setUploadProgress(0);
     try {
-      // STEP 0 — Username uniqueness check (both collections)
-      const [regSnap, usersSnap] = await Promise.all([
-        getDocs(query(collection(db, "pending_registrations"), where("username", "==", username))),
-        getDocs(query(collection(db, "users"), where("username", "==", username))),
-      ]);
-      if (!regSnap.empty || !usersSnap.empty) {
-        toast({ variant: "destructive", title: "Username Taken", description: "This username is already registered. Please choose another one." });
-        setLoading(false);
-        return;
-      }
+      const normalizedUsername = values.username.toLowerCase().trim();
+      const email = syntheticEmail(normalizedUsername);
+      const authResult = await authRegister(email, values.password);
 
-      // STEP 1 — Create Firebase Auth account (username → synthetic email)
-      const syntheticEmail = `${username.toLowerCase().trim()}@mykalakar.app`;
-      const authResult = await authRegister(syntheticEmail, password);
       if (!authResult.success) {
-        toast({ variant: "destructive", title: "Account Error", description: authResult.message });
-        setLoading(false);
+        toast({ variant: "destructive", title: "Registration failed", description: authResult.message });
         return;
       }
+
       const uid = authResult.uid;
-
-      // STEP 2 — Small delay to let Firebase auth token propagate before Storage uploads.
-      // This fixes the storage/unknown CORS-rejection that happens when uploading
-      // before the auth session is fully established on the Firebase SDK side.
-      await new Promise(resolve => setTimeout(resolve, 400));
-
-      // STEP 3 — Upload profile photo (required)
-      const profileUrl = await uploadFile(artsList[0].profileFile, `avatars/${uid}`);
-
-      // STEP 4 — Upload optional cover, aadhar, gallery per art entry
-      let coverUrl = "";
-      if (artsList[0].coverFile) {
-        coverUrl = await uploadFile(artsList[0].coverFile, `covers/${uid}`);
-      }
-
-      let aadharUrl = "";
-      if (aadharFile) {
-        aadharUrl = await uploadFile(aadharFile, `identity/${uid}`);
-      }
-
-      const galleryUrls = await Promise.all(
-        artsList[0].galleryFiles.map((file: File) => uploadFile(file, `galleries/${uid}`))
+      await withTimeout(
+        setDoc(
+          doc(db, "users", uid),
+          {
+            uid,
+            username: normalizedUsername,
+            email,
+            name: values.fullName,
+            phone: values.mobileNumber,
+            role: "artist",
+            status: "pending",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ),
+        FIREBASE_WRITE_TIMEOUT_MS,
+        "Could not save your user account details."
       );
 
-      // STEP 5 — Build Firestore registration document
-      const registrationPayload = {
-        ...formData,
+      const profilePhoto = getRegistrationImagePath(
+        profileFile,
+        `avatars/${uid}`,
+        fallbackProfilePhoto(values.fullName)
+      );
+      const coverPhoto = getRegistrationImagePath(coverFile, `covers/${uid}`);
+      const aadharPhoto = getRegistrationImagePath(aadharFile, `identity/${uid}`);
+      const galleryPhotos = galleryFiles
+        .map((item) => getRegistrationImagePath(item.file, `galleries/${uid}`))
+        .filter(Boolean);
+      const socialLinks = portfolioLinks
+        .map((link) => ({ platform: link.platform, url: link.url.trim() }))
+        .filter((link) => link.url.length > 0);
+      const youtubeLinks = socialLinks.filter((link) => link.platform === "youtube").map((link) => link.url);
+      const artEntries = [
+        {
+          category: values.artCategory,
+          subcategory: "",
+          types: [],
+          soloPrice: Number(values.soloPrice) || 0,
+          duoPrice: Number(values.duoPrice) || 0,
+          teamPrice: Number(values.teamPrice) || 0,
+        },
+        ...preparedExtraArts.map((entry) => ({
+          category: entry.category,
+          subcategory: "",
+          types: [],
+          soloPrice: Number(entry.soloPrice) || 0,
+          duoPrice: Number(entry.duoPrice) || 0,
+          teamPrice: Number(entry.teamPrice) || 0,
+        })),
+      ];
+
+      const payload = {
         uid,
-        username,
-        email: syntheticEmail,
+        username: normalizedUsername,
+        email,
         role: "artist",
-        category: artsList[0].category,
-        artsList: artsList.map(({ profileFile: _pf, coverFile: _cf, profilePreview: _pp, coverPreview: _cp, galleryFiles: _gf, galleryPreviews: _gp, ...rest }) => rest),
-        categories: artsList.map(art => art.category).filter(Boolean),
-        socialLinks,
-        profilePhoto: profileUrl,
-        coverPhoto: coverUrl,
-        aadharPhoto: aadharUrl,
-        galleryPhotos: galleryUrls,
         status: "pending",
+        rejectionReason: "",
+        name: values.fullName,
+        brandName: values.brandName || "",
+        mobileNumber: values.mobileNumber,
+        emergencyNumber: values.emergencyNumber,
+        phoneOptional: values.phoneOptional || "",
+        dob: values.dob,
+        age: Number.parseInt(getAgeLabel(values.dob), 10) || 0,
+        gender: values.gender,
+        travelWillingness: values.travelWillingness,
+        category: artEntries[0]?.category || values.artCategory,
+        subcategory: "",
+        types: [],
+        categories: Array.from(new Set(artEntries.map((entry) => entry.category).filter(Boolean))),
+        artsList: artEntries,
+        soloPrice: artEntries[0]?.soloPrice || 0,
+        duoPrice: artEntries[0]?.duoPrice || 0,
+        teamPrice: artEntries[0]?.teamPrice || 0,
+        state: values.state,
+        district: values.district,
+        experience: Number(values.experience),
+        bio: values.bio || "",
+        availability: "available",
+        aadharNumber: values.aadharNumber,
+        identity: {
+          aadharNumber: values.aadharNumber,
+        },
+        bankName: values.bankName,
+        ifscCode: values.ifscCode,
+        accountNumber: values.accountNumber,
+        bankDetails: {
+          bankName: values.bankName,
+          ifscCode: values.ifscCode,
+          accountNumber: values.accountNumber,
+        },
+        media: {
+          profilePhoto,
+          coverPhoto,
+          galleryPhotos,
+          aadharPhoto,
+        },
+        profilePhoto,
+        coverPhoto,
+        galleryPhotos,
+        aadharPhoto,
+        socialLinks,
+        youtubeLinks,
+        portfolioUrl: socialLinks[0]?.url || values.portfolioUrl || "",
+        liveLink: values.liveLink || "",
+        assistant: {
+          hasAssistant: values.hasAssistant,
+          name: values.assistantName || "",
+          contact: values.assistantContact || "",
+          needAssistant: values.hasAssistant ? "yes" : "no",
+        },
+        suggestionComment: values.suggestionComment || "",
+        mediaUploadStatus: "path-only",
+        mediaUploadWarnings: [],
         verified: false,
         trending: false,
-        rating: 0,
-        reviews: 0,
-        followers: 0,
-        profileViews: 0,
-        totalBookings: 0,
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
 
-      // STEP 6 — Write to Firestore in parallel: pending_registrations + users (so auth lookup works)
-      const { doc: firestoreDoc, setDoc } = await import("firebase/firestore");
-      await Promise.all([
-        addDoc(collection(db, "pending_registrations"), registrationPayload),
-        setDoc(firestoreDoc(db, "users", uid), {
-          uid,
-          username,
-          email: syntheticEmail,
-          name: formData.name,
-          role: "artist",
-          profilePhoto: profileUrl,
-          status: "pending",
-          createdAt: new Date().toISOString(),
-        }, { merge: true }),
-      ]);
-
-      toast({ title: "Registration Submitted! 🎉", description: "Account created! You can login once your profile is approved." });
-      setTimeout(() => navigate("/artist-login"), 2500);
-
-      // Reset form
-      setFormData({
-        name: "", brandName: "", emergencyNumber: "", mobileNumber: "", age: "", gender: "", dob: "", travelWillingness: "local",
-        state: "", district: "", experience: "", bio: "", availability: "available",
-        accountNumber: "", ifscCode: "", bankName: "", aadharNumber: "",
-        soloPrice: "", duoPrice: "", teamPrice: "", feeNotes: "",
-        hasAssistant: false, assistantName: "", assistantContact: "", liveLink: "",
-        needAssistant: "no", telecallerName: "", professionalName: "", capName: "", bloodGroup: "",
-        suggestionComment: "",
+      await withTimeout(
+        addDoc(collection(db, "artist_applications"), payload),
+        FIREBASE_WRITE_TIMEOUT_MS,
+        "Could not submit your artist application."
+      );
+      await withTimeout(
+        setDoc(doc(db, "users", uid), { profilePhoto, updatedAt: serverTimestamp() }, { merge: true }),
+        FIREBASE_WRITE_TIMEOUT_MS,
+        "Could not update your profile photo."
+      );
+      await logout().catch((logoutError) => console.warn("Logout after artist registration failed:", logoutError));
+      toast({
+        title: "Registration submitted",
+        description: "Your artist profile is under review. Image paths were saved without uploading files.",
       });
-      setProfileFile(null); setProfilePreview(""); setCoverFile(null); setCoverPreview("");
-      setGalleryFiles([]); setGalleryPreviews([]); setAadharFile(null); setAadharPreview("");
-      setSocialLinks([{ platform: "youtube", url: "" }]);
-      setArtsList([{ category: "", soloPrice: "", duoPrice: "", teamPrice: "", profileFile: null, profilePreview: "", coverFile: null, coverPreview: "", galleryFiles: [], galleryPreviews: [] }]);
-      setUsername(""); setPassword(""); setConfirmPassword("");
-    } catch (error: any) {
-      console.error("=== FIREBASE REGISTRATION ERROR ===");
-      console.error("Error code:", error?.code);
-      console.error("Error message:", error?.message);
-      console.error("Full error payload:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      navigate("/login?role=artist");
+    } catch (error) {
+      console.error("Artist registration error:", error);
       toast({
         variant: "destructive",
-        title: "Registration Failed ❌",
-        description: error?.message || "Could not submit your registration. Please check the console for details.",
+        title: "Registration failed",
+        description: firebaseErrorMessage(error, "Could not submit your artist registration."),
       });
     } finally {
-      setLoading(false);
-      setUploadProgress(0);
+      setLoadingRole(null);
+    }
+  };
+
+  const submitUser = async (values: UserRegistrationValues) => {
+    setLoadingRole("user");
+    try {
+      const normalizedUsername = values.username.toLowerCase().trim();
+      const email = syntheticEmail(normalizedUsername);
+      const authResult = await authRegister(email, values.password);
+
+      if (!authResult.success) {
+        toast({ variant: "destructive", title: "Registration failed", description: authResult.message });
+        return;
+      }
+
+      await withTimeout(
+        setDoc(
+          doc(db, "users", authResult.uid),
+          {
+            uid: authResult.uid,
+            name: values.fullName,
+            username: normalizedUsername,
+            email,
+            phone: values.phoneOptional || "",
+            role: "customer",
+            status: "active",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ),
+        FIREBASE_WRITE_TIMEOUT_MS,
+        "Could not save your user profile."
+      );
+
+      toast({ title: "Account created", description: "Welcome to MyKalakar." });
+      navigate("/profile");
+    } catch (error) {
+      console.error("User registration error:", error);
+      toast({
+        variant: "destructive",
+        title: "Registration failed",
+        description: firebaseErrorMessage(error, "Could not create your account."),
+      });
+    } finally {
+      setLoadingRole(null);
+    }
+  };
+
+  const submitAdmin = async (values: AdminRegistrationValues) => {
+    setLoadingRole("admin");
+    try {
+      const normalizedUsername = values.username.toLowerCase().trim();
+      const email = syntheticEmail(normalizedUsername);
+      const authResult = await authRegister(email, values.password);
+
+      if (!authResult.success) {
+        toast({ variant: "destructive", title: "Registration failed", description: authResult.message });
+        return;
+      }
+
+      const adminRequest = {
+        uid: authResult.uid,
+        name: values.fullName,
+        username: normalizedUsername,
+        email,
+        mobileNumber: values.mobileNumber,
+        capName: values.capName,
+        bloodGroup: values.bloodGroup,
+        about: values.about,
+        status: "pending",
+        requestedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await withTimeout(
+        setDoc(
+          doc(db, "users", authResult.uid),
+          {
+            uid: authResult.uid,
+            name: values.fullName,
+            username: normalizedUsername,
+            email,
+            role: "admin_request",
+            status: "pending",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ),
+        FIREBASE_WRITE_TIMEOUT_MS,
+        "Could not save your admin request account."
+      );
+      await withTimeout(
+        addDoc(collection(db, "admin_requests"), adminRequest),
+        FIREBASE_WRITE_TIMEOUT_MS,
+        "Could not submit the admin access request."
+      );
+      await logout().catch((logoutError) => console.warn("Logout after admin request failed:", logoutError));
+      toast({ title: "Admin request submitted", description: "Your admin access request is pending approval." });
+      navigate("/login?role=admin");
+    } catch (error) {
+      console.error("Admin request error:", error);
+      toast({
+        variant: "destructive",
+        title: "Request failed",
+        description: firebaseErrorMessage(error, "Could not submit the admin request."),
+      });
+    } finally {
+      setLoadingRole(null);
     }
   };
 
   return (
-    <div className="relative z-10 w-full pt-32 pb-32 flex justify-center items-start">
-      <div className="container mx-auto px-4 max-w-2xl w-full">
-        <div className="glass-panel border border-white/50 bg-white/60 backdrop-blur-3xl shadow-[0_8px_32px_rgba(0,0,0,0.1)] rounded-3xl p-6 md:p-8 w-full h-fit flex flex-col space-y-6">
-          {/* Back nav & Login */}
-          <div className="flex items-center justify-between mb-2">
-            <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-orange-600 transition-colors bg-white/50 border border-orange-100 shadow-sm backdrop-blur-md rounded-full px-4 py-2">
-              ← Back to Home
+    <div className="relative z-10 w-full px-4 py-10 sm:py-16">
+      <div className="mx-auto max-w-4xl">
+        <div className="glass-panel min-h-[720px] overflow-hidden rounded-[2rem] border border-white/60 bg-white/65 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-3xl sm:p-8 md:p-10">
+          <div className="mb-8 flex items-center justify-between gap-3">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-white/70 px-4 py-2 text-sm font-bold text-slate-500 shadow-sm transition hover:text-orange-600"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Home
             </Link>
-            <Link to="/artist-login" className="text-sm font-bold text-orange-500 hover:text-orange-600 transition-colors">
-              Login →
+            <Link
+              to={`/login?role=${activeRole}`}
+              className="text-sm font-black text-orange-500 transition hover:text-orange-600"
+            >
+              Login -&gt;
             </Link>
           </div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center mx-auto mb-5 shadow-[0_8px_32px_rgba(255,107,0,0.3)]">
-              <Music className="h-6 w-6 text-foreground" />
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl gradient-bg shadow-[0_12px_40px_rgba(232,111,58,0.25)]">
+              <Music className="h-7 w-7 text-white" />
             </div>
-            <h1 className="font-display text-3xl md:text-4xl font-black text-[#1A1A1A] mb-2 tracking-tight">Join <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500">MyKalakar</span> as an Artist</h1>
-            <p className="text-slate-500 text-sm font-medium">India's premier platform for Artists, Performers & Entertainers.</p>
-          </motion.div>
+            <h1 className="font-display text-4xl font-black tracking-tight text-[#1A1A1A] md:text-5xl">
+              Join <span className="gradient-text-primary">MyKalakar</span>
+              {activeRole === "artist" ? " as an Artist" : activeRole === "admin" ? " Admin Access" : " as a User"}
+            </h1>
+            <p className="mt-2 text-sm font-semibold text-slate-500">
+              India's premier platform for Artists, Performers & Entertainers.
+            </p>
+          </div>
 
-          <Tabs defaultValue="artist" className="w-full" onValueChange={setActiveTab}>
-            <TabsList className="bg-orange-50/60 border border-orange-100 shadow-sm backdrop-blur-md flex w-full overflow-x-auto overflow-y-hidden no-scrollbar mb-6 p-1.5 rounded-2xl gap-1.5 sm:grid sm:grid-cols-3">
-              <TabsTrigger value="admin" className="min-w-[100px] flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-700 data-[state=active]:to-slate-900 data-[state=active]:text-foreground text-slate-500 font-bold tracking-wider uppercase text-[10px] sm:text-xs py-3 transition-all duration-300">Admin</TabsTrigger>
-              <TabsTrigger value="artist" className="min-w-[100px] flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-400 data-[state=active]:text-foreground text-slate-500 font-bold tracking-wider uppercase text-[10px] sm:text-xs py-3 transition-all duration-300">Artist</TabsTrigger>
-              <TabsTrigger value="user" className="min-w-[100px] flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-400 data-[state=active]:to-orange-400 data-[state=active]:text-foreground text-slate-500 font-bold tracking-wider uppercase text-[10px] sm:text-xs py-3 transition-all duration-300">User</TabsTrigger>
-            </TabsList>
+          <RoleTabs activeRole={activeRole} onChange={setActiveRole} />
 
-            <AnimatePresence mode="wait">
-              {activeTab === "artist" && (
-                <motion.div key="artist" initial={{ opacity: 0, x: -20, filter: "blur(8px)" }} animate={{ opacity: 1, x: 0, filter: "blur(0px)" }} exit={{ opacity: 0, x: 20, filter: "blur(8px)" }} transition={{ duration: 0.35, ease: "circOut" }}>
-                  <TabsContent value="artist" className="mt-0 outline-none">
-                    <form
-                      onSubmit={handleSubmit}
-                      className="w-full h-fit space-y-6 text-[#1A1A1A]"
-                    >
-            {/* Login Credentials Section */}
-            <div className="flex items-center gap-3 pb-4 border-b border-border/50">
-              <Lock className="h-5 w-5 text-primary" />
-              <h2 className="font-display font-semibold text-lg">Create Your Login Account</h2>
-            </div>
-
-            <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4">
-              <p className="text-sm text-muted-foreground">🔐 Choose a unique username and password to log in to your Artist Dashboard.</p>
-
-              {/* Username field with real-time validation */}
-              <div>
-                <Label htmlFor="reg-username" className="flex items-center gap-2">
-                  <AtSign className="h-4 w-4 text-primary" /> Username *
-                </Label>
-                <div className="relative mt-1">
-                  <Input
-                    id="reg-username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                    placeholder="e.g. dj_phoenix99"
-                    required
-                    maxLength={16}
-                    className={`input-glass pr-10 transition-colors ${
-                      usernameValid === true
-                        ? "border-emerald-500 focus-visible:ring-emerald-500/30 text-emerald-700"
-                        : usernameValid === false
-                        ? "border-red-400 focus-visible:ring-red-400/30 text-red-700"
-                        : "text-[#1A1A1A]"
-                    }`}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {usernameValid === true && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-                    {usernameValid === false && <XCircle className="h-4 w-4 text-red-400" />}
-                  </span>
-                </div>
-                {usernameValid === false && (
-                  <p className="text-xs text-red-400 mt-1">
-                    3–16 characters: lowercase letters, numbers, and underscores only.
-                  </p>
-                )}
-                {usernameValid === true && (
-                  <p className="text-xs text-emerald-500 mt-1">✓ Username looks good!</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="reg-password" className="flex items-center gap-2">
-                    <Lock className="h-4 w-4 text-primary" /> Password *
-                  </Label>
-                  <div className="relative mt-1">
-                    <Input
-                      id="reg-password"
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Min 6 characters"
-                      required
-                      className="input-glass pr-10 text-[#1A1A1A]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="reg-confirm-password" className="flex items-center gap-2">
-                    <Lock className="h-4 w-4 text-primary" /> Confirm Password *
-                  </Label>
-                  <Input
-                    id="reg-confirm-password"
-                    type={showPassword ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Re-enter password"
-                    required
-                    className="input-glass mt-1 text-[#1A1A1A]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pb-4 border-b border-border/50">
-              <User className="h-5 w-5 text-primary" />
-              <h2 className="font-display font-semibold text-lg">Personal Information</h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><Label>Artist Name *</Label><Input name="name" value={formData.name} onChange={handleChange} placeholder="Your full name" required className="input-glass text-[#1A1A1A]" /></div>
-              <div><Label>Nick Name / Brand Name</Label><Input name="brandName" value={formData.brandName} onChange={handleChange} placeholder="Your stage name or brand" className="input-glass text-[#1A1A1A]" /></div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><Label>Mobile Number *</Label><Input name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} placeholder="+91 XXXXX XXXXX" type="tel" required className="input-glass text-[#1A1A1A]" /></div>
-              <div><Label>Emergency Number *</Label><Input name="emergencyNumber" value={formData.emergencyNumber} onChange={handleChange} placeholder="+91 XXXXX XXXXX" type="tel" required className="input-glass text-[#1A1A1A]" /></div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                 <Label className="text-slate-600 font-bold uppercase tracking-wider text-xs">Date of Birth *</Label>
-                 <Input className="input-glass mt-1 text-[#1A1A1A] cursor-pointer" name="dob" value={formData.dob} onChange={handleChange} type="date" required />
-              </div>
-              <div>
-                 <Label className="text-slate-600 font-bold uppercase tracking-wider text-xs flex items-center gap-2"><Sparkles className="h-3 w-3 text-orange-500" /> Synced Age Display</Label>
-                 <Input className="input-glass mt-1 text-orange-600 font-black cursor-not-allowed select-none bg-white/40" name="age" value={formData.age ? `${formData.age} Years Old` : "Select DOB to auto-calculate"} readOnly tabIndex={-1} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>Gender *</Label>
-                <Select value={formData.gender} onValueChange={(v) => handleSelectChange("gender", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Travel Willingness *</Label>
-                <Select value={formData.travelWillingness} onValueChange={(v) => handleSelectChange("travelWillingness", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select travel preference" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="local">Local Only</SelectItem>
-                    <SelectItem value="state">Within State</SelectItem>
-                    <SelectItem value="all">All India</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-
-
-            {/* Arts / Skills Section */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-orange-100">
-                <Label className="text-base font-semibold flex items-center gap-2 text-[#1A1A1A]">🎨 Your Art(s) / Skills *</Label>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={addArt}
-                  className="h-9 text-xs bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-foreground border-0 rounded-xl px-4 shadow-md shadow-orange-200 hover:scale-105 active:scale-95 transition-all font-bold tracking-wider uppercase"
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Another Category
-                </Button>
-              </div>
-
-              {artsList.map((art, index) => {
-                const artCatData = dbCategories.find(c => c.name === art.category);
-                const artAvailableTypes: string[] = artCatData?.subcategoryTypes?.[art.subcategory] || [];
-                return (
-                  <div key={index} className="p-4 rounded-xl border border-border bg-secondary/20 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">Art #{index + 1}</span>
-                      {artsList.length > 1 && (
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeArt(index)} className="h-7 w-7 text-destructive hover:text-destructive">
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-                      {/* Category */}
-                      <div className="flex flex-col gap-2">
-                        <Label>Category / Art Form *</Label>
-                        <CreatableSelect
-                          isClearable
-                          options={categoryOptions}
-                          placeholder="Search or add your art form..."
-                          value={art.category ? { label: art.category, value: art.category } : null}
-                          onChange={(newValue: any) => updateArt(index, "category", newValue ? newValue.value : "")}
-                          formatCreateLabel={(inputValue) => `Add "${inputValue}"`}
-                          styles={{
-                            control: (base) => ({
-                              ...base,
-                              backgroundColor: "rgba(255, 255, 255, 0.4)",
-                              borderColor: "rgba(255, 255, 255, 0.3)",
-                              borderRadius: "0.75rem",
-                              minHeight: "44px",
-                              boxShadow: "none",
-                              "&:hover": {
-                                borderColor: "#f97316",
-                              }
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              backgroundColor: "#ffffff",
-                              borderRadius: "0.75rem",
-                              overflow: "visible",
-                              boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
-                              zIndex: 50,
-                            }),
-                            menuList: (base) => ({
-                              ...base,
-                              maxHeight: "240px",
-                              overflowY: "auto",
-                              overscrollBehavior: "contain",
-                              WebkitOverflowScrolling: "touch",
-                            }),
-                            option: (base, { isFocused, isSelected }) => ({
-                              ...base,
-                              backgroundColor: isSelected ? "#f97316" : isFocused ? "#fff7ed" : "transparent",
-                              color: isSelected ? "white" : "#1a1a1a",
-                              cursor: "pointer",
-                              "&:active": {
-                                backgroundColor: "#f97316",
-                              }
-                            })
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* ── Performance Pricing ── */}
-                    <div className="pt-4 mt-2 border-t border-orange-100 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <IndianRupee className="h-4 w-4 text-primary" />
-                        <h3 className="font-bold text-sm text-[#2E3A47] tracking-wide uppercase">Performance Pricing (₹)</h3>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Solo Performance</Label>
-                          <Input
-                            type="number"
-                            value={art.soloPrice}
-                            onChange={e => updateArt(index, "soloPrice", e.target.value)}
-                            placeholder="e.g. 10000"
-                            className="input-glass mt-1 h-10"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Duo Performance</Label>
-                          <Input
-                            type="number"
-                            value={art.duoPrice}
-                            onChange={e => updateArt(index, "duoPrice", e.target.value)}
-                            placeholder="e.g. 15000"
-                            className="input-glass mt-1 h-10"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Team Performance</Label>
-                          <Input
-                            type="number"
-                            value={art.teamPrice}
-                            onChange={e => updateArt(index, "teamPrice", e.target.value)}
-                            placeholder="e.g. 25000"
-                            className="input-glass mt-1 h-10"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ── Media ── */}
-                    <div className="pt-4 mt-2 border-t border-orange-100 space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Upload className="h-4 w-4 text-primary" />
-                        <h3 className="font-bold text-sm text-[#2E3A47] tracking-wide uppercase">Media</h3>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Profile Photo */}
-                        <div>
-                          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Profile Photo *</Label>
-                          <div
-                            onClick={() => handleArtFileSelect(index, "profile")}
-                            className="mt-1.5 relative h-36 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-orange-200 bg-orange-50/30 cursor-pointer hover:bg-orange-50/60 hover:border-orange-400 transition-all overflow-hidden group"
-                          >
-                            {art.profilePreview ? (
-                              <>
-                                <img src={art.profilePreview} className="absolute inset-0 w-full h-full object-cover" alt="Profile preview" />
-                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                  <Upload className="h-6 w-6 text-foreground" />
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center mb-2">
-                                  <User className="h-5 w-5 text-orange-400" />
-                                </div>
-                                <p className="text-xs font-bold text-orange-400">Upload Profile Photo</p>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Cover Photo */}
-                        <div>
-                          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Cover / Background Photo</Label>
-                          <div
-                            onClick={() => handleArtFileSelect(index, "cover")}
-                            className="mt-1.5 relative h-36 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/20 cursor-pointer hover:bg-blue-50/40 hover:border-blue-400 transition-all overflow-hidden group"
-                          >
-                            {art.coverPreview ? (
-                              <>
-                                <img src={art.coverPreview} className="absolute inset-0 w-full h-full object-cover" alt="Cover preview" />
-                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                  <Upload className="h-6 w-6 text-foreground" />
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mb-2">
-                                  <Upload className="h-5 w-5 text-blue-400" />
-                                </div>
-                                <p className="text-xs font-bold text-blue-400">Upload Background Photo</p>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Gallery */}
-                      <div>
-                        <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Gallery Photos</Label>
-                        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mt-1.5">
-                          {art.galleryPreviews.map((p, gi) => (
-                            <div key={gi} className="relative aspect-square rounded-xl overflow-hidden border border-white/60 shadow-sm">
-                              <img src={p} className="w-full h-full object-cover" alt={`Gallery ${gi + 1}`} />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  updateArt(index, "galleryFiles", art.galleryFiles.filter((_: File, fi: number) => fi !== gi));
-                                  updateArt(index, "galleryPreviews", art.galleryPreviews.filter((_: string, fi: number) => fi !== gi));
-                                }}
-                                className="absolute top-1 right-1 p-0.5 bg-white/80 rounded-full hover:bg-red-500 hover:text-foreground transition-colors"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ))}
-                          <div
-                              onClick={() => handleArtFileSelect(index, "gallery")}
-                              className="aspect-square rounded-xl border-2 border-dashed border-orange-200 bg-orange-50/30 flex flex-col items-center justify-center cursor-pointer hover:bg-orange-50/60 hover:border-orange-400 transition-all"
-                            >
-                              <Plus className="h-5 w-5 text-orange-400 mb-0.5" />
-                              <span className="text-[9px] font-bold text-orange-400 uppercase tracking-wider">Add Photo</span>
-                            </div>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground mt-1.5">Upload photos of your best work</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <Label>State *</Label>
-                <Popover open={stateOpen} onOpenChange={setStateOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" role="combobox" aria-expanded={stateOpen} className="justify-between w-full h-10 font-normal">
-                      {formData.state || "Select State"}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
-                    <Command>
-                      <CommandInput placeholder="Search state..." />
-                      <CommandList>
-                        <CommandEmpty>No state found.</CommandEmpty>
-                        <CommandGroup>
-                          {dbStates.map(s => (
-                            <CommandItem key={s.id} value={s.name} onSelect={(v) => { handleSelectChange("state", v); handleSelectChange("district", ""); setStateOpen(false); }}>
-                              <Check className={cn("mr-2 h-4 w-4", formData.state === s.name ? "opacity-100" : "opacity-0")} />
-                              {s.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>District *</Label>
-                <Popover open={districtOpen} onOpenChange={setDistrictOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" role="combobox" aria-expanded={districtOpen} disabled={!formData.state} className="justify-between w-full h-10 font-normal">
-                      {formData.district || (formData.state ? "Select District" : "Select state first")}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
-                    <Command>
-                      <CommandInput placeholder="Search district..." />
-                      <CommandList>
-                        <CommandEmpty>No district found.</CommandEmpty>
-                        <CommandGroup>
-                          {(dbStates.find(s => s.name === formData.state)?.districts || []).map((d: string) => (
-                            <CommandItem key={d} value={d} onSelect={(v) => { handleSelectChange("district", v); setDistrictOpen(false); }}>
-                              <Check className={cn("mr-2 h-4 w-4", formData.district === d ? "opacity-100" : "opacity-0")} />
-                              {d}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>Experience (Years) *</Label>
-                <Input name="experience" type="number" value={formData.experience} onChange={handleChange} placeholder="e.g. 5" required className="input-glass text-[#1A1A1A]" />
-              </div>
-            </div>
-
-            <div><Label>Description / Bio</Label><Textarea name="bio" value={formData.bio} onChange={handleChange} placeholder="Tell us about your art, experience, and what makes you unique..." rows={4} className="input-glass text-[#1A1A1A]" /></div>
-
-
-
-            <div className="flex items-center gap-3 pb-4 border-b border-border/50 pt-4">
-              <CreditCard className="h-5 w-5 text-primary" />
-              <h2 className="font-display font-semibold text-lg">Identity Documents</h2>
-            </div>
-
-            <div>
-              <Label>Aadhar Card Photo</Label>
-              <input
-                type="file"
-                ref={aadharInputRef}
-                className="hidden"
-                accept="image/*"
-                onChange={(e) => handleFileChange(e, 'aadhar')}
-              />
-              <div
-                onClick={() => aadharInputRef.current?.click()}
-                className="mt-1 border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:border-primary/50 transition-colors relative min-h-[100px] flex flex-col items-center justify-center overflow-hidden"
+          <AnimatePresence mode="wait">
+            {activeRole === "artist" ? (
+              <motion.form
+                key="artist"
+                initial={{ opacity: 0, x: -18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 18 }}
+                transition={{ duration: 0.28 }}
+                onSubmit={artistForm.handleSubmit(submitArtist)}
+                className="mt-8 space-y-8"
+                noValidate
               >
-                {aadharPreview ? (
-                  <img src={aadharPreview} className="absolute inset-0 w-full h-full object-contain bg-secondary/20" alt="Aadhar preview" />
-                ) : (
-                  <>
-                    <CreditCard className="h-8 w-8 text-muted-foreground mb-2" />
-                    <p className="text-sm text-muted-foreground">Upload Aadhar Card Photo (Front & Back)</p>
-                  </>
-                )}
-              </div>
-              <div className="mt-3">
-                <Label>Aadhar Number</Label>
-                <Input name="aadharNumber" value={formData.aadharNumber} onChange={handleChange} placeholder="XXXX XXXX XXXX" />
-              </div>
-            </div>
+                <SectionHeading icon={Lock} title="Create Your Login Account" />
 
-            <div className="flex items-center gap-3 pb-4 border-b border-border/50 pt-4">
-              <Building2 className="h-5 w-5 text-primary" />
-              <h2 className="font-display font-semibold text-lg">Bank Account Details</h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><Label>Bank Name</Label><Input name="bankName" value={formData.bankName} onChange={handleChange} placeholder="e.g. SBI, HDFC" /></div>
-              <div><Label>IFSC Code</Label><Input name="ifscCode" value={formData.ifscCode} onChange={handleChange} placeholder="SBIN00XXXXX" /></div>
-            </div>
-            <div>
-              <Label>Account Number</Label>
-              <Input name="accountNumber" value={formData.accountNumber} onChange={handleChange} placeholder="Enter account number" />
-            </div>
-
-            <div className="flex items-center gap-3 pb-4 border-b border-border/50 pt-4">
-              <Globe className="h-5 w-5 text-primary" />
-              <h2 className="font-display font-semibold text-lg">Links & Portfolio</h2>
-            </div>
-
-            <div className="space-y-4">
-              {socialLinks.map((link, index) => (
-                <div key={index} className="space-y-3 p-4 rounded-xl border border-border bg-secondary/20">
-                  <div className="flex items-center gap-2">
-                    <Select value={link.platform} onValueChange={(v) => updateSocialLink(index, "platform", v)}>
-                      <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="youtube">YouTube</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      placeholder="Paste link here..."
-                      value={link.url}
-                      onChange={(e) => updateSocialLink(index, "url", e.target.value)}
+                <div className="rounded-2xl border border-orange-200/70 bg-orange-50/50 p-5">
+                  <p className="mb-4 text-sm font-semibold text-slate-500">
+                    Choose a unique username and password to log in to your Artist Dashboard.
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <TextField
+                      label="Username *"
+                      name="username"
+                      register={artistForm.register}
+                      error={artistForm.formState.errors.username?.message}
+                      icon={AtSign}
+                      placeholder="e.g. dj_phoenix99"
+                      className="md:col-span-2"
                     />
-                    {socialLinks.length > 1 && (
-                      <Button variant="ghost" size="icon" onClick={() => removeSocialLink(index)} className="text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <Controller
+                      name="password"
+                      control={artistForm.control}
+                      render={({ field }) => (
+                        <PasswordField
+                          label="Password *"
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          error={artistForm.formState.errors.password?.message}
+                          show={showPassword}
+                          onToggle={() => setShowPassword((current) => !current)}
+                          placeholder="Min 8 characters"
+                        />
+                      )}
+                    />
+                    <Controller
+                      name="confirmPassword"
+                      control={artistForm.control}
+                      render={({ field }) => (
+                        <PasswordField
+                          label="Confirm Password *"
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          error={artistForm.formState.errors.confirmPassword?.message}
+                          show={showPassword}
+                          onToggle={() => setShowPassword((current) => !current)}
+                          placeholder="Re-enter password"
+                        />
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <SectionHeading icon={User} title="Personal Information" />
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <TextField
+                    label="Artist Name *"
+                    name="fullName"
+                    register={artistForm.register}
+                    error={artistForm.formState.errors.fullName?.message}
+                    placeholder="Your full name"
+                  />
+                  <TextField
+                    label="Nick Name / Brand Name"
+                    name="brandName"
+                    register={artistForm.register}
+                    error={artistForm.formState.errors.brandName?.message}
+                    placeholder="Your stage name or brand"
+                  />
+                  <Controller
+                    name="mobileNumber"
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <div>
+                        <label className="mb-1.5 block text-sm font-bold text-slate-700">Mobile Number *</label>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          value={field.value}
+                          onBlur={field.onBlur}
+                          onChange={(event) => field.onChange(digitsOnly(event.target.value, 10))}
+                          placeholder="+91 XXXXX XXXXX"
+                          maxLength={10}
+                          className={`${inputClass} ${artistForm.formState.errors.mobileNumber ? errorInputClass : ""}`}
+                        />
+                        <FieldError message={artistForm.formState.errors.mobileNumber?.message} />
+                      </div>
                     )}
+                  />
+                  <Controller
+                    name="emergencyNumber"
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <div>
+                        <label className="mb-1.5 block text-sm font-bold text-slate-700">Emergency Number *</label>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          value={field.value}
+                          onBlur={field.onBlur}
+                          onChange={(event) => field.onChange(digitsOnly(event.target.value, 10))}
+                          placeholder="+91 XXXXX XXXXX"
+                          maxLength={10}
+                          className={`${inputClass} ${artistForm.formState.errors.emergencyNumber ? errorInputClass : ""}`}
+                        />
+                        <FieldError message={artistForm.formState.errors.emergencyNumber?.message} />
+                      </div>
+                    )}
+                  />
+                  <TextField
+                    label="Date of Birth *"
+                    name="dob"
+                    type="date"
+                    register={artistForm.register}
+                    error={artistForm.formState.errors.dob?.message}
+                  />
+                  <div>
+                    <label className="mb-1.5 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                      <Sparkles className="h-3.5 w-3.5 text-orange-500" />
+                      Synced Age Display
+                    </label>
+                    <input
+                      value={getAgeLabel(selectedDob)}
+                      readOnly
+                      tabIndex={-1}
+                      className="input-glass w-full cursor-not-allowed bg-white/50 px-4 py-3 text-sm font-black text-orange-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-bold text-slate-700">Gender *</label>
+                    <select {...artistForm.register("gender")} className={`${inputClass} ${artistForm.formState.errors.gender ? errorInputClass : ""}`}>
+                      <option value="">Select gender</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <FieldError message={artistForm.formState.errors.gender?.message} />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-bold text-slate-700">Travel Willingness *</label>
+                    <select {...artistForm.register("travelWillingness")} className={inputClass}>
+                      <option value="local">Local Only</option>
+                      <option value="state">Within State</option>
+                      <option value="all">All India</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 border-b border-orange-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                  <h2 className="font-display text-xl font-bold text-[#2E3A47]">Your Art(s) / Skills *</h2>
+                  <button
+                    type="button"
+                    onClick={addArtEntry}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 px-5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-orange-200"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Another Category
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
+                  <p className="mb-4 text-sm font-black text-slate-500">Art #1</p>
+                  <Controller
+                    name="artCategory"
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <SearchableDropdown
+                        label="Category / Art Form *"
+                        value={field.value}
+                        options={artCategoryOptions}
+                        placeholder="Search or add your art form..."
+                        error={artistForm.formState.errors.artCategory?.message}
+                        allowCustom
+                        onChange={field.onChange}
+                      />
+                    )}
+                  />
+
+                  <div className="my-5 h-px bg-white/80" />
+
+                  <div className="mb-4 flex items-center gap-2">
+                    <IndianRupee className="h-4 w-4 text-orange-500" />
+                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Performance Pricing</h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <TextField label="Solo Performance" name="soloPrice" register={artistForm.register} placeholder="e.g. 10000" />
+                    <TextField label="Duo Performance" name="duoPrice" register={artistForm.register} placeholder="e.g. 15000" />
+                    <TextField label="Team Performance" name="teamPrice" register={artistForm.register} placeholder="e.g. 25000" />
                   </div>
 
-                  {link.platform === "youtube" && getYoutubeEmbedUrl(link.url) && (
-                    <div className="aspect-video w-full rounded-lg overflow-hidden border border-border">
-                      <iframe
-                        width="100%"
-                        height="100%"
-                        src={getYoutubeEmbedUrl(link.url)!}
-                        title="YouTube video player"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      ></iframe>
+                  <div className="my-5 h-px bg-white/80" />
+
+                  <div className="mb-4 flex items-center gap-2">
+                    <Upload className="h-4 w-4 text-orange-500" />
+                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Media</h3>
+                  </div>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <FileDrop
+                      label="Profile Photo"
+                      description="Upload Profile Photo"
+                      required
+                      file={profileFile}
+                      preview={profilePreview}
+                      onChange={(file) => setPreviewFile(file, profilePreview, setProfileFile, setProfilePreview)}
+                    />
+                    <FileDrop
+                      label="Cover / Background Photo"
+                      description="Upload Background Photo"
+                      file={coverFile}
+                      preview={coverPreview}
+                      tone="blue"
+                      onChange={(file) => setPreviewFile(file, coverPreview, setCoverFile, setCoverPreview)}
+                    />
+                  </div>
+
+                  <div className="mt-5">
+                    <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">Gallery Photos</label>
+                    <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                      {galleryFiles.map((item, index) => (
+                        <div key={item.preview} className="relative aspect-square overflow-hidden rounded-xl border border-white/70">
+                          <img src={item.preview} alt={`Gallery ${index + 1}`} className="h-full w-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeGalleryFile(index)}
+                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-red-500"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <FileDrop
+                        label=""
+                        description="Add Photo"
+                        file={null}
+                        preview=""
+                        onChange={addGalleryFile}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs font-semibold text-slate-500">Upload photos of your best work</p>
+                  </div>
+                </div>
+
+                <AnimatePresence mode="popLayout">
+                  {extraArtEntries.map((entry, index) => (
+                    <motion.div
+                      key={entry.id}
+                      layout
+                      initial={{ opacity: 0, y: 18 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <ArtCategoryCard
+                        art={entry}
+                        index={index + 1}
+                        removable
+                        onUpdate={(nextEntry) => updateExtraArtEntry(entry.id, nextEntry)}
+                        onRemove={() => removeExtraArtEntry(entry.id)}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Controller
+                    name="state"
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <SearchableDropdown
+                        label="State *"
+                        value={field.value}
+                        options={stateOptions}
+                        placeholder="Select State"
+                        error={artistForm.formState.errors.state?.message}
+                        onChange={(value) => {
+                          field.onChange(value);
+                          artistForm.setValue("district", "", {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                            shouldValidate: true,
+                          });
+                        }}
+                      />
+                    )}
+                  />
+                  <Controller
+                    name="district"
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <SearchableDropdown
+                        label="District *"
+                        value={field.value}
+                        options={districts}
+                        placeholder={selectedState ? "Select District" : "Select state first"}
+                        disabled={!selectedState}
+                        error={artistForm.formState.errors.district?.message}
+                        onChange={field.onChange}
+                      />
+                    )}
+                  />
+                  <TextField
+                    label="Experience (Years) *"
+                    name="experience"
+                    register={artistForm.register}
+                    error={artistForm.formState.errors.experience?.message}
+                    placeholder="e.g. 5"
+                    inputMode="numeric"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-bold text-slate-700">Description / Bio</label>
+                  <textarea
+                    {...artistForm.register("bio")}
+                    rows={4}
+                    placeholder="Tell us about your art, experience, and what makes you unique..."
+                    className={`${inputClass} min-h-32 resize-y`}
+                  />
+                </div>
+
+                <SectionHeading icon={CreditCard} title="Identity Documents" />
+                <FileDrop
+                  label="Aadhar Card Photo"
+                  description="Upload Aadhar Card Photo (Front & Back)"
+                  file={aadharFile}
+                  preview={aadharPreview}
+                  tone="slate"
+                  onChange={(file) => setPreviewFile(file, aadharPreview, setAadharFile, setAadharPreview)}
+                />
+                <Controller
+                  name="aadharNumber"
+                  control={artistForm.control}
+                  render={({ field }) => (
+                    <div>
+                      <label className="mb-1.5 block text-sm font-bold text-slate-700">Aadhar Number *</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={field.value}
+                        onBlur={field.onBlur}
+                        onChange={(event) => field.onChange(formatAadhar(event.target.value))}
+                        placeholder="XXXX XXXX XXXX"
+                        maxLength={14}
+                        className={`${inputClass} ${artistForm.formState.errors.aadharNumber ? errorInputClass : ""}`}
+                      />
+                      <FieldError message={artistForm.formState.errors.aadharNumber?.message} />
                     </div>
                   )}
-                </div>
-              ))}
-              <Button type="button" variant="outline" size="sm" onClick={addSocialLink} className="w-full">
-                <Plus className="h-4 w-4 mr-2" /> Add More Links
-              </Button>
-            </div>
+                />
 
-            {/* Live Stream & Assistant Section */}
-            <div className="flex items-center gap-3 pb-4 border-b border-border/50 pt-4">
-              <Sparkles className="h-5 w-5 text-primary" />
-              <h2 className="font-display font-semibold text-lg">Additional Details</h2>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <Label>Live Stream Link (Optional)</Label>
-                <Input name="liveLink" value={formData.liveLink} onChange={handleChange} placeholder="e.g. YouTube Live, Instagram Live URL" className="input-glass text-[#1A1A1A]" />
-              </div>
-
-              <div className="space-y-3 p-4 rounded-xl border border-border bg-secondary/20">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={formData.hasAssistant} onChange={(e) => setFormData(prev => ({ ...prev, hasAssistant: e.target.checked }))} className="w-4 h-4 rounded border-border" />
-                  <span className="text-sm font-medium">Do you have an assistant/manager?</span>
-                </label>
-                
-                {formData.hasAssistant && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                    <div>
-                      <Label>Assistant/Manager Name</Label>
-                      <Input name="assistantName" value={formData.assistantName} onChange={handleChange} placeholder="Their full name" className="input-glass text-[#1A1A1A]" />
-                    </div>
-                    <div>
-                      <Label>Assistant/Manager Contact</Label>
-                      <Input name="assistantContact" value={formData.assistantContact} onChange={handleChange} placeholder="Phone number or email" className="input-glass text-[#1A1A1A]" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Suggestion / Comment Box */}
-            <div className="flex items-center gap-3 pb-4 border-b border-border/50 pt-4">
-              <MessageSquare className="h-5 w-5 text-primary" />
-              <h2 className="font-display font-semibold text-lg">Suggestions & Tips</h2>
-            </div>
-
-            <div>
-              <Label>Any suggestions or tips about your art for us?</Label>
-              <p className="text-xs text-muted-foreground mb-2">Share anything you'd like us to know — special requirements, tips about your performance, or suggestions for the company.</p>
-              <Textarea
-                name="suggestionComment"
-                value={formData.suggestionComment}
-                onChange={handleChange}
-                placeholder="e.g. I need a specific sound setup, I perform best in outdoor venues, suggestions for how to present my art..."
-                rows={4}
-              />
-            </div>
-
-            {/* Upload progress bar */}
-            {loading && uploadProgress > 0 && uploadProgress < 100 && (
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs font-semibold text-orange-600">
-                  <span>Uploading photos...</span>
-                  <span>{uploadProgress}%</span>
-                </div>
-                <div className="h-2 bg-orange-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
+                <SectionHeading icon={Building2} title="Bank Account Details" />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <TextField
+                    label="Bank Name *"
+                    name="bankName"
+                    register={artistForm.register}
+                    error={artistForm.formState.errors.bankName?.message}
+                    placeholder="e.g. SBI, HDFC"
+                  />
+                  <Controller
+                    name="ifscCode"
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <div>
+                        <label className="mb-1.5 block text-sm font-bold text-slate-700">IFSC Code *</label>
+                        <input
+                          value={field.value}
+                          onBlur={field.onBlur}
+                          onChange={(event) => field.onChange(event.target.value.toUpperCase().slice(0, 11))}
+                          placeholder="SBIN00XXXXX"
+                          maxLength={11}
+                          className={`${inputClass} ${artistForm.formState.errors.ifscCode ? errorInputClass : ""}`}
+                        />
+                        <FieldError message={artistForm.formState.errors.ifscCode?.message} />
+                      </div>
+                    )}
+                  />
+                  <Controller
+                    name="accountNumber"
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <div className="md:col-span-2">
+                        <label className="mb-1.5 block text-sm font-bold text-slate-700">Account Number *</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={field.value}
+                          onBlur={field.onBlur}
+                          onChange={(event) => field.onChange(digitsOnly(event.target.value, 18))}
+                          placeholder="Enter account number"
+                          maxLength={18}
+                          className={`${inputClass} ${artistForm.formState.errors.accountNumber ? errorInputClass : ""}`}
+                        />
+                        <FieldError message={artistForm.formState.errors.accountNumber?.message} />
+                      </div>
+                    )}
                   />
                 </div>
-              </div>
-            )}
 
-            <Button
-              type="submit"
-              className="w-full h-14 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 border-0 text-foreground font-black text-sm tracking-widest uppercase rounded-2xl shadow-lg shadow-orange-300/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
-              disabled={loading}
-            >
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {uploadProgress > 0 ? `Uploading... ${uploadProgress}%` : "Creating Account..."}
+                <SectionHeading icon={Globe} title="Links & Portfolio" />
+                <PortfolioLinksEditor
+                  links={portfolioLinks}
+                  onAdd={addPortfolioLink}
+                  onRemove={removePortfolioLink}
+                  onUpdate={updatePortfolioLink}
+                />
+
+                <SectionHeading icon={Sparkles} title="Additional Details" />
+                <TextField
+                  label="Live Stream Link (Optional)"
+                  name="liveLink"
+                  register={artistForm.register}
+                  placeholder="e.g. YouTube Live, Instagram Live URL"
+                  inputMode="url"
+                />
+                <div className="rounded-2xl bg-sky-100/70 p-4">
+                  <label className="flex cursor-pointer items-center gap-3 text-sm font-bold text-slate-700">
+                    <input
+                      type="checkbox"
+                      {...artistForm.register("hasAssistant")}
+                      className="h-5 w-5 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                    />
+                    Do you have an assistant/manager?
+                  </label>
+                  {hasAssistant ? (
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <TextField label="Assistant/Manager Name" name="assistantName" register={artistForm.register} placeholder="Their full name" />
+                      <TextField label="Assistant/Manager Contact" name="assistantContact" register={artistForm.register} placeholder="Phone number or email" />
+                    </div>
+                  ) : null}
                 </div>
-              ) : (
-                <><Send className="h-4 w-4 mr-2" /> Submit My Artist Profile</>
-              )}
-            </Button>
-            </form>
-                  </TabsContent>
-                </motion.div>
-              )}
 
-              {activeTab === "admin" && (
-                <motion.div key="admin" initial={{ opacity: 0, x: -20, filter: "blur(10px)" }} animate={{ opacity: 1, x: 0, filter: "blur(0px)" }} exit={{ opacity: 0, x: 20, filter: "blur(10px)" }} transition={{ duration: 0.4, ease: "circOut" }}>
-                  <TabsContent value="admin" className="mt-0 outline-none">
-                    <form
-                      onSubmit={(e) => { e.preventDefault(); navigate("/admin/dashboard"); }}
-                      className="relative overflow-hidden rounded-[2rem] border border-white/5 bg-[#05050580] p-6 md:p-8 text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_8px_32px_rgba(0,0,0,0.8)] backdrop-blur-[32px] saturate-[120%] w-full max-w-2xl"
-                    >
-                      <div className="flex items-center gap-3 pb-4 border-b border-white/10 mb-6">
-                        <Building2 className="h-5 w-5 text-amber-400" />
-                        <h2 className="font-display font-semibold text-lg">Admin Access Request</h2>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        <div>
-                           <Label className="flex items-center gap-2 text-foreground/70">Username</Label>
-                           <Input className="mt-1 bg-black/40 border-white/10 text-foreground focus-visible:ring-amber-500/50" placeholder="admin_login" required />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                             <Label className="flex items-center gap-2 text-foreground/70">Full Name</Label>
-                             <Input className="mt-1 bg-black/40 border-white/10 text-foreground focus-visible:ring-amber-500/50" placeholder="E.g. John Doe" required />
-                          </div>
-                          <div>
-                             <Label className="flex items-center gap-2 text-foreground/70">Cap Name (Nickname)</Label>
-                             <Input className="mt-1 bg-black/40 border-white/10 text-foreground focus-visible:ring-amber-500/50" placeholder="E.g. JD" required />
-                          </div>
-                        </div>
-                        <div>
-                           <Label className="flex items-center gap-2 text-foreground/70">Blood Group</Label>
-                           <Select required>
-                             <SelectTrigger className="mt-1 bg-black/40 border-white/10 text-foreground focus-visible:ring-amber-500/50"><SelectValue placeholder="Select Blood Group" /></SelectTrigger>
-                             <SelectContent>
-                               <SelectItem value="A+">A+</SelectItem><SelectItem value="A-">A-</SelectItem>
-                               <SelectItem value="B+">B+</SelectItem><SelectItem value="B-">B-</SelectItem>
-                               <SelectItem value="O+">O+</SelectItem><SelectItem value="O-">O-</SelectItem>
-                               <SelectItem value="AB+">AB+</SelectItem><SelectItem value="AB-">AB-</SelectItem>
-                             </SelectContent>
-                           </Select>
-                        </div>
-                        <div>
-                           <Label className="flex items-center gap-2 text-foreground/70">Tell us about yourself</Label>
-                           <Textarea className="mt-1 bg-black/40 border-white/10 text-foreground focus-visible:ring-amber-500/50 min-h-[120px]" placeholder="Briefly describe your role and experience..." required />
-                        </div>
-                        <Button type="submit" className="w-full h-12 bg-amber-500 hover:bg-amber-400 text-black font-semibold tracking-widest mt-4">
-                           REQUEST ADMIN ACCESS
-                        </Button>
-                      </div>
-                    </form>
-                  </TabsContent>
-                </motion.div>
-              )}
+                <SectionHeading icon={MessageSquare} title="Suggestions & Tips" />
+                <div>
+                  <label className="mb-1.5 block text-sm font-bold text-slate-700">Any suggestions or tips about your art for us?</label>
+                  <p className="mb-2 text-xs font-semibold text-slate-500">
+                    Share anything you would like us to know: special requirements, performance tips, or suggestions for the company.
+                  </p>
+                  <textarea
+                    {...artistForm.register("suggestionComment")}
+                    rows={4}
+                    placeholder="e.g. I need a specific sound setup, I perform best in outdoor venues..."
+                    className={`${inputClass} min-h-32 resize-y`}
+                  />
+                </div>
 
-              {activeTab === "user" && (
-                <motion.div key="user" initial={{ opacity: 0, x: -20, filter: "blur(8px)" }} animate={{ opacity: 1, x: 0, filter: "blur(0px)" }} exit={{ opacity: 0, x: 20, filter: "blur(8px)" }} transition={{ duration: 0.35, ease: "circOut" }}>
-                  <TabsContent value="user" className="mt-0 outline-none">
-                    <form
-                      onSubmit={handleUserRegistration}
-                      className="glass-panel rounded-3xl p-6 md:p-8 w-full text-[#1A1A1A]"
-                    >
-                      <div className="flex items-center gap-3 pb-4 border-b border-slate-200 mb-6">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-pink-500 to-amber-400 flex items-center justify-center">
-                          <User className="h-4 w-4 text-foreground" />
-                        </div>
-                        <div>
-                          <h2 className="font-display font-bold text-lg text-[#1A1A1A]">User / Connoisseur Account</h2>
-                          <p className="text-xs text-slate-500">Book and discover elite artists</p>
-                        </div>
-                      </div>
+                <button
+                  type="submit"
+                  disabled={!artistForm.formState.isValid || loadingRole === "artist"}
+                  className={`btn-glass-primary flex h-16 w-full items-center justify-center gap-3 rounded-2xl text-sm font-black uppercase tracking-[0.18em] ${
+                    !artistForm.formState.isValid || loadingRole === "artist" ? "cursor-not-allowed opacity-50" : ""
+                  }`}
+                >
+                  {loadingRole === "artist" ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                  Submit My Artist Profile
+                </button>
+              </motion.form>
+            ) : null}
 
-                      <div className="space-y-4">
-                        <div>
-                          <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Full Name *</Label>
-                          <Input value={userFullName} onChange={(e) => setUserFullName(e.target.value)} className="mt-1.5 input-glass rounded-xl py-3" placeholder="E.g. Sarah Smith" required />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Username *</Label>
-                          <Input type="text" value={userUsername} onChange={(e) => setUserUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} className="mt-1.5 input-glass rounded-xl py-3" placeholder="e.g. sarah_smith" required />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Phone Number (Optional)</Label>
-                          <Input type="tel" value={userPhone} onChange={(e) => setUserPhone(e.target.value)} className="mt-1.5 input-glass rounded-xl py-3" placeholder="+91 XXXXX XXXXX" />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Password *</Label>
-                          <Input type="password" value={userPassword} onChange={(e) => setUserPassword(e.target.value)} className="mt-1.5 input-glass rounded-xl py-3" placeholder="Min 8 characters" required />
-                        </div>
-                        <button type="submit" disabled={userLoading} className="flex items-center justify-center gap-2 btn-glass-primary w-full rounded-xl py-3.5 text-sm font-black uppercase tracking-widest mt-2">
-                          {userLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Account"}
-                        </button>
-                        </div>
-                      </form>
-                    </TabsContent>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </Tabs>
-          </div>
+            {activeRole === "user" ? (
+              <motion.form
+                key="user"
+                initial={{ opacity: 0, x: -18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 18 }}
+                transition={{ duration: 0.28 }}
+                onSubmit={userForm.handleSubmit(submitUser)}
+                className="mx-auto mt-8 max-w-2xl space-y-6 rounded-3xl border border-white/70 bg-white/55 p-6 shadow-sm"
+                noValidate
+              >
+                <SectionHeading icon={User} title="User Registration" />
+                <TextField label="Full Name *" name="fullName" register={userForm.register} error={userForm.formState.errors.fullName?.message} placeholder="Your full name" />
+                <TextField label="Username *" name="username" register={userForm.register} error={userForm.formState.errors.username?.message} icon={AtSign} placeholder="e.g. rasika_99" />
+                <Controller
+                  name="phoneOptional"
+                  control={userForm.control}
+                  render={({ field }) => (
+                    <div>
+                      <label className="mb-1.5 flex items-center gap-2 text-sm font-bold text-slate-700">
+                        <Phone className="h-4 w-4 text-orange-500" />
+                        Phone Number (Optional)
+                      </label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        value={field.value ?? ""}
+                        onBlur={field.onBlur}
+                        onChange={(event) => field.onChange(digitsOnly(event.target.value, 10))}
+                        placeholder="+91 XXXXX XXXXX"
+                        maxLength={10}
+                        className={`${inputClass} ${userForm.formState.errors.phoneOptional ? errorInputClass : ""}`}
+                      />
+                      <FieldError message={userForm.formState.errors.phoneOptional?.message} />
+                    </div>
+                  )}
+                />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Controller
+                    name="password"
+                    control={userForm.control}
+                    render={({ field }) => (
+                      <PasswordField
+                        label="Password *"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        error={userForm.formState.errors.password?.message}
+                        show={showPassword}
+                        onToggle={() => setShowPassword((current) => !current)}
+                        placeholder="Min 8 characters"
+                      />
+                    )}
+                  />
+                  <Controller
+                    name="confirmPassword"
+                    control={userForm.control}
+                    render={({ field }) => (
+                      <PasswordField
+                        label="Confirm Password *"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        error={userForm.formState.errors.confirmPassword?.message}
+                        show={showPassword}
+                        onToggle={() => setShowPassword((current) => !current)}
+                        placeholder="Re-enter password"
+                      />
+                    )}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={!userForm.formState.isValid || loadingRole === "user"}
+                  className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-amber-400 text-sm font-black uppercase tracking-widest text-white shadow-lg ${
+                    !userForm.formState.isValid || loadingRole === "user" ? "cursor-not-allowed opacity-50" : ""
+                  }`}
+                >
+                  {loadingRole === "user" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
+                  Create User Account
+                </button>
+              </motion.form>
+            ) : null}
+
+            {activeRole === "admin" ? (
+              <motion.form
+                key="admin"
+                initial={{ opacity: 0, x: -18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 18 }}
+                transition={{ duration: 0.28 }}
+                onSubmit={adminForm.handleSubmit(submitAdmin)}
+                className="glass-panel mx-auto mt-8 max-w-2xl space-y-6 rounded-3xl border border-white/60 bg-white/70 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.12)] backdrop-blur-3xl"
+                noValidate
+              >
+                <div className="flex items-center gap-3 border-b border-slate-200/70 pb-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 via-amber-400 to-rose-500 text-white shadow-md shadow-orange-200/60">
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                  <h2 className="font-display text-xl font-bold text-[#2E3A47]">Admin Access Request</h2>
+                </div>
+                <TextField label="Full Name *" name="fullName" register={adminForm.register} error={adminForm.formState.errors.fullName?.message} placeholder="E.g. John Doe" />
+                <TextField label="Username *" name="username" register={adminForm.register} error={adminForm.formState.errors.username?.message} icon={AtSign} placeholder="admin_login" />
+                <Controller
+                  name="mobileNumber"
+                  control={adminForm.control}
+                  render={({ field }) => (
+                    <div>
+                      <label className="mb-1.5 block text-sm font-bold text-slate-700">Mobile Number *</label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        value={field.value}
+                        onBlur={field.onBlur}
+                        onChange={(event) => field.onChange(digitsOnly(event.target.value, 10))}
+                        placeholder="+91 XXXXX XXXXX"
+                        maxLength={10}
+                        className={`${inputClass} ${adminForm.formState.errors.mobileNumber ? errorInputClass : ""}`}
+                      />
+                      <FieldError message={adminForm.formState.errors.mobileNumber?.message} />
+                    </div>
+                  )}
+                />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <TextField label="Cap Name *" name="capName" register={adminForm.register} error={adminForm.formState.errors.capName?.message} placeholder="E.g. JD" />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-bold text-slate-700">Blood Group *</label>
+                    <select {...adminForm.register("bloodGroup")} className={`${inputClass} ${adminForm.formState.errors.bloodGroup ? errorInputClass : ""}`}>
+                      <option value="">Select Blood Group</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                    </select>
+                    <FieldError message={adminForm.formState.errors.bloodGroup?.message} />
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Controller
+                    name="password"
+                    control={adminForm.control}
+                    render={({ field }) => (
+                      <PasswordField
+                        label="Password *"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        error={adminForm.formState.errors.password?.message}
+                        show={showPassword}
+                        onToggle={() => setShowPassword((current) => !current)}
+                        placeholder="Min 8 characters"
+                      />
+                    )}
+                  />
+                  <Controller
+                    name="confirmPassword"
+                    control={adminForm.control}
+                    render={({ field }) => (
+                      <PasswordField
+                        label="Confirm Password *"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        error={adminForm.formState.errors.confirmPassword?.message}
+                        show={showPassword}
+                        onToggle={() => setShowPassword((current) => !current)}
+                        placeholder="Re-enter password"
+                      />
+                    )}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-bold text-slate-700">Tell us about yourself *</label>
+                  <textarea
+                    {...adminForm.register("about")}
+                    rows={5}
+                    placeholder="Briefly describe your role and experience..."
+                    className={`${inputClass} min-h-32 resize-y ${adminForm.formState.errors.about ? errorInputClass : ""}`}
+                  />
+                  <FieldError message={adminForm.formState.errors.about?.message} />
+                </div>
+                <button
+                  type="submit"
+                  disabled={!adminForm.formState.isValid || loadingRole === "admin"}
+                  className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl gradient-bg text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-orange-200/70 transition hover:shadow-xl ${
+                    !adminForm.formState.isValid || loadingRole === "admin" ? "cursor-not-allowed opacity-50" : ""
+                  }`}
+                >
+                  {loadingRole === "admin" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Landmark className="h-4 w-4" />}
+                  Request Admin Access
+                </button>
+              </motion.form>
+            ) : null}
+          </AnimatePresence>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}

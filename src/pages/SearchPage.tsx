@@ -21,10 +21,11 @@ import {
   Mic,
 } from "lucide-react";
 import { db, storage } from "@/lib/firebase";
-import { collection, query, onSnapshot } from "firebase/firestore";
+import { collection, query, onSnapshot, where, orderBy } from "firebase/firestore";
 import { ref, getDownloadURL } from "firebase/storage";
 import { gsap } from "gsap";
 import { useAuth } from "@/contexts/AuthContext";
+import { initialArtists, platformCategories } from "@/data/mockData";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 function updateOgMeta(title: string, description: string, image?: string) {
@@ -72,7 +73,7 @@ function PremiumArtistCard({
   useEffect(() => {
     let isMounted = true;
     const fetchImage = async () => {
-      const picUrl = artist.profilePicUrl || artist.profilePhoto;
+      const picUrl = artist.media?.profilePhoto || artist.profilePhoto;
       if (!picUrl) return;
 
       if (picUrl.startsWith("http://") || picUrl.startsWith("https://")) {
@@ -309,6 +310,8 @@ export default function SearchPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"category" | "grid">("category");
+  const selectedState = params.get("state") || "";
+  const selectedDistrict = params.get("district") || "";
 
   // Read category filter from URL param set by EventRequirements
   useEffect(() => {
@@ -317,20 +320,73 @@ export default function SearchPage() {
   }, [params]);
 
   useEffect(() => {
-    const qArtists = query(collection(db, "pending_registrations"));
+    const artistFilters = [where("status", "==", "active")];
+    const qArtists = query(collection(db, "artists"), ...artistFilters);
     const unsubArtists = onSnapshot(qArtists, (snapshot) => {
-      setArtists(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      const liveArtists = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const sourceArtists = liveArtists.length > 0
+        ? liveArtists
+        : initialArtists.map((artist, index) => ({
+            id: `demo-artist-${index + 1}`,
+            uid: `demo-artist-${index + 1}`,
+            status: "active",
+            categories: [artist.category],
+            artsList: [{ category: artist.category, subcategory: artist.subcategory, types: [] }],
+            media: {
+              profilePhoto: artist.profilePhoto,
+              coverPhoto: artist.profilePhoto,
+              galleryPhotos: [artist.profilePhoto],
+            },
+            stats: {
+              rating: artist.rating,
+              reviews: artist.reviews,
+              followers: 0,
+              profileViews: 0,
+              totalBookings: 0,
+            },
+            ...artist,
+          }));
+      const stateMatches = selectedState ? sourceArtists.filter((artist: any) => artist.state === selectedState) : sourceArtists;
+      const districtMatches = selectedDistrict ? stateMatches.filter((artist: any) => artist.district === selectedDistrict || artist.city === selectedDistrict) : stateMatches;
+      setArtists(districtMatches.length > 0 ? districtMatches : stateMatches.length > 0 ? stateMatches : sourceArtists);
+      setLoading(false);
+    }, (error) => {
+      console.warn("Artists unavailable, using local defaults.", error);
+      setArtists(initialArtists.map((artist, index) => ({
+        id: `demo-artist-${index + 1}`,
+        uid: `demo-artist-${index + 1}`,
+        status: "active",
+        categories: [artist.category],
+        artsList: [{ category: artist.category, subcategory: artist.subcategory, types: [] }],
+        media: {
+          profilePhoto: artist.profilePhoto,
+          coverPhoto: artist.profilePhoto,
+          galleryPhotos: [artist.profilePhoto],
+        },
+        stats: {
+          rating: artist.rating,
+          reviews: artist.reviews,
+          followers: 0,
+          profileViews: 0,
+          totalBookings: 0,
+        },
+        ...artist,
+      })));
       setLoading(false);
     });
-    const qCategories = query(collection(db, "categories"));
+    const qCategories = query(collection(db, "categories"), orderBy("sortOrder"));
     const unsubCategories = onSnapshot(qCategories, (snapshot) => {
-      setCategories(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      const liveCategories = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setCategories(liveCategories.length > 0 ? liveCategories : platformCategories);
+    }, (error) => {
+      console.warn("Categories unavailable, using local defaults.", error);
+      setCategories(platformCategories);
     });
     return () => {
       unsubArtists();
       unsubCategories();
     };
-  }, []);
+  }, [selectedDistrict, selectedState]);
 
   // Build a map: categoryName → list of artists who have that category
   // Artists with multiple arts appear under EACH category

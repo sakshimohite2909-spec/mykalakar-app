@@ -25,9 +25,10 @@ function GlassPanel({ children, className = "", delay = 0 }: { children: React.R
   return (
     <div
       ref={panelRef}
-      className={`glass-panel rounded-3xl p-8 fade-in-panel ${className}`}
+      className={`glass-panel rounded-3xl p-8 fade-in-panel border-white/75 bg-white/60 shadow-[0_24px_90px_rgba(184,92,122,0.14),0_10px_36px_rgba(232,111,58,0.10),inset_0_1px_0_rgba(255,255,255,0.78)] ${className}`}
     >
-      <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/60 to-white/10 pointer-events-none opacity-50" />
+      <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/72 via-white/26 to-rose-50/18 pointer-events-none opacity-70" />
+      <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent pointer-events-none" />
       <div className="relative z-10">{children}</div>
     </div>
   );
@@ -122,7 +123,7 @@ export default function PremiumScrollyExperience() {
       <div
         ref={cursorRef}
         className="fixed top-0 left-0 w-[500px] h-[500px] -ml-[250px] -mt-[250px] rounded-full pointer-events-none z-[9990] select-none"
-        style={{ background: "radial-gradient(circle, rgba(255, 107, 0, 0.08) 0%, rgba(255, 180, 50, 0.04) 50%, transparent 70%)" }}
+        style={{ background: "radial-gradient(circle, rgba(232, 111, 58, 0.10) 0%, rgba(184, 92, 122, 0.06) 48%, transparent 70%)" }}
       />
 
       {/* ── PAGE WRAPPER ── */}
@@ -226,8 +227,8 @@ export default function PremiumScrollyExperience() {
                </GlassPanel>
                {/* Card 2 */}
                <GlassPanel className="flex flex-col items-start hover:-translate-y-2 transition-transform duration-500" delay={0.2}>
-                  <div className="w-12 h-12 rounded-2xl bg-cyan-100 flex items-center justify-center mb-6">
-                     <Zap className="w-5 h-5 text-cyan-600" />
+                  <div className="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center mb-6">
+                     <Zap className="w-5 h-5 text-rose-600" />
                   </div>
                   <h3 className="text-xl font-black text-[#1A1A1A] mb-3">Intelligent Logistics</h3>
                   <p className="text-sm text-slate-500 font-medium leading-relaxed">"From initial spark to final applause, smart contracts and automated payments operate seamlessly in the background."</p>

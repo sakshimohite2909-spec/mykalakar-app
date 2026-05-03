@@ -8,17 +8,13 @@ import { Star, MapPin, BadgeCheck, Clock, Phone, Heart, Share2, Calendar, Chevro
 import { useState, useEffect } from "react";
 import BookingModal from "@/components/BookingModal";
 import { db, storage } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, setDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { ref, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
-
-const getYoutubeEmbedUrl = (url: string) => {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
-};
+import { getExternalUrl, getYoutubeEmbedUrl } from "@/lib/youtube";
+import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
 
 export default function ArtistProfile() {
   const { id } = useParams();
@@ -33,8 +29,8 @@ export default function ArtistProfile() {
     const fetchArtist = async () => {
       if (!id) return;
       try {
-        const docRef = doc(db, "pending_registrations", id);
-        const docSnap = await getDoc(docRef);
+        const docRef = doc(db, "artists", id);
+        const docSnap = await withTimeout(getDoc(docRef), FIREBASE_READ_TIMEOUT_MS, "Could not load this artist profile.");
         if (docSnap.exists()) {
           const data = docSnap.data();
           const resolveImageUrl = async (urlStr: string) => {
@@ -50,24 +46,26 @@ export default function ArtistProfile() {
             return urlStr;
           };
 
-          const profilePhoto = await resolveImageUrl(data.profilePhoto || data.profilePicUrl);
-          const coverPhoto = await resolveImageUrl(data.coverPhoto || data.coverImages?.[0]);
+          const profilePhoto = await resolveImageUrl(data.media?.profilePhoto || data.profilePhoto || data.profilePicUrl);
+          const coverPhoto = await resolveImageUrl(data.media?.coverPhoto || data.coverPhoto || data.coverImages?.[0]);
           let galleryPhotos = [];
-          if (data.galleryPhotos) {
-             galleryPhotos = await Promise.all(data.galleryPhotos.map(resolveImageUrl));
+          if (data.media?.galleryPhotos || data.galleryPhotos) {
+             galleryPhotos = await Promise.all((data.media?.galleryPhotos || data.galleryPhotos).map(resolveImageUrl));
           }
 
           setArtist({ id: docSnap.id, ...data, profilePhoto, coverPhoto, galleryPhotos });
 
-          // Increment profile views
-          await updateDoc(docRef, {
-            profileViews: (data.profileViews || 0) + 1
+          updateDoc(docRef, {
+            "stats.profileViews": (data.stats?.profileViews || data.profileViews || 0) + 1,
+            updatedAt: serverTimestamp(),
+          }).catch((error) => {
+            console.warn("Could not update profile views:", error);
           });
 
           // Check if saved
           if (currentUser) {
             const savedRef = doc(db, "users", currentUser.uid, "savedArtists", docSnap.id);
-            const savedSnap = await getDoc(savedRef);
+            const savedSnap = await withTimeout(getDoc(savedRef), FIREBASE_READ_TIMEOUT_MS, "Could not load saved artist state.");
             if (savedSnap.exists()) setIsSaved(true);
           }
         }
@@ -90,25 +88,26 @@ export default function ArtistProfile() {
     try {
       const savedRef = doc(db, "users", currentUser.uid, "savedArtists", artist.id);
       if (isSaved) {
-        await deleteDoc(savedRef);
+        await withTimeout(deleteDoc(savedRef), FIREBASE_WRITE_TIMEOUT_MS, "Could not remove this saved artist.");
         setIsSaved(false);
         toast({ title: "Removed", description: `${artist.name} removed from saved.` });
       } else {
-        await setDoc(savedRef, {
+        await withTimeout(setDoc(savedRef, {
           artistId: artist.id,
           name: artist.name,
           category: artist.category || artist.subcategory || "",
           profilePhoto: artist.profilePhoto || "",
-          savedAt: new Date().toISOString()
-        });
+          savedAt: serverTimestamp()
+        }), FIREBASE_WRITE_TIMEOUT_MS, "Could not save this artist.");
         setIsSaved(true);
         toast({ title: "Saved! 🎉", description: `${artist.name} has been saved.` });
       }
     } catch (err) {
       console.error(err);
-      toast({ variant: "destructive", title: "Error", description: "Failed to save artist." });
+      toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(err, "Failed to save artist.") });
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   };
 
   const handleShare = async () => {
@@ -152,6 +151,15 @@ export default function ArtistProfile() {
       </div>
     );
   }
+
+  const socialLinks = Array.isArray(artist.socialLinks)
+    ? artist.socialLinks.filter((link: any) => typeof link?.url === "string" && link.url.trim().length > 0)
+    : [];
+  const socialLinkUrls = new Set(socialLinks.map((link: any) => link.url.trim()));
+  const youtubeLinks = Array.isArray(artist.youtubeLinks)
+    ? artist.youtubeLinks.filter((link: string) => typeof link === "string" && link.trim().length > 0 && !socialLinkUrls.has(link.trim()))
+    : [];
+  const hasPerformanceLinks = socialLinks.length > 0 || youtubeLinks.length > 0 || Boolean(artist.videoLink);
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -251,29 +259,59 @@ export default function ArtistProfile() {
             )}
 
             {/* Videos & Social Links */}
-            {(artist.socialLinks && artist.socialLinks.length > 0) || artist.youtubeLinks?.length > 0 || artist.videoLink && (
+            {hasPerformanceLinks && (
               <div className="glass-card rounded-2xl p-6 mb-6">
                 <h2 className="font-display text-lg font-semibold mb-4">Performance & Links</h2>
                 <div className="grid gap-6">
                   {/* Legacy Video Links */}
-                  {artist.youtubeLinks?.map((link: string, i: number) => (
+                  {youtubeLinks.map((link: string, i: number) => (
                     <div key={`legacy-yt-${i}`} className="space-y-2">
                       {getYoutubeEmbedUrl(link) ? (
                         <div className="aspect-video w-full rounded-xl overflow-hidden border border-border">
-                          <iframe width="100%" height="100%" src={getYoutubeEmbedUrl(link)!} allowFullScreen></iframe>
+                          <iframe
+                            width="100%"
+                            height="100%"
+                            src={getYoutubeEmbedUrl(link)!}
+                            title={`YouTube performance ${i + 1}`}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                            loading="lazy"
+                          ></iframe>
                         </div>
                       ) : (
-                        <a href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary">
+                        <a href={getExternalUrl(link)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary">
                           <Play className="h-5 w-5" /> Video Link {i + 1}
                         </a>
                       )}
                     </div>
                   ))}
 
+                  {artist.videoLink ? (
+                    <div className="space-y-2">
+                      {getYoutubeEmbedUrl(artist.videoLink) ? (
+                        <div className="aspect-video w-full rounded-xl overflow-hidden border border-border">
+                          <iframe
+                            width="100%"
+                            height="100%"
+                            src={getYoutubeEmbedUrl(artist.videoLink)!}
+                            title="Artist performance video"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                            loading="lazy"
+                          ></iframe>
+                        </div>
+                      ) : (
+                        <a href={getExternalUrl(artist.videoLink)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary">
+                          <Play className="h-5 w-5" /> Performance Link
+                        </a>
+                      )}
+                    </div>
+                  ) : null}
+
                   {/* New Social Links */}
-                  {artist.socialLinks?.map((link: any, i: number) => (
+                  {socialLinks.map((link: any, i: number) => (
                     <div key={`social-${i}`} className="space-y-3">
-                      {link.platform === "youtube" && getYoutubeEmbedUrl(link.url) ? (
+                      {String(link.platform).toLowerCase() === "youtube" && getYoutubeEmbedUrl(link.url) ? (
                         <div className="space-y-2">
                           <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <Play className="h-4 w-4" /> YouTube Performance
@@ -284,17 +322,18 @@ export default function ArtistProfile() {
                               height="100%"
                               src={getYoutubeEmbedUrl(link.url)!}
                               title="YouTube video player"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                               allowFullScreen
+                              loading="lazy"
                             ></iframe>
                           </div>
                         </div>
                       ) : (
-                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors border border-border/50">
+                        <a href={getExternalUrl(link.url)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors border border-border/50">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-lg gradient-bg flex items-center justify-center text-primary-foreground">
-                              {link.platform === "instagram" ? <Instagram className="h-5 w-5" /> :
-                                link.platform === "facebook" ? <Facebook className="h-5 w-5" /> :
+                              {String(link.platform).toLowerCase() === "instagram" ? <Instagram className="h-5 w-5" /> :
+                                String(link.platform).toLowerCase() === "facebook" ? <Facebook className="h-5 w-5" /> :
                                   <Globe className="h-5 w-5" />}
                             </div>
                             <div>
@@ -318,25 +357,25 @@ export default function ArtistProfile() {
               <h3 className="font-display text-lg font-semibold mb-4">Inquiry for Artist</h3>
 
               {/* Pricing Info */}
-              {(artist.soloPrice || artist.groupPrice || artist.advancePrice) && (
+              {(artist.pricing?.soloPrice || artist.pricing?.teamPrice || artist.pricing?.duoPrice) && (
                 <div className="mb-4 p-3 rounded-xl bg-secondary/50 border border-border/50 space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pricing</p>
-                  {artist.soloPrice && (
+                  {artist.pricing?.soloPrice && (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground flex items-center gap-1"><User className="h-3.5 w-3.5" /> Solo</span>
-                      <span className="font-semibold">₹{Number(artist.soloPrice).toLocaleString('en-IN')}</span>
+                      <span className="font-semibold">₹{Number(artist.pricing.soloPrice).toLocaleString('en-IN')}</span>
                     </div>
                   )}
-                  {artist.groupPrice && (
+                  {artist.pricing?.duoPrice && (
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Group</span>
-                      <span className="font-semibold">₹{Number(artist.groupPrice).toLocaleString('en-IN')}</span>
+                      <span className="text-muted-foreground flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Duo</span>
+                      <span className="font-semibold">₹{Number(artist.pricing.duoPrice).toLocaleString('en-IN')}</span>
                     </div>
                   )}
-                  {artist.advancePrice && (
-                    <div className="flex justify-between items-center text-sm border-t border-border/50 pt-2 mt-1">
-                      <span className="text-muted-foreground">Advance</span>
-                      <span className="font-semibold text-primary">₹{Number(artist.advancePrice).toLocaleString('en-IN')}</span>
+                  {artist.pricing?.teamPrice && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Team</span>
+                      <span className="font-semibold text-primary">₹{Number(artist.pricing.teamPrice).toLocaleString('en-IN')}</span>
                     </div>
                   )}
                 </div>
@@ -373,11 +412,11 @@ export default function ArtistProfile() {
               )}
               
               {/* Contact Assistant / Manager */}
-              {artist.hasAssistant && artist.assistantName && artist.assistantContact && (
+              {artist.assistant?.hasAssistant && artist.assistant?.name && artist.assistant?.contact && (
                 <div className="mt-4 p-4 rounded-xl border border-primary/20 bg-primary/5">
                    <p className="text-xs font-bold uppercase tracking-wider text-primary mb-2">Contact Assistant/Manager</p>
-                   <p className="text-sm font-semibold">{artist.assistantName}</p>
-                   <p className="text-sm text-muted-foreground">{artist.assistantContact}</p>
+                   <p className="text-sm font-semibold">{artist.assistant.name}</p>
+                   <p className="text-sm text-muted-foreground">{artist.assistant.contact}</p>
                 </div>
               )}
             </div>

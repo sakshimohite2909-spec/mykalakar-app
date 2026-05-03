@@ -11,6 +11,8 @@ const eventTypes = ["Wedding", "Corporate Event", "Birthday Party", "Festival", 
 import { Calendar, Send } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { useAuth } from "@/contexts/AuthContext";
+import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
 
 interface Props {
   open: boolean;
@@ -20,6 +22,7 @@ interface Props {
 }
 
 export default function BookingModal({ open, onOpenChange, artistName, artistId }: Props) {
+  const { currentUser, userProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     customerName: "",
@@ -42,15 +45,28 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!formData.eventType) {
+      toast({ variant: "destructive", title: "Event type required", description: "Please select the event type." });
+      return;
+    }
     setLoading(true);
     try {
-      await addDoc(collection(db, "inquiries"), {
-        ...formData,
-        artistName,
-        artistId,
-        status: "pending",
-        createdAt: serverTimestamp()
-      });
+      await withTimeout(
+        addDoc(collection(db, "inquiries"), {
+          ...formData,
+          artistName,
+          artistId,
+          artistUid: artistId,
+          customerId: currentUser?.uid || "",
+          customerEmail: currentUser?.email || "",
+          customerName: formData.customerName || userProfile?.name || "",
+          status: "pending",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }),
+        FIREBASE_WRITE_TIMEOUT_MS,
+        "Sending this inquiry is taking too long. Please try again."
+      );
 
       onOpenChange(false);
       toast({ title: "Inquiry Sent! ✨", description: `Your inquiry for ${artistName} has been submitted.` });
@@ -65,7 +81,7 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
         message: ""
       });
     } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "Could not send inquiry." });
+      toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not send inquiry.") });
     } finally {
       setLoading(false);
     }

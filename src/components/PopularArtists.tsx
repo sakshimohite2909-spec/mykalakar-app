@@ -12,8 +12,8 @@ export default function PopularArtists() {
 
   useEffect(() => {
     const q = query(
-      collection(db, "pending_registrations"),
-      where("status", "==", "approved"),
+      collection(db, "artists"),
+      where("status", "==", "active"),
       limit(10)
     );
 

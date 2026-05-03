@@ -1,5 +1,6 @@
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase";
+import { FIREBASE_UPLOAD_TIMEOUT_MS } from "@/lib/firebaseSafe";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -61,6 +62,15 @@ export function uploadFileWithProgress(
     const uploadTask = uploadBytesResumable(storageRef, file, {
       contentType: file.type,
     });
+    const timeoutId = setTimeout(() => {
+      uploadTask.cancel();
+      reject(new Error("The upload is taking too long. Please try a smaller image or check your connection."));
+    }, FIREBASE_UPLOAD_TIMEOUT_MS);
+
+    const finish = (callback: () => void) => {
+      clearTimeout(timeoutId);
+      callback();
+    };
 
     uploadTask.on(
       "state_changed",
@@ -74,14 +84,14 @@ export function uploadFileWithProgress(
           message: error.message,
           serverResponse: error.serverResponse,
         });
-        reject(error);
+        finish(() => reject(error));
       },
       async () => {
         try {
           const url = await getDownloadURL(uploadTask.snapshot.ref);
-          resolve(url);
+          finish(() => resolve(url));
         } catch (err) {
-          reject(err);
+          finish(() => reject(err));
         }
       }
     );

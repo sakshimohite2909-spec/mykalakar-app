@@ -1,11 +1,57 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // Temporarily allow public read/write to allow uploads before the user is fully 
-    // initialized in Firestore, since we are using a custom username auth flow.
-    // Replace with stricter rules in production once auth flow is hardened.
-    match /{allPaths=**} {
-      allow read, write: if true;
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/admins/$(request.auth.uid)).data.status == "active";
+    }
+
+    function isImage() {
+      return request.resource != null && request.resource.contentType.matches("image/.*");
+    }
+
+    match /avatars/{uid}/{fileName} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && isImage();
+    }
+
+    match /covers/{uid}/{fileName} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && isImage();
+    }
+
+    match /galleries/{uid}/{fileName} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && isImage();
+    }
+
+    match /identity/{uid}/{fileName} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    match /categories/{categoryId}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isImage();
+    }
+
+    match /events/{eventId}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isImage();
+    }
+
+    match /app/{assetName} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

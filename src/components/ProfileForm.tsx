@@ -20,8 +20,11 @@ import {
   Save,
   User,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import CreatableSelect from "react-select/creatable";
+import { toast } from "@/hooks/use-toast";
+import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
 
 interface ProfileCategory {
   category: string;
@@ -243,7 +246,9 @@ export function ProfileForm({ initial = {}, onSave, disabled = false }: ProfileF
     if (!onSave) return;
     setSaving(true);
     try {
-      await onSave(form);
+      await withTimeout(onSave(form), FIREBASE_WRITE_TIMEOUT_MS, "Saving this profile is taking too long. Please try again.");
+    } catch (error) {
+      toast({ variant: "destructive", title: "Profile not saved", description: firebaseErrorMessage(error, "Could not save profile.") });
     } finally {
       setSaving(false);
     }
@@ -317,7 +322,7 @@ export function ProfileForm({ initial = {}, onSave, disabled = false }: ProfileF
               >
                 <SelectValue placeholder="Select gender" />
               </SelectTrigger>
-              <SelectContent className="bg-slate-950 border-white/10 text-foreground backdrop-blur-3xl">
+              <SelectContent className="rounded-2xl border-orange-100 bg-white/95 text-slate-800 shadow-2xl backdrop-blur-3xl">
                 <SelectItem value="Male">Male</SelectItem>
                 <SelectItem value="Female">Female</SelectItem>
                 <SelectItem value="Non-Binary">Non-Binary</SelectItem>
@@ -374,7 +379,11 @@ export function ProfileForm({ initial = {}, onSave, disabled = false }: ProfileF
                         value={catEntry.category ? { label: catEntry.category, value: catEntry.category } : null}
                         onChange={(newValue: any) => updateCategory(idx, "category", newValue ? newValue.value : "")}
                         formatCreateLabel={(inputValue) => `Add "${inputValue}"`}
+                        menuPortalTarget={document.body}
+                        menuPosition="fixed"
+                        maxMenuHeight={300}
                         styles={{
+                          menuPortal: (base) => ({ ...base, zIndex: 9999 }),
                           control: (base) => ({
                             ...base,
                             backgroundColor: "rgba(255, 255, 255, 0.05)",
@@ -391,10 +400,16 @@ export function ProfileForm({ initial = {}, onSave, disabled = false }: ProfileF
                             ...base,
                             backgroundColor: "#0f172a",
                             borderRadius: "0.75rem",
-                            overflow: "hidden",
+                            overflow: "visible",
                             border: "1px solid rgba(255,255,255,0.1)",
                             boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
                             zIndex: 50,
+                          }),
+                          menuList: (base) => ({
+                            ...base,
+                            maxHeight: 300,
+                            overflowY: "auto",
+                            WebkitOverflowScrolling: "touch",
                           }),
                           option: (base, { isFocused, isSelected }) => ({
                             ...base,

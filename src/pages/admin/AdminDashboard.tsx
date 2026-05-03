@@ -8,7 +8,9 @@ import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, limit, orderBy, writeBatch, doc, getDocs, updateDoc, serverTimestamp } from "firebase/firestore";
 
-import { initialCategories } from "@/data/mockData";
+import { platformCategories } from "@/data/mockData";
+import { approveArtist, rejectArtist } from "@/lib/adminQueries";
+import { firebaseErrorMessage } from "@/lib/firebaseSafe";
 
 export default function AdminDashboard() {
   const [counts, setCounts] = useState({
@@ -25,7 +27,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     // Total Artists (Approved)
-    const qArtists = query(collection(db, "pending_registrations"), where("status", "==", "approved"));
+    const qArtists = query(collection(db, "artists"), where("status", "==", "active"));
     const unsubArtists = onSnapshot(qArtists, (snap) => {
       setCounts(prev => ({
         ...prev,
@@ -33,10 +35,13 @@ export default function AdminDashboard() {
         verifiedArtists: snap.docs.filter(d => d.data().verified).length,
         trending: snap.docs.filter(d => d.data().trending).length
       }));
+    }, (error) => {
+      console.error(error);
+      toast({ variant: "destructive", title: "Artists unavailable", description: firebaseErrorMessage(error, "Could not load artist stats.") });
     });
 
     // Pending Artists & Today's Registrations
-    const qPending = query(collection(db, "pending_registrations"), where("status", "==", "pending"));
+    const qPending = query(collection(db, "artist_applications"), where("status", "==", "pending"), orderBy("createdAt", "desc"));
     const unsubPending = onSnapshot(qPending, (snap) => {
       const allPending = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -50,6 +55,9 @@ export default function AdminDashboard() {
 
       setCounts(prev => ({ ...prev, pendingArtists: snap.size, todayRegistrations: todayCount }));
       setPendingList(allPending.slice(0, 5));
+    }, (error) => {
+      console.error(error);
+      toast({ variant: "destructive", title: "Pending artists unavailable", description: firebaseErrorMessage(error, "Could not load pending artists.") });
     });
 
     // Bookings
@@ -57,12 +65,18 @@ export default function AdminDashboard() {
     const unsubBookings = onSnapshot(qBookings, (snap) => {
       setCounts(prev => ({ ...prev, totalBookings: snap.size }));
       setRecentBookings(snap.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error(error);
+      toast({ variant: "destructive", title: "Bookings unavailable", description: firebaseErrorMessage(error, "Could not load bookings.") });
     });
 
     // Categories
     const qCats = query(collection(db, "categories"));
     const unsubCats = onSnapshot(qCats, (snap) => {
-      setCounts(prev => ({ ...prev, categories: snap.size }));
+      setCounts(prev => ({ ...prev, categories: snap.size || platformCategories.length }));
+    }, (error) => {
+      console.error(error);
+      toast({ variant: "destructive", title: "Categories unavailable", description: firebaseErrorMessage(error, "Could not load categories.") });
     });
 
     setLoading(false);
@@ -86,10 +100,11 @@ export default function AdminDashboard() {
         batch.delete(docSnap.ref);
       });
 
-      initialCategories.forEach((cat) => {
-        const docRef = doc(collection(db, "categories"));
+      platformCategories.forEach((cat) => {
+        const docRef = doc(db, "categories", cat.id);
         batch.set(docRef, {
           ...cat,
+          updatedAt: serverTimestamp(),
           createdAt: serverTimestamp()
         });
       });
@@ -110,10 +125,7 @@ export default function AdminDashboard() {
 
   const handleApprove = async (id: string) => {
     try {
-      await updateDoc(doc(db, "pending_registrations", id), {
-        status: "approved",
-        verified: true
-      });
+      await approveArtist(id);
       toast({ title: "Artist Verified! ✅", description: "Artist is now live and verified on the platform." });
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Could not verify artist." });
@@ -122,9 +134,7 @@ export default function AdminDashboard() {
 
   const handleReject = async (id: string) => {
     try {
-      await updateDoc(doc(db, "pending_registrations", id), {
-        status: "rejected"
-      });
+      await rejectArtist(id);
       toast({ title: "Artist Rejected", description: "Registration has been rejected." });
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Could not reject artist." });
@@ -173,7 +183,7 @@ export default function AdminDashboard() {
             {recentBookings.map((b) => (
               <div key={b.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
                 <div>
-                  <p className="font-medium text-sm">{b.customerName}</p>
+                  <p className="font-medium text-sm">{b.clientName || b.customerName}</p>
                   <p className="text-xs text-muted-foreground">{b.artistName} · {b.eventType}</p>
                 </div>
                 <div className="text-right">
@@ -198,13 +208,13 @@ export default function AdminDashboard() {
               <div key={a.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
                 <div className="flex items-center gap-3">
                   <img
-                    src={a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
+                    src={a.media?.profilePhoto || a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
                     alt={a.name}
                     className="w-10 h-10 rounded-lg object-cover"
                   />
                   <div>
                     <p className="font-medium text-sm">{a.name}</p>
-                    <p className="text-xs text-muted-foreground">{a.subcategory} · {a.city}</p>
+                    <p className="text-xs text-muted-foreground">{a.subcategory} · {a.district || a.city}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
@@ -233,9 +243,9 @@ export default function AdminDashboard() {
                       </DialogHeader>
                       <div className="space-y-6 pt-4 text-left">
                         <div className="relative h-32 w-full rounded-xl overflow-hidden border mb-4 bg-secondary/20">
-                          <img src={a.coverPhoto || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600"} className="w-full h-full object-cover" alt="Cover" />
+                          <img src={a.media?.coverPhoto || a.coverPhoto || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600"} className="w-full h-full object-cover" alt="Cover" />
                           <div className="absolute bottom-4 left-4 flex gap-4 items-end">
-                            <img src={a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"} className="w-20 h-20 rounded-xl object-cover border-4 border-background shadow-lg" />
+                            <img src={a.media?.profilePhoto || a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"} className="w-20 h-20 rounded-xl object-cover border-4 border-background shadow-lg" />
                             <div className="pb-1">
                               <p className="text-xl font-bold bg-background/60 backdrop-blur-sm px-2 rounded-md">{a.name}</p>
                               <p className="text-primary font-medium text-xs bg-background/60 backdrop-blur-sm px-2 rounded-md inline-block">{a.category} / {a.subcategory}</p>
@@ -244,33 +254,33 @@ export default function AdminDashboard() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                          <p className="text-muted-foreground flex items-center gap-1 text-sm"><Phone className="h-3 w-3" /> {a.phone}</p>
-                          <p className="text-muted-foreground flex items-center gap-1 text-sm"><MapPin className="h-3 w-3" /> {a.city}</p>
+                          <p className="text-muted-foreground flex items-center gap-1 text-sm"><Phone className="h-3 w-3" /> {a.mobileNumber || a.phone}</p>
+                          <p className="text-muted-foreground flex items-center gap-1 text-sm"><MapPin className="h-3 w-3" /> {a.district || a.city}</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2 p-4 rounded-xl bg-secondary/30 border border-border">
                             <h4 className="font-semibold flex items-center gap-2 text-primary text-sm"><CreditCard className="h-4 w-4" /> Identity Info</h4>
-                            <p className="text-xs"><strong>Aadhar No:</strong> {a.aadharNumber || "N/A"}</p>
-                            {a.aadharPhoto && (
+                            <p className="text-xs"><strong>Aadhar No:</strong> {a.identity?.aadharNumber || a.aadharNumber || "N/A"}</p>
+                            {(a.media?.aadharPhoto || a.aadharPhoto) && (
                               <div className="mt-2 rounded-lg overflow-hidden border bg-background">
-                                <img src={a.aadharPhoto} alt="Aadhar" className="w-full h-auto max-h-32 object-contain" />
+                                <img src={a.media?.aadharPhoto || a.aadharPhoto} alt="Aadhar" className="w-full h-auto max-h-32 object-contain" />
                               </div>
                             )}
                           </div>
                           <div className="space-y-2 p-4 rounded-xl bg-secondary/30 border border-border">
                             <h4 className="font-semibold flex items-center gap-2 text-primary text-sm"><Building2 className="h-4 w-4" /> Bank Details</h4>
-                            <p className="text-xs"><strong>Bank:</strong> {a.bankName || "N/A"}</p>
-                            <p className="text-xs"><strong>IFSC:</strong> {a.ifscCode || "N/A"}</p>
-                            <p className="text-xs"><strong>Account:</strong> {a.accountNumber || "N/A"}</p>
+                            <p className="text-xs"><strong>Bank:</strong> {a.bankDetails?.bankName || a.bankName || "N/A"}</p>
+                            <p className="text-xs"><strong>IFSC:</strong> {a.bankDetails?.ifscCode || a.ifscCode || "N/A"}</p>
+                            <p className="text-xs"><strong>Account:</strong> {a.bankDetails?.accountNumber || a.accountNumber || "N/A"}</p>
                           </div>
                         </div>
 
-                        {a.galleryPhotos && a.galleryPhotos.length > 0 && (
+                        {(a.media?.galleryPhotos || a.galleryPhotos) && (a.media?.galleryPhotos || a.galleryPhotos).length > 0 && (
                           <div className="space-y-2">
                             <h4 className="font-semibold flex items-center gap-2 text-primary text-sm"><Upload className="h-4 w-4" /> Gallery</h4>
                             <div className="grid grid-cols-5 gap-2">
-                              {a.galleryPhotos.map((p: string, i: number) => (
+                              {(a.media?.galleryPhotos || a.galleryPhotos).map((p: string, i: number) => (
                                 <img key={i} src={p} className="aspect-square w-full rounded-lg object-cover border" alt="Gallery" />
                               ))}
                             </div>

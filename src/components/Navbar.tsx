@@ -2,13 +2,13 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { useAuth } from "@/contexts/AuthContext";
-import { Menu, X, ChevronDown, Sparkles as SparklesIcon } from "lucide-react";
+import { LayoutDashboard, Menu, ShieldCheck, UserCircle, X, ChevronDown, Sparkles as SparklesIcon, Eye } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { currentUser, artistData, logout } = useAuth();
+  const { currentUser, artistData, userProfile, userRole, logout } = useAuth();
   const navRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -41,6 +41,33 @@ export default function Navbar() {
     return cur.startsWith(path);
   };
 
+  const profileValue = (key: string) => {
+    const value = userProfile?.[key];
+    return typeof value === "string" ? value : "";
+  };
+  const artistMedia = typeof artistData?.media === "object" && artistData.media !== null
+    ? artistData.media as Record<string, unknown>
+    : null;
+  const artistPhoto = typeof artistMedia?.profilePhoto === "string"
+    ? artistMedia.profilePhoto
+    : typeof artistData?.profilePhoto === "string"
+      ? artistData.profilePhoto
+      : "";
+  const profilePhoto = artistPhoto || profileValue("profilePhoto");
+  const displayName =
+    artistData?.name ||
+    profileValue("name") ||
+    profileValue("username") ||
+    currentUser?.email?.split("@")[0] ||
+    "User";
+  const firstName = displayName.split(" ")[0] || "User";
+  const canViewArtistProfile = Boolean(
+    artistData && (artistData.status === "active" || artistData.status === "approved")
+  );
+  const dashboardPath = userRole === "admin" ? "/admin" : userRole === "artist" ? "/artist/dashboard" : "/profile";
+  const dashboardLabel = userRole === "admin" ? "Admin Console" : userRole === "artist" ? "Artist Dashboard" : "My Profile";
+  const showDashboardLink = dashboardPath !== "/profile";
+
   return (
     <nav className="fixed inset-x-0 top-0 z-[100] px-4 pt-4 md:px-8 pointer-events-none">
       <div
@@ -56,7 +83,7 @@ export default function Navbar() {
       >
         {/* Tangerine glow line top */}
         <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 h-px w-3/4 rounded-full"
-          style={{ background: "linear-gradient(90deg, transparent, rgba(232,93,4,0.50), rgba(0,122,159,0.40), transparent)" }}
+          style={{ background: "linear-gradient(90deg, transparent, rgba(232,111,58,0.42), rgba(184,92,122,0.34), transparent)" }}
         />
 
         {/* Brand */}
@@ -90,17 +117,17 @@ export default function Navbar() {
                 <div className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1.5 cursor-pointer transition-all"
                   style={{ background: "rgba(255,255,255,0.70)", border: "1px solid rgba(255,138,48,0.20)", boxShadow: "0 2px 10px rgba(0,0,0,0.03)" }}>
                   <div className="w-7 h-7 rounded-full flex items-center justify-center text-foreground text-xs font-black overflow-hidden shrink-0"
-                    style={{ background: "linear-gradient(135deg, #E85D04, #007A9F)", boxShadow: "0 0 12px rgba(232,93,4,0.40)" }}>
-                    {artistData?.profilePhoto ? (
-                      <img src={artistData.profilePhoto} alt="" className="w-full h-full object-cover" />
+                    style={{ background: "linear-gradient(135deg, #E86F3A, #B85C7A)", boxShadow: "0 0 12px rgba(232,111,58,0.28)" }}>
+                    {profilePhoto ? (
+                      <img src={profilePhoto} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <span>{artistData?.name?.[0] || currentUser.email?.[0]?.toUpperCase() || "U"}</span>
+                      <span>{displayName[0]?.toUpperCase() || "U"}</span>
                     )}
                   </div>
                   <div className="hidden sm:block text-left">
                     <p className="text-[9px] font-bold uppercase tracking-wider leading-none" style={{ color: "#475569" }}>Welcome</p>
                     <p className="text-xs font-black leading-none mt-0.5" style={{ color: "#1A1A1A" }}>
-                      {artistData?.name?.split(" ")[0] || currentUser.email?.split("@")[0] || "User"}
+                      {firstName}
                     </p>
                   </div>
                   <ChevronDown className="w-3 h-3 ml-1" style={{ color: "#475569" }} />
@@ -111,17 +138,31 @@ export default function Navbar() {
                 <DropdownMenuItem
                   className="rounded-xl cursor-pointer font-bold transition-colors text-sm py-2.5 hover:bg-orange-100"
                   style={{ color: "#1A1A1A" }}
-                  onClick={() => navigate(artistData ? `/artist/${artistData.id}` : "/")}
+                  onClick={() => navigate("/profile")}
                 >
-                  View Profile
+                  <UserCircle className="mr-2 h-4 w-4" />
+                  My Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="rounded-xl cursor-pointer font-bold transition-colors text-sm py-2.5 hover:bg-orange-100"
-                  style={{ color: "#1A1A1A" }}
-                  onClick={() => navigate("/artist/dashboard")}
-                >
-                  Dashboard
-                </DropdownMenuItem>
+                {canViewArtistProfile ? (
+                  <DropdownMenuItem
+                    className="rounded-xl cursor-pointer font-bold transition-colors text-sm py-2.5 hover:bg-orange-100"
+                    style={{ color: "#1A1A1A" }}
+                    onClick={() => navigate(`/artist/${artistData!.uid || artistData!.id}`)}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    View Public Page
+                  </DropdownMenuItem>
+                ) : null}
+                {showDashboardLink ? (
+                  <DropdownMenuItem
+                    className="rounded-xl cursor-pointer font-bold transition-colors text-sm py-2.5 hover:bg-orange-100"
+                    style={{ color: "#1A1A1A" }}
+                    onClick={() => navigate(dashboardPath)}
+                  >
+                    {userRole === "admin" ? <ShieldCheck className="mr-2 h-4 w-4" /> : <LayoutDashboard className="mr-2 h-4 w-4" />}
+                    {dashboardLabel}
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem
                   className="rounded-xl cursor-pointer font-bold transition-colors mt-1 text-sm py-2.5 hover:bg-red-50"
                   style={{ color: "#E11D48" }}
@@ -143,7 +184,7 @@ export default function Navbar() {
               <Link
                 to="/login"
                 className="rounded-full px-5 py-2 text-[11px] font-black uppercase tracking-widest text-[#FFFFFF] transition-all hover:scale-105 active:scale-95"
-                style={{ background: "linear-gradient(135deg, #E85D04, #007A9F)", boxShadow: "0 4px 16px rgba(232,93,4,0.40)" }}
+                style={{ background: "linear-gradient(135deg, #E86F3A, #F6A15A 52%, #B85C7A)", boxShadow: "0 4px 16px rgba(232,111,58,0.30)" }}
               >
                 Login
               </Link>
@@ -183,6 +224,26 @@ export default function Navbar() {
             >
               Register
             </Link>
+          )}
+          {currentUser && (
+            <>
+              <Link
+                to="/profile"
+                className="rounded-xl px-4 py-3 text-sm font-bold uppercase tracking-wider transition-all bg-white"
+                style={{ color: "#1A1A1A", border: "1px solid rgba(255,138,48,0.25)" }}
+              >
+                My Profile
+              </Link>
+              {showDashboardLink ? (
+                <Link
+                  to={dashboardPath}
+                  className="rounded-xl px-4 py-3 text-sm font-bold uppercase tracking-wider transition-all bg-white"
+                  style={{ color: "#1A1A1A", border: "1px solid rgba(255,138,48,0.25)" }}
+                >
+                  {dashboardLabel}
+                </Link>
+              ) : null}
+            </>
           )}
         </div>
       )}

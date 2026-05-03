@@ -1,83 +1,116 @@
-# Welcome to your Lovable project
+# Artist HUB
 
-## Project info
+A production-ready React + Vite platform for artist discovery, booking workflows, and role-based dashboards.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Tech Stack
 
-## How can I edit this code?
+- React 18 + TypeScript
+- Vite 5
+- Tailwind CSS + shadcn/ui
+- Firebase (Auth, Firestore, Storage)
+- Vitest
 
-There are several ways of editing your application.
+## Project Structure
 
-**Use Lovable**
+- `src/pages` - route pages (public, artist, admin)
+- `src/components` - reusable UI and feature components
+- `src/contexts` - global state providers (auth)
+- `src/lib` - firebase integration, utilities, domain helpers
+- `firestore.rules` / `storage.rules` - Firebase security rules
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Local Development
 
-Changes made via Lovable will be committed automatically to this repo.
+1. Install dependencies:
 
-**Use your preferred IDE**
+```bash
+npm install
+```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+2. Create local environment file:
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```bash
+cp .env.example .env
+```
 
-Follow these steps:
+3. Fill all values in `.env` using your Firebase project config.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+4. Start dev server:
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+5. Open the app in browser:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```text
+http://localhost:8080
+```
 
-**Use GitHub Codespaces**
+## Environment Variables
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Use `.env.example` as reference. Required variables:
 
-## What technologies are used for this project?
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID` (optional)
 
-This project is built with:
+## Security and Privacy Practices
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- Never commit `.env`, `.env.local`, or production secrets.
+- Keep real keys in local env files and deployment platform secret stores.
+- Commit only `.env.example` with placeholder values.
+- Firebase rules are versioned and deployed explicitly from this repo.
+- Source code reads Firebase config from environment variables only.
 
-## How can I deploy this project?
+## Build and Tests
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Run production build:
 
-## Vercel deployment
+```bash
+npm run build
+```
 
-This project is Vercel-ready as a Vite single-page app.
+Run tests:
 
-1. Import the GitHub repository into Vercel.
-2. Keep the build command as `npm run build` and the output directory as `dist`.
-3. Add the Firebase values from `.env.example` as Vercel Environment Variables using the same `VITE_` names.
-4. Do not commit a real `.env` file. Keep secrets in Vercel or in your local untracked `.env` only.
-5. The `vercel.json` rewrite keeps client-side routing working on refresh and direct links.
+```bash
+npm run test
+```
 
-## Can I connect a custom domain to my Lovable project?
+## Deployment
 
-Yes, you can!
+### Option A: Vercel (frontend)
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+1. Import this GitHub repository into Vercel.
+2. Build command: `npm run build`
+3. Output directory: `dist`
+4. Add all `VITE_` environment variables in Vercel Project Settings.
+5. Deploy.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+`vercel.json` is configured for SPA route rewrites.
+
+### Option B: Firebase Rules Deployment
+
+Deploy Firestore and Storage rules:
+
+```bash
+npx firebase-tools@latest login
+npx firebase-tools@latest deploy --only firestore:rules,storage:rules --project <your-project-id>
+```
+
+## Git Workflow
+
+Recommended release workflow:
+
+1. Create a feature/release branch.
+2. Run `npm run build` and `npm run test`.
+3. Commit with clear messages.
+4. Push branch and open a Pull Request.
+5. Merge after review and CI checks.
+
+## License
+
+This project is currently private and maintained by the Artist HUB team.

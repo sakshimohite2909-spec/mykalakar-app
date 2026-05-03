@@ -26,7 +26,7 @@ export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
           {/* Cover Media */}
           <div className="relative h-48 overflow-hidden">
             <img
-              src={artist.coverPhoto || artist.profilePhoto || `https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&auto=format&fit=crop`}
+              src={artist.media?.coverPhoto || artist.media?.profilePhoto || artist.coverPhoto || artist.profilePhoto || `https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&auto=format&fit=crop`}
               alt={artist.name}
               className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
             />
@@ -38,7 +38,9 @@ export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
                </span>
                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/90 backdrop-blur-md border border-slate-100 w-fit">
                   <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                  <span className="text-xs font-black text-slate-800 tracking-tighter">4.9 (24 Reviews)</span>
+                  <span className="text-xs font-black text-slate-800 tracking-tighter">
+                    {artist.stats?.rating || artist.rating || "5.0"} ({artist.stats?.reviews || artist.reviews || "0"} Reviews)
+                  </span>
                </div>
             </div>
           </div>
@@ -72,7 +74,7 @@ export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
              <div className="pt-6 mt-auto border-t border-slate-50 flex items-center justify-between">
                 <div className="flex flex-col">
                    <span className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">Event Booking</span>
-                   <span className="text-2xl font-black text-slate-900">₹{artist.startingPrice || "5,000"}<span className="text-xs text-slate-400 ml-1">/ session</span></span>
+                   <span className="text-2xl font-black text-slate-900">₹{(artist.pricing?.soloPrice || artist.startingPrice || "5,000").toLocaleString('en-IN')}<span className="text-xs text-slate-400 ml-1">/ session</span></span>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center group-hover:bg-primary transition-all shadow-lg group-hover:shadow-primary/30 translate-y-0 group-hover:-translate-y-1">
                    <ArrowRight className="h-6 w-6 text-foreground" />
@@ -96,8 +98,8 @@ export default function FeaturedArtists() {
 
   useEffect(() => {
     const q = query(
-      collection(db, "pending_registrations"),
-      where("status", "==", "approved"),
+      collection(db, "artists"),
+      where("status", "==", "active"),
       limit(10)
     );
 

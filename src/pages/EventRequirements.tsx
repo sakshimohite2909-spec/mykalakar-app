@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
 import { Loader2, Sparkles } from "lucide-react";
+import { platformCategories } from "@/data/mockData";
 
 // Category icon map — falls back to emoji based on name keywords
 const getCategoryIcon = (name: string): string => {
@@ -55,10 +56,11 @@ const EventRequirements = () => {
     const q = query(collection(db, "categories"), orderBy("name"));
     const unsub = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setCategories(data);
+      setCategories(data.length > 0 ? data : platformCategories);
       setLoading(false);
     }, (err) => {
       console.warn("Categories fetch error:", err);
+      setCategories(platformCategories);
       setLoading(false);
     });
     return () => unsub();
@@ -118,7 +120,7 @@ const EventRequirements = () => {
               <div className="mb-8 flex items-center gap-3">
                 <span className="h-px flex-1 bg-gradient-to-r from-transparent via-orange-200 to-transparent" />
                 <span className="text-[10px] font-black tracking-[0.25em] uppercase text-slate-400">All Categories</span>
-                <span className="h-px flex-1 bg-gradient-to-l from-transparent via-cyan-200 to-transparent" />
+                <span className="h-px flex-1 bg-gradient-to-l from-transparent via-rose-200 to-transparent" />
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 mb-12">

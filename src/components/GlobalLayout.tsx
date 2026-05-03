@@ -10,7 +10,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 gsap.registerPlugin(ScrollTrigger);
 
 // Auth pages that should shift the 3D objects to the side
-const AUTH_PATHS = ["/register", "/artist-login"];
+const AUTH_PATHS = ["/register", "/artist-register", "/admin-register", "/user-register", "/login", "/artist-login", "/admin-login", "/user-login"];
 
 interface GlobalLayoutProps {
   children: React.ReactNode;
@@ -19,24 +19,24 @@ interface GlobalLayoutProps {
 export default function GlobalLayout({ children }: GlobalLayoutProps) {
   const location = useLocation();
   const isAuthPage = AUTH_PATHS.includes(location.pathname);
-  const lenisRef = useRef<any>(null);
+  const lenisRef = useRef<Lenis | null>(null);
 
   // Lenis smooth scroll — attach globally, persist across route changes
   useEffect(() => {
     const lenis = new Lenis({
-      duration: 1.3,
+      duration: 0.85,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       orientation: "vertical",
       smoothWheel: true,
-      wheelMultiplier: 1.0,
-      touchMultiplier: 2.0,
+      wheelMultiplier: 0.9,
+      touchMultiplier: 1.4,
     });
 
     lenisRef.current = lenis;
+    lenis.on("scroll", ScrollTrigger.update);
 
     const tickerFn = (time: number) => {
       lenis.raf(time * 1000);
-      ScrollTrigger.update();
     };
 
     gsap.ticker.add(tickerFn);
