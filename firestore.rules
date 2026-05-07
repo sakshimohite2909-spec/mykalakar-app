@@ -2,6 +2,7 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function signedIn() {
       return request.auth != null;
     }
@@ -16,31 +17,27 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.status == "active";
     }
 
-    function validOwnedUser(uid) {
-      return isOwner(uid)
+    // ── users ────────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+
+      // Owner can create their own user doc with allowed roles
+      allow create: if isOwner(uid)
         && request.resource.data.uid == uid
         && request.resource.data.role in ["customer", "artist", "admin_request"]
         && request.resource.data.status in ["active", "pending", "blocked"];
-    }
 
-    function userKeepsIdentity(uid) {
-      return isOwner(uid)
-        && resource.data.uid == uid
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.role == resource.data.role;
-    }
+      // Owner can update only non-sensitive fields (cannot self-promote role/status)
+      allow update: if isAdmin()
+        || (
+          isOwner(uid)
+          && resource.data.uid == uid
+          && request.resource.data.uid == resource.data.uid
+          // Block self-promotion: role and status cannot be changed by owner
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.status == resource.data.status
+        );
 
-    function validArtistApplicationOwner() {
-      return signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.role == "artist"
-        && request.resource.data.status == "pending";
-    }
-
-    match /users/{uid} {
-      allow read: if isOwner(uid) || isAdmin();
-      allow create: if validOwnedUser(uid) || isAdmin();
-      allow update: if (validOwnedUser(uid) && userKeepsIdentity(uid)) || isAdmin();
       allow delete: if isAdmin();
 
       match /savedArtists/{artistId} {
@@ -48,32 +45,61 @@ service cloud.firestore {
       }
     }
 
+    // ── admins ───────────────────────────────────────────────────────────────
     match /admins/{uid} {
       allow read: if isOwner(uid) || isAdmin();
       allow write: if isAdmin();
     }
 
+    // ── admin_requests ───────────────────────────────────────────────────────
     match /admin_requests/{requestId} {
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.status == "pending";
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      // Owner can read their own request (by uid field, not doc id since we use addDoc)
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.uid == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
+    // ── artist_applications ──────────────────────────────────────────────────
     match /artist_applications/{applicationId} {
-      allow create: if validArtistApplicationOwner();
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.role == "artist"
+        && request.resource.data.status == "pending";
+      // Artist can read their own application
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.uid == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
-    match /pending_registrations/{registrationId} {
-      allow create: if validArtistApplicationOwner()
+    // ── artists ──────────────────────────────────────────────────────────────
+    match /artists/{artistId} {
+      // Public can read active artist profiles
+      allow read: if resource.data.status == "active"
+        || isAdmin()
+        || (signedIn() && (artistId == request.auth.uid || resource.data.uid == request.auth.uid));
+
+      allow create, delete: if isAdmin();
+
+      // Admin can update anything; artist can update their own non-sensitive fields
+      allow update: if isAdmin()
         || (
           signedIn()
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.status == "pending"
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.verified == resource.data.verified
+          && request.resource.data.trending == resource.data.trending
         );
+    }
+
+    // ── pending_registrations (legacy) ───────────────────────────────────────
+    match /pending_registrations/{registrationId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == "pending";
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
       allow update: if isAdmin()
         || (
@@ -86,69 +112,52 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /artists/{artistId} {
-      allow read: if (signedIn() && artistId == request.auth.uid)
-        || resource.data.status == "active"
-        || isAdmin()
-        || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-          && request.resource.data.uid == resource.data.uid
-          && request.resource.data.status == resource.data.status
-          && request.resource.data.verified == resource.data.verified
-          && request.resource.data.trending == resource.data.trending
-        );
-    }
-
+    // ── categories ───────────────────────────────────────────────────────────
     match /categories/{categoryId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
+    // ── states ───────────────────────────────────────────────────────────────
     match /states/{stateId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
+    // ── events ───────────────────────────────────────────────────────────────
     match /events/{eventId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
+    // ── event_category_mappings ──────────────────────────────────────────────
     match /event_category_mappings/{mappingId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
+    // ── inquiries ────────────────────────────────────────────────────────────
     match /inquiries/{inquiryId} {
       allow create: if request.resource.data.status == "pending"
         && request.resource.data.artistId is string
         && request.resource.data.customerPhone is string;
       allow read: if isAdmin()
-        || (
-          signedIn()
-          && (
-            resource.data.artistUid == request.auth.uid
-            || resource.data.artistId == request.auth.uid
-            || resource.data.customerId == request.auth.uid
-          )
-        );
+        || (signedIn() && (
+          resource.data.artistUid == request.auth.uid
+          || resource.data.artistId == request.auth.uid
+          || resource.data.customerId == request.auth.uid
+        ));
       allow update, delete: if isAdmin();
     }
 
+    // ── bookings ─────────────────────────────────────────────────────────────
     match /bookings/{bookingId} {
       allow read: if isAdmin()
-        || (
-          signedIn()
-          && (
-            resource.data.artistUid == request.auth.uid
-            || resource.data.artistId == request.auth.uid
-            || resource.data.customerId == request.auth.uid
-          )
-        );
+        || (signedIn() && (
+          resource.data.artistUid == request.auth.uid
+          || resource.data.artistId == request.auth.uid
+          || resource.data.customerId == request.auth.uid
+        ));
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
         || (
@@ -159,17 +168,20 @@ service cloud.firestore {
         );
     }
 
+    // ── reviews ──────────────────────────────────────────────────────────────
     match /reviews/{reviewId} {
       allow read: if resource.data.isPublic == true || isAdmin();
       allow create: if signedIn() && request.resource.data.customerId == request.auth.uid;
       allow update, delete: if isAdmin() || (signedIn() && resource.data.customerId == request.auth.uid);
     }
 
+    // ── notifications ────────────────────────────────────────────────────────
     match /notifications/{notificationId} {
       allow read, update, delete: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
       allow create: if isAdmin();
     }
 
+    // ── app_settings ─────────────────────────────────────────────────────────
     match /app_settings/{document=**} {
       allow read: if true;
       allow write: if isAdmin();

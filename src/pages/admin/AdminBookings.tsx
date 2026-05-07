@@ -8,7 +8,7 @@ import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { cancelInquiry, confirmInquiry } from "@/lib/adminQueries";
-import { firebaseErrorMessage } from "@/lib/firebaseSafe";
+import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
 
 import { MapPin, Home, MessageSquare } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -29,7 +29,7 @@ export default function AdminBookings() {
       setLoading(false);
     }, (error) => {
       console.error(error);
-      toast({ variant: "destructive", title: "Inquiries unavailable", description: firebaseErrorMessage(error, "Could not load inquiries.") });
+      toastForFirestoreError(error, "Inquiries unavailable", "Could not load inquiries.", toast);
       setLoading(false);
     });
 

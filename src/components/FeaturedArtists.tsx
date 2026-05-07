@@ -103,14 +103,33 @@ export default function FeaturedArtists() {
       limit(10)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setArtists(data);
+    let unsubscribe = () => {};
+    
+    try {
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setArtists(data);
+        setLoading(false);
+      }, async (error) => {
+        console.warn("Firestore listen error in FeaturedArtists, falling back to getDocs:", error);
+        try {
+          const { getDocs } = await import("firebase/firestore");
+          const snap = await getDocs(q);
+          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setArtists(data);
+        } catch (fallbackError) {
+          console.error("Fallback fetch also failed:", fallbackError);
+        } finally {
+          setLoading(false);
+        }
+      });
+    } catch (e) {
+      console.error("Error setting up FeaturedArtists listener:", e);
       setLoading(false);
-    });
+    }
 
     return () => unsubscribe();
   }, []);

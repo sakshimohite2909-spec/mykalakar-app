@@ -12,7 +12,7 @@ import { Plus, Edit, Trash2, Calendar, Database, Loader2 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from "firebase/firestore";
 import { toast } from "@/hooks/use-toast";
-import { firebaseErrorMessage } from "@/lib/firebaseSafe";
+import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
 
 // Define data locally
 const events = [
@@ -74,7 +74,7 @@ const AdminEvents = () => {
       setLoading(false);
     }, (error) => {
       console.error(error);
-      toast({ variant: "destructive", title: "Events unavailable", description: firebaseErrorMessage(error, "Could not load events.") });
+      toastForFirestoreError(error, "Events unavailable", "Could not load events.", toast);
       setLoading(false);
     });
 
@@ -87,7 +87,7 @@ const AdminEvents = () => {
       setMappings(data);
     }, (error) => {
       console.error(error);
-      toast({ variant: "destructive", title: "Event mappings unavailable", description: firebaseErrorMessage(error, "Could not load event mappings.") });
+      toastForFirestoreError(error, "Event mappings unavailable", "Could not load event mappings.", toast);
     });
 
     return () => {
@@ -339,11 +339,12 @@ const AdminEvents = () => {
                 Add Event
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
+            <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b">
               <DialogTitle>{editingEvent ? 'Edit Event' : 'Add New Event'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-6 py-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="name">Event Name</Label>
@@ -420,7 +421,7 @@ const AdminEvents = () => {
                 )}
                 
                 <p className="text-xs text-muted-foreground mb-2">Select categories and set their priority</p>
-                <div className="space-y-3 mt-2 max-h-96 overflow-y-auto border rounded-lg p-4">
+                <div className="space-y-3 mt-2 max-h-60 no-scrollbar overflow-y-auto border rounded-lg p-4">
                   {categoryList.map((category) => {
                     const isChecked = formData.requiredCategories.includes(category.id);
                     const priority = categoryPriorities[category.id] || 1;
@@ -465,11 +466,12 @@ const AdminEvents = () => {
                 </p>
               </div>
 
-              <div className="flex justify-end gap-2">
+              </div>{/* end scroll body */}
+              <div className="flex-shrink-0 flex justify-end gap-2 px-6 py-4 border-t bg-background">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">
+                <Button type="submit" className="gradient-bg border-0 text-white">
                   {editingEvent ? 'Update Event' : 'Add Event'}
                 </Button>
               </div>

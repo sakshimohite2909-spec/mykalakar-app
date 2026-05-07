@@ -396,3 +396,56 @@
 .glow-tangerine {
   animation: glow-pulse 3s ease-in-out infinite;
 }
+
+/* ══════════ HIDDEN SCROLLBAR UTILITY ══════════ */
+/* Use .no-scrollbar on any overflowing container to hide the scrollbar
+   while keeping full mouse-wheel, trackpad, and touch scroll support */
+.no-scrollbar {
+  -ms-overflow-style: none;   /* IE & Edge */
+  scrollbar-width: none;      /* Firefox */
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;              /* Chrome, Safari, Opera */
+}
+
+/* ══════════ MODAL SCROLL CONTAINER ══════════ */
+/* Apply to scrollable content inside Dialog/Modal */
+.modal-scroll {
+  overflow-y: auto;
+  max-height: 72vh;
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Hide scrollbar cross-browser */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.modal-scroll::-webkit-scrollbar { display: none; }
+
+/* Bottom fade hint when modal content overflows */
+.modal-scroll-wrap {
+  position: relative;
+}
+.modal-scroll-wrap::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.85));
+  pointer-events: none;
+  border-radius: 0 0 1rem 1rem;
+}
+
+/* ══════════ HOVER LIFT ══════════ */
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 0.25s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.hover-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.08);
+}

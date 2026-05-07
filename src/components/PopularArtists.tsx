@@ -17,14 +17,34 @@ export default function PopularArtists() {
       limit(10)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setArtists(data);
+    let unsubscribe = () => {};
+    
+    try {
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setArtists(data);
+        setLoading(false);
+      }, async (error) => {
+        console.warn("Firestore listen error in PopularArtists, falling back to getDocs:", error);
+        // Fallback to manual fetch if listener is blocked
+        try {
+          const { getDocs } = await import("firebase/firestore");
+          const snap = await getDocs(q);
+          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setArtists(data);
+        } catch (fallbackError) {
+          console.error("Fallback fetch also failed:", fallbackError);
+        } finally {
+          setLoading(false);
+        }
+      });
+    } catch (e) {
+      console.error("Error setting up PopularArtists listener:", e);
       setLoading(false);
-    });
+    }
 
     return () => unsubscribe();
   }, []);

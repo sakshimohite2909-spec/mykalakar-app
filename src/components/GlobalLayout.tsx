@@ -23,6 +23,12 @@ export default function GlobalLayout({ children }: GlobalLayoutProps) {
 
   // Lenis smooth scroll — attach globally, persist across route changes
   useEffect(() => {
+    if (isAuthPage) {
+      lenisRef.current?.destroy();
+      lenisRef.current = null;
+      return;
+    }
+
     const lenis = new Lenis({
       duration: 0.85,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -45,8 +51,9 @@ export default function GlobalLayout({ children }: GlobalLayoutProps) {
     return () => {
       lenis.destroy();
       gsap.ticker.remove(tickerFn);
+      if (lenisRef.current === lenis) lenisRef.current = null;
     };
-  }, []);
+  }, [isAuthPage]);
 
   // Reset scroll on route change
   useEffect(() => {

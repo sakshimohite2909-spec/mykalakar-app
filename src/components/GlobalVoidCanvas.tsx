@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useMemo } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Environment, Float, ContactShadows } from "@react-three/drei";
@@ -9,10 +9,13 @@ function ElegantCrystal({ isAuthPage = false, isHomePage = false }: { isAuthPage
   const coreRef = useRef<THREE.Mesh>(null);
   const stageScale = isHomePage ? 1.12 : 1;
 
+  const timer = useMemo(() => new THREE.Timer(), []);
+
   // Directly lerping off window.scrollY inside useFrame ensures 60/120fps sync
   // Completely bypasses GSAP and React DOM thread lag for scroll interactions.
   useFrame((state, delta) => {
-    const t = state.clock.getElapsedTime();
+    timer.update();
+    const t = timer.getElapsed();
     const scrollY = window.scrollY;
 
     if (meshRef.current) {
@@ -53,7 +56,7 @@ function ElegantCrystal({ isAuthPage = false, isHomePage = false }: { isAuthPage
         <group ref={meshRef}>
           {/* Main Glass Outer Body - Premium polished transmission */}
           <mesh>
-            <torusKnotGeometry args={[1.5, 0.5, 128, 32]} />
+            <torusKnotGeometry args={[1.5, 0.5, isAuthPage ? 72 : 96, isAuthPage ? 18 : 24]} />
             <meshPhysicalMaterial 
               color="#ffffff"
               roughness={0.02}
@@ -73,7 +76,7 @@ function ElegantCrystal({ isAuthPage = false, isHomePage = false }: { isAuthPage
           
           {/* Inner Solid Colorful Core */}
           <mesh ref={coreRef}>
-             <icosahedronGeometry args={[1, 5]} />
+             <icosahedronGeometry args={[1, isAuthPage ? 3 : 4]} />
              <meshStandardMaterial 
                 color="#B85C7A"
                 emissive="#E86F3A"
@@ -109,6 +112,8 @@ function ElegantCrystal({ isAuthPage = false, isHomePage = false }: { isAuthPage
 }
 
 export default function GlobalVoidCanvas({ isAuthPage = false, isHomePage = false }: { isAuthPage?: boolean; isHomePage?: boolean }) {
+  const maxDpr = isAuthPage ? 1 : Math.min(1.35, window.devicePixelRatio);
+
   return (
     <div
       style={{
@@ -153,8 +158,7 @@ export default function GlobalVoidCanvas({ isAuthPage = false, isHomePage = fals
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.1,
         }}
-        // Limiting DPR to 1-1.5 handles scrolling lag completely, even with glassmorphism
-        dpr={[1, Math.min(1.5, window.devicePixelRatio)]}
+        dpr={[1, maxDpr]}
       >
         {/* Lights */}
         <ambientLight intensity={isHomePage ? 1.65 : 1.5} color="#ffffff" />

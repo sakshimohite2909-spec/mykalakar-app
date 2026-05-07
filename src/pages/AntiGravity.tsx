@@ -8,9 +8,12 @@ import { Link } from 'react-router-dom';
 function AbstractArt({ position, rotation, floatSpeed, floatRange, rotationIntensity, geometry, color }: any) {
   const meshRef = useRef<THREE.Mesh>(null);
 
-  useFrame((state) => {
+  const timer = useMemo(() => new THREE.Timer(), []);
+
+  useFrame((state, delta) => {
     if (!meshRef.current) return;
-    const t = state.clock.getElapsedTime();
+    timer.update();
+    const t = timer.getElapsed();
     // Use the controls to override/multiply the base animation if not using Float directly,
     // or just let Float handle it and we pass the props.
   });

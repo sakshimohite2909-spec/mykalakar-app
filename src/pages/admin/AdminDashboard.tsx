@@ -1,16 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, UserPlus, CalendarDays, FolderOpen, TrendingUp, BadgeCheck, Loader2, Database, Settings, MapPin, Globe, Phone, CreditCard, Building2, Upload, Check, X, Eye } from "lucide-react";
+import { Users, UserPlus, CalendarDays, FolderOpen, TrendingUp, Loader2, Database, Settings, RefreshCw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, limit, orderBy, writeBatch, doc, getDocs, updateDoc, serverTimestamp } from "firebase/firestore";
-
+import {
+  collection, query, where, onSnapshot, orderBy,
+  writeBatch, doc, getDocs, serverTimestamp,
+} from "firebase/firestore";
 import { platformCategories } from "@/data/mockData";
-import { approveArtist, rejectArtist } from "@/lib/adminQueries";
 import { firebaseErrorMessage } from "@/lib/firebaseSafe";
+import { migrateApprovedArtists } from "@/scripts/migrateArtistData";
 
 export default function AdminDashboard() {
   const [counts, setCounts] = useState({
@@ -23,129 +25,92 @@ export default function AdminDashboard() {
   });
   const [recentBookings, setRecentBookings] = useState<any[]>([]);
   const [pendingList, setPendingList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Total Artists (Approved)
-    const qArtists = query(collection(db, "artists"), where("status", "==", "active"));
-    const unsubArtists = onSnapshot(qArtists, (snap) => {
-      setCounts(prev => ({
-        ...prev,
-        totalArtists: snap.size,
-        verifiedArtists: snap.docs.filter(d => d.data().verified).length,
-        trending: snap.docs.filter(d => d.data().trending).length
-      }));
-    }, (error) => {
-      console.error(error);
-      toast({ variant: "destructive", title: "Artists unavailable", description: firebaseErrorMessage(error, "Could not load artist stats.") });
-    });
+    const unsubs: (() => void)[] = [];
 
-    // Pending Artists & Today's Registrations
-    const qPending = query(collection(db, "artist_applications"), where("status", "==", "pending"), orderBy("createdAt", "desc"));
-    const unsubPending = onSnapshot(qPending, (snap) => {
-      const allPending = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // ── Total Approved Artists ─────────────────────────────────────────────
+    try {
+      const qArtists = query(collection(db, "artists"), where("status", "==", "active"));
+      unsubs.push(onSnapshot(qArtists, (snap) => {
+        setCounts(prev => ({
+          ...prev,
+          totalArtists: snap.size,
+          trending: snap.docs.filter(d => d.data().trending).length,
+        }));
+      }, (err) => console.warn("artists stats:", err)));
+    } catch (e) { console.warn(e); }
 
-      // Calculate today's registrations
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayCount = snap.docs.filter(d => {
-        const createdAt = d.data().createdAt?.toDate();
-        return createdAt && createdAt >= today;
-      }).length;
+    // ── Pending Applications + Today count ────────────────────────────────
+    try {
+      const qPending = query(
+        collection(db, "artist_applications"),
+        where("status", "==", "pending"),
+        orderBy("createdAt", "desc")
+      );
+      unsubs.push(onSnapshot(qPending, (snap) => {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const todayCount = snap.docs.filter(d => {
+          const ts = d.data().createdAt?.toDate?.();
+          return ts && ts >= today;
+        }).length;
+        setCounts(prev => ({ ...prev, pendingArtists: snap.size, todayRegistrations: todayCount }));
+        setPendingList(snap.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() })));
+      }, (err) => console.warn("pending apps:", err)));
+    } catch (e) { console.warn(e); }
 
-      setCounts(prev => ({ ...prev, pendingArtists: snap.size, todayRegistrations: todayCount }));
-      setPendingList(allPending.slice(0, 5));
-    }, (error) => {
-      console.error(error);
-      toast({ variant: "destructive", title: "Pending artists unavailable", description: firebaseErrorMessage(error, "Could not load pending artists.") });
-    });
+    // ── Recent Bookings ────────────────────────────────────────────────────
+    try {
+      const qBookings = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
+      unsubs.push(onSnapshot(qBookings, (snap) => {
+        setCounts(prev => ({ ...prev, totalBookings: snap.size }));
+        setRecentBookings(snap.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() })));
+      }, (err) => console.warn("bookings:", err)));
+    } catch (e) { console.warn(e); }
 
-    // Bookings
-    const qBookings = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
-    const unsubBookings = onSnapshot(qBookings, (snap) => {
-      setCounts(prev => ({ ...prev, totalBookings: snap.size }));
-      setRecentBookings(snap.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error(error);
-      toast({ variant: "destructive", title: "Bookings unavailable", description: firebaseErrorMessage(error, "Could not load bookings.") });
-    });
+    // ── Categories ────────────────────────────────────────────────────────
+    try {
+      unsubs.push(onSnapshot(collection(db, "categories"), (snap) => {
+        setCounts(prev => ({ ...prev, categories: snap.size || platformCategories.length }));
+      }, (err) => console.warn("categories:", err)));
+    } catch (e) { console.warn(e); }
 
-    // Categories
-    const qCats = query(collection(db, "categories"));
-    const unsubCats = onSnapshot(qCats, (snap) => {
-      setCounts(prev => ({ ...prev, categories: snap.size || platformCategories.length }));
-    }, (error) => {
-      console.error(error);
-      toast({ variant: "destructive", title: "Categories unavailable", description: firebaseErrorMessage(error, "Could not load categories.") });
-    });
-
-    setLoading(false);
-
-    return () => {
-      unsubArtists();
-      unsubPending();
-      unsubBookings();
-      unsubCats();
-    };
+    return () => unsubs.forEach(u => u());
   }, []);
 
-  const seedCategories = async () => {
+  // ── Seed Categories ────────────────────────────────────────────────────────
+  const seedCategories = useCallback(async () => {
     setLoading(true);
     try {
       const batch = writeBatch(db);
-
-      // Optionally clear old categories if any (manual steps for safety usually preferred, but we'll overwrite)
-      const existingCats = await getDocs(collection(db, "categories"));
-      existingCats.forEach((docSnap) => {
-        batch.delete(docSnap.ref);
-      });
-
-      platformCategories.forEach((cat) => {
-        const docRef = doc(db, "categories", cat.id);
-        batch.set(docRef, {
-          ...cat,
-          updatedAt: serverTimestamp(),
-          createdAt: serverTimestamp()
+      const existing = await getDocs(collection(db, "categories"));
+      existing.forEach(s => batch.delete(s.ref));
+      platformCategories.forEach(cat => {
+        batch.set(doc(db, "categories", cat.id), {
+          ...cat, updatedAt: serverTimestamp(), createdAt: serverTimestamp(),
         });
       });
-
       await batch.commit();
-      toast({ title: "Categories Updated! 🚀", description: "All new categories and subcategories are now live." });
+      toast({ title: "Categories Updated 🚀", description: "All categories are now live." });
     } catch (error: any) {
-      console.error("Seeding error details:", error);
+      toast({ variant: "destructive", title: "Update Failed", description: error?.message || "Could not seed categories." });
+    } finally { setLoading(false); }
+  }, []);
+
+  // ── Migrate Approved Artists ───────────────────────────────────────────────
+  const runMigration = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await migrateApprovedArtists();
       toast({
-        variant: "destructive",
-        title: "Update Failed",
-        description: error.message || "Could not seed categories. Please check your Firestore rules."
+        title: "Migration Complete ✅",
+        description: `${result.created} artists synced, ${result.skipped} already up-to-date.`,
       });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleApprove = async (id: string) => {
-    try {
-      await approveArtist(id);
-      toast({ title: "Artist Verified! ✅", description: "Artist is now live and verified on the platform." });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "Could not verify artist." });
-    }
-  };
-
-  const handleReject = async (id: string) => {
-    try {
-      await rejectArtist(id);
-      toast({ title: "Artist Rejected", description: "Registration has been rejected." });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "Could not reject artist." });
-    }
-  };
-
-  const getYoutubeEmbedUrl = (url: string) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
-  };
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Migration Failed", description: error?.message || "Could not run migration." });
+    } finally { setLoading(false); }
+  }, []);
 
   const stats = [
     { label: "Total Approved", value: counts.totalArtists, icon: Users, color: "text-primary" },
@@ -155,6 +120,7 @@ export default function AdminDashboard() {
     { label: "Categories", value: counts.categories, icon: FolderOpen, color: "text-primary" },
     { label: "Trending", value: counts.trending, icon: TrendingUp, color: "text-accent" },
   ];
+
   return (
     <div className="space-y-6">
       <div>
@@ -162,6 +128,7 @@ export default function AdminDashboard() {
         <p className="text-sm text-muted-foreground">Overview of your platform</p>
       </div>
 
+      {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {stats.map((s) => (
           <Card key={s.label} className="hover-lift">
@@ -179,16 +146,19 @@ export default function AdminDashboard() {
         <CardContent className="p-6">
           <h3 className="font-display font-semibold mb-4">Recent Bookings</h3>
           <div className="space-y-3">
-            {recentBookings.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No recent bookings</p>}
+            {recentBookings.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No recent bookings</p>
+            )}
             {recentBookings.map((b) => (
               <div key={b.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
                 <div>
-                  <p className="font-medium text-sm">{b.clientName || b.customerName}</p>
+                  <p className="font-medium text-sm">{b.clientName || b.customerName || "Client"}</p>
                   <p className="text-xs text-muted-foreground">{b.artistName} · {b.eventType}</p>
                 </div>
                 <div className="text-right">
-                  <Badge variant={b.status === "confirmed" ? "default" : "secondary"} className={b.status === "confirmed" ? "gradient-bg border-0" : ""}>
-                    {b.status}
+                  <Badge variant={b.status === "confirmed" ? "default" : "secondary"}
+                    className={b.status === "confirmed" ? "gradient-bg border-0" : ""}>
+                    {b.status || "pending"}
                   </Badge>
                   <p className="text-xs text-muted-foreground mt-1">{b.eventDate}</p>
                 </div>
@@ -198,147 +168,77 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
 
-      {/* Pending Artists */}
+      {/* Pending Artist Applications Preview */}
       <Card>
         <CardContent className="p-6">
-          <h3 className="font-display font-semibold mb-4">Pending Artist Approvals</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold">Pending Artist Approvals</h3>
+            <Link to="/admin/pending">
+              <Button variant="outline" size="sm">View All →</Button>
+            </Link>
+          </div>
           <div className="space-y-3">
-            {pendingList.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No pending approvals</p>}
-            {pendingList.map((a) => (
-              <div key={a.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={a.media?.profilePhoto || a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
-                    alt={a.name}
-                    className="w-10 h-10 rounded-lg object-cover"
-                  />
-                  <div>
-                    <p className="font-medium text-sm">{a.name}</p>
-                    <p className="text-xs text-muted-foreground">{a.subcategory} · {a.district || a.city}</p>
+            {pendingList.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No pending approvals</p>
+            )}
+            {pendingList.map((a) => {
+              const today = new Date(); today.setHours(0, 0, 0, 0);
+              const createdAt = a.createdAt?.toDate?.();
+              const isToday = createdAt && createdAt >= today;
+              return (
+                <div key={a.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={a.media?.profilePhoto || a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80"}
+                      alt={a.name}
+                      className="w-10 h-10 rounded-lg object-cover"
+                    />
+                    <div>
+                      <p className="font-medium text-sm">{a.name}</p>
+                      <p className="text-xs text-muted-foreground">{a.subcategory || a.category} · {a.district || a.city || a.state}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isToday && <span className="text-[10px] font-bold text-green-500 uppercase">Today</span>}
                     <Badge variant="secondary">Pending</Badge>
-                    {(() => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const createdAt = a.createdAt?.toDate();
-                      if (createdAt && createdAt >= today) {
-                        return <span className="text-[10px] font-bold text-green-500 uppercase">Received Today</span>;
-                      }
-                      return null;
-                    })()}
+                    <Link to="/admin/pending">
+                      <Button variant="outline" size="sm" className="h-8 px-3 text-xs">Review</Button>
+                    </Link>
                   </div>
-
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-8 w-8">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>Verify Registration - {a.name}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-6 pt-4 text-left">
-                        <div className="relative h-32 w-full rounded-xl overflow-hidden border mb-4 bg-secondary/20">
-                          <img src={a.media?.coverPhoto || a.coverPhoto || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600"} className="w-full h-full object-cover" alt="Cover" />
-                          <div className="absolute bottom-4 left-4 flex gap-4 items-end">
-                            <img src={a.media?.profilePhoto || a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"} className="w-20 h-20 rounded-xl object-cover border-4 border-background shadow-lg" />
-                            <div className="pb-1">
-                              <p className="text-xl font-bold bg-background/60 backdrop-blur-sm px-2 rounded-md">{a.name}</p>
-                              <p className="text-primary font-medium text-xs bg-background/60 backdrop-blur-sm px-2 rounded-md inline-block">{a.category} / {a.subcategory}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <p className="text-muted-foreground flex items-center gap-1 text-sm"><Phone className="h-3 w-3" /> {a.mobileNumber || a.phone}</p>
-                          <p className="text-muted-foreground flex items-center gap-1 text-sm"><MapPin className="h-3 w-3" /> {a.district || a.city}</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2 p-4 rounded-xl bg-secondary/30 border border-border">
-                            <h4 className="font-semibold flex items-center gap-2 text-primary text-sm"><CreditCard className="h-4 w-4" /> Identity Info</h4>
-                            <p className="text-xs"><strong>Aadhar No:</strong> {a.identity?.aadharNumber || a.aadharNumber || "N/A"}</p>
-                            {(a.media?.aadharPhoto || a.aadharPhoto) && (
-                              <div className="mt-2 rounded-lg overflow-hidden border bg-background">
-                                <img src={a.media?.aadharPhoto || a.aadharPhoto} alt="Aadhar" className="w-full h-auto max-h-32 object-contain" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="space-y-2 p-4 rounded-xl bg-secondary/30 border border-border">
-                            <h4 className="font-semibold flex items-center gap-2 text-primary text-sm"><Building2 className="h-4 w-4" /> Bank Details</h4>
-                            <p className="text-xs"><strong>Bank:</strong> {a.bankDetails?.bankName || a.bankName || "N/A"}</p>
-                            <p className="text-xs"><strong>IFSC:</strong> {a.bankDetails?.ifscCode || a.ifscCode || "N/A"}</p>
-                            <p className="text-xs"><strong>Account:</strong> {a.bankDetails?.accountNumber || a.accountNumber || "N/A"}</p>
-                          </div>
-                        </div>
-
-                        {(a.media?.galleryPhotos || a.galleryPhotos) && (a.media?.galleryPhotos || a.galleryPhotos).length > 0 && (
-                          <div className="space-y-2">
-                            <h4 className="font-semibold flex items-center gap-2 text-primary text-sm"><Upload className="h-4 w-4" /> Gallery</h4>
-                            <div className="grid grid-cols-5 gap-2">
-                              {(a.media?.galleryPhotos || a.galleryPhotos).map((p: string, i: number) => (
-                                <img key={i} src={p} className="aspect-square w-full rounded-lg object-cover border" alt="Gallery" />
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="space-y-2">
-                          <h4 className="font-semibold flex items-center gap-2 text-primary text-sm"><Globe className="h-4 w-4" /> Socials</h4>
-                          <div className="grid gap-2">
-                            {a.socialLinks?.map((link: any, i: number) => (
-                              <div key={i} className="p-2 border rounded-lg bg-background/50 flex flex-col gap-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[10px] font-bold uppercase text-primary">{link.platform}</span>
-                                  <a href={link.url} target="_blank" className="text-[10px] text-blue-500 hover:underline">Open Link</a>
-                                </div>
-                                {link.platform === "youtube" && getYoutubeEmbedUrl(link.url) && (
-                                  <div className="aspect-video rounded-md overflow-hidden border">
-                                    <iframe width="100%" height="100%" src={getYoutubeEmbedUrl(link.url)!} allowFullScreen></iframe>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2 pt-2">
-                          <Button onClick={() => handleApprove(a.id)} className="flex-1 gradient-bg border-0 text-primary-foreground font-semibold">Verify & Live</Button>
-                          <Button onClick={() => handleReject(a.id)} variant="destructive" className="flex-1">Reject</Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
 
-      {/* Database Management Tools */}
+      {/* System Tools */}
       <Card className="border-primary/20 bg-primary/5">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-display font-semibold flex items-center gap-2">
-                <Settings className="h-5 w-5 text-primary" /> System Tools
-              </h3>
-              <p className="text-xs text-muted-foreground">Manage platform categories and core data</p>
-            </div>
-            <Button
-              onClick={seedCategories}
-              disabled={loading}
-              className="gradient-bg border-0 text-primary-foreground font-semibold h-10 px-6 shrink-0"
-            >
+          <h3 className="font-display font-semibold flex items-center gap-2 mb-4">
+            <Settings className="h-5 w-5 text-primary" /> System Tools
+          </h3>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={seedCategories} disabled={loading} variant="outline" className="h-10 px-5">
               {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Database className="h-4 w-4 mr-2" />}
-              Seed & Update Categories
+              Seed Categories
             </Button>
+            <Button onClick={runMigration} disabled={loading} variant="outline" className="h-10 px-5">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Migrate Artists
+            </Button>
+            <Link to="/admin/pending">
+              <Button variant="outline" className="h-10 px-5">Pending Approvals →</Button>
+            </Link>
+            <Link to="/admin/bootstrap">
+              <Button className="gradient-bg border-0 text-primary-foreground font-semibold h-10 px-5">
+                <ShieldCheck className="h-4 w-4 mr-2" /> 🚀 Bootstrap Fix
+              </Button>
+            </Link>
           </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            If admin access or artists are not showing — click <strong>"Bootstrap Fix"</strong> to repair all Firestore data.
+          </p>
         </CardContent>
       </Card>
     </div>

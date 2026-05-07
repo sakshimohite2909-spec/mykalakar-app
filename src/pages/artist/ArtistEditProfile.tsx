@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+﻿import { motion } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,6 @@ import {
     X,
     Plus,
     Trash2,
-    Globe,
     Youtube,
     Building2,
     Phone,
@@ -85,7 +84,11 @@ export default function ArtistEditProfile() {
                 accountNumber: artistData.bankDetails?.accountNumber || artistData.accountNumber || "",
             });
             setSocialLinks(artistData.socialLinks || [{ platform: "youtube", url: "" }]);
-            setGalleryPreviews(artistData.media?.galleryPhotos || artistData.galleryPhotos || []);
+            setGalleryPreviews(
+                artistData.media?.galleryPhotos ||
+                (Array.isArray(artistData.galleryPhotos) ? artistData.galleryPhotos : []) ||
+                []
+            );
         }
     }, [artistData]);
 
@@ -159,7 +162,7 @@ export default function ArtistEditProfile() {
         const files = e.target.files;
         if (!files || !artistData) return;
 
-        const currentPhotos = artistData.media?.galleryPhotos || artistData.galleryPhotos || [];
+        const currentPhotos = artistData.media?.galleryPhotos;
         if (currentPhotos.length + files.length > 10) {
             toast({ variant: "destructive", title: "Limit Exceeded", description: "Maximum 10 gallery photos allowed." });
             return;
@@ -192,7 +195,7 @@ export default function ArtistEditProfile() {
     // Remove gallery photo
     const removeGalleryPhoto = async (index: number) => {
         if (!artistData) return;
-        const updatedGallery = [...(artistData.media?.galleryPhotos || artistData.galleryPhotos || [])];
+        const updatedGallery = [...(artistData.media?.galleryPhotos ?? (artistData.galleryPhotos as string[]) ?? [])];
         updatedGallery.splice(index, 1);
 
         try {
@@ -218,7 +221,7 @@ export default function ArtistEditProfile() {
     const removeSocialLink = (index: number) => setSocialLinks(socialLinks.filter((_, i) => i !== index));
     const updateSocialLink = (index: number, field: string, value: string) => {
         const newLinks = [...socialLinks];
-        newLinks[index] = { ...newLinks[index], [field]: value };
+        newLinks[index] = { ...newLinks[index], platform: "youtube", [field]: value };
         setSocialLinks(newLinks);
     };
 
@@ -257,7 +260,7 @@ export default function ArtistEditProfile() {
                     name: formData.name,
                     email: artistData.email || "",
                     phone: formData.mobileNumber || formData.phone,
-                    profilePhoto: artistData.media?.profilePhoto || artistData.profilePhoto || "",
+                    profilePhoto: artistData.media?.profilePhoto,
                     role: "artist",
                     status: "active",
                     updatedAt: serverTimestamp(),
@@ -307,7 +310,7 @@ export default function ArtistEditProfile() {
                                     className="relative border-2 border-dashed border-border rounded-xl h-44 cursor-pointer hover:border-primary/50 transition-colors overflow-hidden group"
                                 >
                                     <img
-                                        src={artistData.media?.profilePhoto || artistData.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
+                                        src={artistData.media?.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
                                         className="w-full h-full object-cover"
                                         alt="Profile"
                                     />
@@ -506,7 +509,7 @@ export default function ArtistEditProfile() {
                             {artistData.types && artistData.types.length > 0 && (
                                 <p className="text-sm"><strong>Types:</strong> {artistData.types.join(", ")}</p>
                             )}
-                            <p className="text-xs text-muted-foreground mt-2">⚠️ Category changes require admin approval. Contact support.</p>
+                            <p className="text-xs text-muted-foreground mt-2">âš ï¸ Category changes require admin approval. Contact support.</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -530,8 +533,8 @@ export default function ArtistEditProfile() {
                             <Select value={formData.availability} onValueChange={(v) => handleSelectChange("availability", v)}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="available">✅ Available for Booking</SelectItem>
-                                    <SelectItem value="busy">🔴 Currently Busy</SelectItem>
+                                    <SelectItem value="available">âœ… Available for Booking</SelectItem>
+                                    <SelectItem value="busy">ðŸ”´ Currently Busy</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -555,24 +558,20 @@ export default function ArtistEditProfile() {
                 <Card>
                     <CardContent className="p-6 space-y-4">
                         <h3 className="font-semibold flex items-center gap-2">
-                            <Globe className="h-5 w-5 text-primary" /> Social Links & Portfolio
+                            <Youtube className="h-5 w-5 text-red-500" /> YouTube Links & Portfolio
                         </h3>
 
                         {socialLinks.map((link, index) => (
                             <div key={index} className="flex items-center gap-2">
-                                <Select value={link.platform} onValueChange={(v) => updateSocialLink(index, "platform", v)}>
-                                    <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="youtube">YouTube</SelectItem>
-                                        <SelectItem value="instagram">Instagram</SelectItem>
-                                        <SelectItem value="facebook">Facebook</SelectItem>
-                                        <SelectItem value="website">Website</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <div className="flex h-10 w-32 shrink-0 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-semibold text-[#1A1A1A]">
+                                    <Youtube className="h-4 w-4 text-red-500" />
+                                    YouTube
+                                </div>
                                 <Input
-                                    placeholder="Paste link here..."
+                                    placeholder="Paste YouTube link here..."
                                     value={link.url}
                                     onChange={(e) => updateSocialLink(index, "url", e.target.value)}
+                                    className="text-[#1A1A1A] placeholder:text-slate-500"
                                 />
                                 {socialLinks.length > 1 && (
                                     <Button variant="ghost" size="icon" onClick={() => removeSocialLink(index)} className="text-destructive">
@@ -635,3 +634,5 @@ export default function ArtistEditProfile() {
         </div>
     );
 }
+
+

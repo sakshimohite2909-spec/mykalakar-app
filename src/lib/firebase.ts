@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
+import { browserLocalPersistence, getAuth, setPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -20,11 +20,23 @@ Object.entries(firebaseConfig).forEach(([key, value]) => {
   }
 });
 
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const analytics =
   typeof window !== "undefined" && firebaseConfig.measurementId ? getAnalytics(app) : null;
 const auth = getAuth(app);
-const db = getFirestore(app);
+void setPersistence(auth, browserLocalPersistence).catch((error) => {
+  console.warn("Firebase auth persistence warning:", error);
+});
+
+// Use initializeFirestore with long polling to bypass aggressive adblockers (ERR_BLOCKED_BY_CLIENT)
+// and enable local cache for offline/fallback capabilities
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  experimentalForceLongPolling: true,
+});
+
 const storage = getStorage(app);
 
 export { app, analytics, auth, db, storage };

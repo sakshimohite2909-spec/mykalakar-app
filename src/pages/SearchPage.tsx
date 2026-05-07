@@ -374,9 +374,24 @@ export default function SearchPage() {
       })));
       setLoading(false);
     });
+
+    // Lucide icon name → emoji fallback map (for Firestore docs seeded with old string icons)
+    const ICON_EMOJI_MAP: Record<string, string> = {
+      Music: "🎵", Dancer: "💃", Masks: "🎭", Camera: "🎨",
+      Flag: "🥁", Hands: "🛕", PartyPopper: "🎊",
+    };
+
     const qCategories = query(collection(db, "categories"), orderBy("sortOrder"));
     const unsubCategories = onSnapshot(qCategories, (snapshot) => {
-      const liveCategories = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const liveCategories = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        // Normalize icon: if it's a plain word (Lucide component name), swap to emoji
+        const rawIcon = data.icon || "🎭";
+        const icon = rawIcon.length <= 15 && !rawIcon.match(/\p{Emoji}/u)
+          ? (ICON_EMOJI_MAP[rawIcon] ?? "🎭")
+          : rawIcon;
+        return { id: doc.id, ...data, icon };
+      });
       setCategories(liveCategories.length > 0 ? liveCategories : platformCategories);
     }, (error) => {
       console.warn("Categories unavailable, using local defaults.", error);
@@ -388,54 +403,49 @@ export default function SearchPage() {
     };
   }, [selectedDistrict, selectedState]);
 
-  // Build a map: categoryName → list of artists who have that category
-  // Artists with multiple arts appear under EACH category
+  // Build a map: categoryName (lowercase-keyed) → list of artists
+  // This makes all lookups case-insensitive by normalizing keys
   const artistsByCategory = useMemo(() => {
-    const map: Record<string, any[]> = {};
+    // map key: lowercase category name, value: { displayName, artists[] }
+    const map: Record<string, { displayName: string; artists: any[] }> = {};
 
     artists.forEach((artist) => {
-      const arts: Array<{ category: string; subcategory?: string }> =
-        Array.isArray(artist.artsList) && artist.artsList.length > 0
-          ? artist.artsList
-          : artist.category
-          ? [{ category: artist.category, subcategory: artist.subcategory }]
-          : [];
+      const catNames = new Set<string>();
 
-      const addedCategories = new Set<string>();
-      arts.forEach((art) => {
-        const cat = art.category;
-        if (!cat || addedCategories.has(cat)) return;
-        addedCategories.add(cat);
-        if (!map[cat]) map[cat] = [];
-        map[cat].push({ ...artist, category: cat, subcategory: art.subcategory || artist.subcategory || "" });
+      if (Array.isArray(artist.artsList) && artist.artsList.length > 0) {
+        artist.artsList.forEach((art: any) => { if (art.category) catNames.add(String(art.category).trim()); });
+      }
+      if (Array.isArray(artist.categories) && artist.categories.length > 0) {
+        artist.categories.forEach((c: string) => { if (c) catNames.add(String(c).trim()); });
+      }
+      if (artist.category) catNames.add(String(artist.category).trim());
+
+      catNames.forEach((cat) => {
+        const key = cat.toLowerCase();
+        if (!map[key]) map[key] = { displayName: cat, artists: [] };
+        if (!map[key].artists.find((a: any) => a.id === artist.id)) {
+          map[key].artists.push({ ...artist, category: cat });
+        }
       });
     });
 
     return map;
   }, [artists]);
 
+  // Helper: find artists for a given category name (case-insensitive)
+  const getArtistsForCategory = (catName: string) => {
+    const entry = artistsByCategory[catName.toLowerCase()];
+    return entry?.artists || [];
+  };
+
   // Flat filtered list for grid mode / search
   const filteredArtists = useMemo(() => {
-    let results = artists;
-
-    if (selectedCategory !== "all") {
-      results = results.filter((a) => {
-        const arts = Array.isArray(a.artsList) && a.artsList.length > 0
-          ? a.artsList
-          : [{ category: a.category }];
-        return arts.some(
-          (art: any) => (art.category || "").toLowerCase() === selectedCategory.toLowerCase()
-        );
-      });
-    }
-
-    // Expand artists with multiple categories into separate records
-    results = results.flatMap((a) => {
-      if (Array.isArray(a.categories) && a.categories.length > 0) {
-        return a.categories.map((cat: string) => ({...a, category: cat}));
-      }
-      return [a];
-    });
+    // Get artists matching selected category via case-insensitive map
+    let results = selectedCategory !== "all"
+      ? getArtistsForCategory(selectedCategory)
+      : Object.values(artistsByCategory).flatMap(e => e.artists)
+          // de-duplicate by id
+          .filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i);
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -450,20 +460,55 @@ export default function SearchPage() {
       );
     }
     return results;
-  }, [artists, selectedCategory, searchQuery]);
+  }, [artistsByCategory, selectedCategory, searchQuery]);
 
-  // Categories that have at least one artist, preserving DB order
+  // effectiveCategories: Merge Firestore categories + artist-derived categories
+  // This ensures artists with category names not in Firestore still show up
+  const effectiveCategories = useMemo(() => {
+    // Start with Firestore categories (or platformCategories as fallback)
+    const base: any[] = categories.length > 0 ? categories : [];
+    const baseNamesLower = new Set(base.map(c => c.name.toLowerCase()));
+
+    // Derive categories from actual artist data
+    const derived: any[] = [];
+    Object.entries(artistsByCategory).forEach(([key, entry]) => {
+      if (!baseNamesLower.has(key)) {
+        // This artist category isn't in Firestore categories — add it
+        derived.push({
+          id: key,
+          name: entry.displayName,
+          icon: "🎭",
+          sortOrder: 999 + derived.length,
+        });
+      }
+    });
+
+    return [...base, ...derived];
+  }, [categories, artistsByCategory]);
+
+  // Categories that have at least one artist
   const activeCategories = useMemo(() => {
-    if (selectedCategory !== "all") {
-      const cat = categories.find((c) => c.name === selectedCategory);
-      const arts = artistsByCategory[selectedCategory] || [];
-      if (arts.length === 0) return [];
-      return cat ? [{ ...cat, artists: arts }] : [{ name: selectedCategory, artists: arts }];
+    const filterName = selectedCategory !== "all" ? selectedCategory : null;
+
+    return effectiveCategories
+      .map((cat) => {
+        const arts = getArtistsForCategory(cat.name);
+        return { ...cat, artists: arts };
+      })
+      .filter((c) => {
+        if (filterName) return c.name.toLowerCase() === filterName.toLowerCase() && c.artists.length > 0;
+        return c.artists.length > 0;
+      });
+  }, [effectiveCategories, artistsByCategory, selectedCategory]);
+
+  // When a category is selected from dropdown, switch to Category view
+  // so the grouped CategorySection view appears automatically
+  const handleCategoryChange = (value: string) => {
+    setSelectedCategory(value);
+    if (value !== "all") {
+      setViewMode("category");
     }
-    return categories
-      .map((cat) => ({ ...cat, artists: artistsByCategory[cat.name] || [] }))
-      .filter((c) => c.artists.length > 0);
-  }, [categories, artistsByCategory, selectedCategory]);
+  };
 
   const showCategoryView =
     viewMode === "category" && !searchQuery.trim();
@@ -535,7 +580,7 @@ export default function SearchPage() {
 
             {/* Category filter */}
             <div className="w-full md:w-64">
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <Select value={selectedCategory} onValueChange={handleCategoryChange}>
                 <SelectTrigger className="h-14 bg-white/60 border-orange-100 text-[#1A1A1A] rounded-2xl uppercase tracking-widest text-xs font-black shadow-inner shadow-black/5 hover:bg-white/80 transition-colors focus:ring-orange-400">
                   <SelectValue placeholder="ALL CATEGORIES" />
                 </SelectTrigger>
@@ -543,8 +588,8 @@ export default function SearchPage() {
                   <SelectItem value="all" className="font-bold py-3 uppercase text-xs tracking-widest focus:bg-orange-50 focus:text-orange-600">
                     ALL CATEGORIES
                   </SelectItem>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.name} className="font-bold py-3 uppercase text-xs tracking-widest focus:bg-orange-50 focus:text-orange-600">
+                  {effectiveCategories.map((cat) => (
+                    <SelectItem key={cat.id || cat.name} value={cat.name} className="font-bold py-3 uppercase text-xs tracking-widest focus:bg-orange-50 focus:text-orange-600">
                       {cat.icon} {cat.name}
                     </SelectItem>
                   ))}

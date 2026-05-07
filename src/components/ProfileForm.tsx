@@ -163,21 +163,24 @@ function YouTubeLinkCard({
         </button>
       </div>
 
-      {/* Embedded Player or styled URL card */}
+      {/* Lightweight link preview. Live iframes in the form make scrolling laggy. */}
       {url && (
         <div className="px-4 pb-4">
           {embedUrl ? (
-            <div className="aspect-video w-full rounded-xl overflow-hidden border border-white/10 shadow-lg">
-              <iframe
-                width="100%"
-                height="100%"
-                src={embedUrl}
-                title={`YouTube video ${index + 1}`}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                loading="lazy"
-              />
-            </div>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between gap-3 rounded-xl border border-red-100 bg-white/80 p-3 text-[#1A1A1A] transition hover:bg-white"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <Youtube className="h-4 w-4 shrink-0 text-red-500" />
+                <span className="truncate text-xs font-bold">YouTube link added</span>
+              </span>
+              <span className="shrink-0 rounded-lg bg-red-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-red-600">
+                Open
+              </span>
+            </a>
           ) : (
             <a
               href={url}
@@ -563,7 +566,7 @@ export function ProfileDisplay({ data }: { data: Partial<ProfileFormState> }) {
         </div>
       </div>
 
-      {/* YouTube embeds */}
+      {/* YouTube links */}
       {(data.youtubeLinks ?? []).length > 0 && (
         <div className="space-y-4 pt-4 border-t border-white/10">
           <h3 className="text-foreground font-black flex items-center gap-2 text-xs uppercase tracking-widest">
@@ -576,17 +579,22 @@ export function ProfileDisplay({ data }: { data: Partial<ProfileFormState> }) {
             return embed ? (
               <div
                 key={i}
-                className="aspect-video w-full rounded-2xl overflow-hidden border border-white/10 shadow-xl"
+                className="w-full rounded-2xl overflow-hidden border border-white/10 shadow-xl"
               >
-                <iframe
-                  width="100%"
-                  height="100%"
-                  src={embed}
-                  title={`Performance ${i + 1}`}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  loading="lazy"
-                />
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between gap-3 bg-white/80 p-4 text-[#1A1A1A] transition hover:bg-white"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Youtube className="h-5 w-5 shrink-0 text-red-500" />
+                    <span className="truncate text-sm font-bold">YouTube performance link</span>
+                  </span>
+                  <span className="shrink-0 rounded-lg bg-red-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-red-600">
+                    Open
+                  </span>
+                </a>
               </div>
             ) : (
               <a

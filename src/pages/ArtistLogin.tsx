@@ -272,4 +272,4 @@ export default function ArtistLogin() {
       </div>
     </div>
   );
-r}
+}

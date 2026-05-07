@@ -7,6 +7,11 @@ function withProtocol(url: string) {
 }
 
 export function getYoutubeEmbedUrl(url?: string | null) {
+  const videoId = getYoutubeVideoId(url);
+  return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+}
+
+export function getYoutubeVideoId(url?: string | null) {
   if (!url) return null;
 
   try {
@@ -27,11 +32,16 @@ export function getYoutubeEmbedUrl(url?: string | null) {
       }
     }
 
-    return YOUTUBE_ID_PATTERN.test(videoId) ? `https://www.youtube.com/embed/${videoId}` : null;
+    return YOUTUBE_ID_PATTERN.test(videoId) ? videoId : null;
   } catch {
     const match = url.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?.*v=|embed\/|shorts\/|live\/|v\/))([a-zA-Z0-9_-]{11})/);
-    return match ? `https://www.youtube.com/embed/${match[1]}` : null;
+    return match ? match[1] : null;
   }
+}
+
+export function getYoutubeThumbnailUrl(url?: string | null) {
+  const videoId = getYoutubeVideoId(url);
+  return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null;
 }
 
 export function getExternalUrl(url: string) {

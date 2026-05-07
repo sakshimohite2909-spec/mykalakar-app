@@ -9,7 +9,7 @@ import { Plus, Trash2, ChevronDown, ChevronRight, Loader2, MapPin, X, Search, Da
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, orderBy, writeBatch } from "firebase/firestore";
-import { firebaseErrorMessage } from "@/lib/firebaseSafe";
+import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
 import { getDefaultIndiaStateDocuments } from "@/lib/indiaLocations";
 
 export default function AdminLocations() {
@@ -48,7 +48,7 @@ export default function AdminLocations() {
             setLoading(false);
         }, (error) => {
             console.error(error);
-            toast({ variant: "destructive", title: "Locations unavailable", description: firebaseErrorMessage(error, "Could not load states and districts.") });
+            toastForFirestoreError(error, "Locations unavailable", "Could not load states and districts.", toast);
             void useDefaultLocations();
             setLoading(false);
         });

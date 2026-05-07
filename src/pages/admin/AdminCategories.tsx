@@ -10,7 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, orderBy } from "firebase/firestore";
 import { initialCategories, platformCategories } from "@/data/mockData";
-import { firebaseErrorMessage } from "@/lib/firebaseSafe";
+import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
 
 
 export default function AdminCategories() {
@@ -37,7 +37,7 @@ export default function AdminCategories() {
       setLoading(false);
     }, (error) => {
       console.error(error);
-      toast({ variant: "destructive", title: "Categories unavailable", description: firebaseErrorMessage(error, "Could not load categories.") });
+      toastForFirestoreError(error, "Categories unavailable", "Could not load categories.", toast);
       setCats(platformCategories);
       setLoading(false);
     });
@@ -128,7 +128,7 @@ export default function AdminCategories() {
     if (!category) return;
 
     try {
-      const updatedSubcategories = category.subcategories.filter((s: string) => s !== subcategory);
+      const updatedSubcategories = (category.subcategories || []).filter((s: string) => s !== subcategory);
       // Also remove types for this subcategory
       const updatedTypes = { ...(category.subcategoryTypes || {}) };
       delete updatedTypes[subcategory];
@@ -234,6 +234,41 @@ export default function AdminCategories() {
     }
   };
 
+  // Fix old Lucide-name icons (e.g. "Music") → proper emoji in Firestore
+  const ICON_EMOJI_MAP: Record<string, string> = {
+    Music: "🎵", Dancer: "💃", Masks: "🎭", Camera: "🎨",
+    Flag: "🥁", Hands: "🛕", PartyPopper: "🎊",
+  };
+
+  const fixCategoryIcons = async () => {
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      let fixed = 0;
+      cats.forEach((cat) => {
+        const rawIcon = cat.icon || "";
+        // Only needs fixing if icon is a word (Lucide name), not an emoji
+        const needsFix = rawIcon.length <= 15 && !rawIcon.match(/\p{Emoji}/u);
+        const correctEmoji = ICON_EMOJI_MAP[rawIcon] || platformCategories.find(p => p.name === cat.name)?.icon || "🎭";
+        if (needsFix) {
+          batch.update(doc(db, "categories", cat.id), { icon: correctEmoji, updatedAt: serverTimestamp() });
+          fixed++;
+        }
+      });
+      await batch.commit();
+      if (fixed > 0) {
+        toast({ title: "Icons Fixed ✅", description: `${fixed} category icons updated to emoji.` });
+      } else {
+        toast({ title: "All icons are already correct ✅" });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({ variant: "destructive", title: "Fix failed", description: "Could not update category icons." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -241,12 +276,15 @@ export default function AdminCategories() {
           <h1 className="font-display text-2xl font-bold mb-1">Categories</h1>
           <p className="text-sm text-muted-foreground">{cats.length} categories</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button onClick={seedCategories} variant="outline" size="sm" className="hidden md:flex">
             <Database className="h-4 w-4 mr-2" /> Seed Defaults
           </Button>
           <Button onClick={updateTypesData} variant="outline" size="sm" className="hidden md:flex">
             <Database className="h-4 w-4 mr-2" /> Update Types
+          </Button>
+          <Button onClick={fixCategoryIcons} variant="outline" size="sm" className="hidden md:flex" title="Fix category icons to use emoji (repairs old Firestore data)">
+            <span className="mr-2 text-base">🎭</span> Fix Icons
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
@@ -293,7 +331,7 @@ export default function AdminCategories() {
                   <span className="text-2xl">{cat.icon}</span>
                   <div>
                     <span className="font-medium">{cat.name}</span>
-                    <span className="text-xs text-muted-foreground ml-2">({cat.subcategories.length} subcategories)</span>
+                    <span className="text-xs text-muted-foreground ml-2">({(cat.subcategories || []).length} subcategories)</span>
                   </div>
                 </button>
                 <div className="flex gap-1">
@@ -303,7 +341,7 @@ export default function AdminCategories() {
               </div>
               {expanded === cat.id && (
                 <div className="mt-4 pl-10 space-y-3">
-                  {cat.subcategories.map((sub: string) => {
+                  {(cat.subcategories || []).map((sub: string) => {
                     const types = cat.subcategoryTypes?.[sub] || [];
                     const isSubExpanded = expandedSub === `${cat.id}-${sub}`;
                     return (
@@ -369,7 +407,7 @@ export default function AdminCategories() {
                       </div>
                     );
                   })}
-                  {cat.subcategories.length === 0 && <span className="text-sm text-muted-foreground">No subcategories yet</span>}
+                  {(cat.subcategories || []).length === 0 && <span className="text-sm text-muted-foreground">No subcategories yet</span>}
 
                   <div className="flex gap-2 pt-2">
                     <Input

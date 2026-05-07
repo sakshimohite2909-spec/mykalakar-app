@@ -79,7 +79,13 @@ export default function Navbar() {
           backdropFilter: "blur(24px) saturate(160%)",
           WebkitBackdropFilter: "blur(24px) saturate(160%)",
           boxShadow: "0 8px 32px rgba(0,0,0,0.05)",
-        } : { background: "transparent" }}
+          transform: "translateZ(0)",          /* GPU layer promotion */
+          willChange: "transform",
+        } : {
+          background: "transparent",
+          transform: "translateZ(0)",
+          willChange: "transform",
+        }}
       >
         {/* Tangerine glow line top */}
         <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 h-px w-3/4 rounded-full"

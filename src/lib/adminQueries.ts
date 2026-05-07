@@ -175,6 +175,94 @@ export async function rejectArtist(applicationId: string, reason = "") {
   );
 }
 
+export async function getPendingAdminRequests() {
+  const snap = await withTimeout(
+    getDocs(query(collection(db, "admin_requests"), where("status", "==", "pending"), orderBy("requestedAt", "desc"))),
+    FIREBASE_READ_TIMEOUT_MS,
+    "Could not load admin requests."
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function approveAdminRequest(requestId: string) {
+  const requestRef = doc(db, "admin_requests", requestId);
+  const requestSnap = await withTimeout(getDoc(requestRef), FIREBASE_READ_TIMEOUT_MS, "Could not load this admin request.");
+  if (!requestSnap.exists()) throw new Error("Admin request not found");
+
+  const data = requestSnap.data();
+  const uid = data.uid;
+  if (!uid) throw new Error("Admin request is missing uid");
+
+  const batch = writeBatch(db);
+  batch.update(requestRef, {
+    status: "approved",
+    approvedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(
+    doc(db, "admins", uid),
+    {
+      uid,
+      name: data.name || "",
+      username: data.username || "",
+      email: data.email || "",
+      mobileNumber: data.mobileNumber || "",
+      capName: data.capName || "",
+      bloodGroup: data.bloodGroup || "",
+      about: data.about || "",
+      role: "admin",
+      status: "active",
+      approvedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+  batch.set(
+    doc(db, "users", uid),
+    {
+      uid,
+      name: data.name || "",
+      username: data.username || "",
+      email: data.email || "",
+      phone: data.mobileNumber || "",
+      role: "admin",
+      status: "active",
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  await withTimeout(batch.commit(), FIREBASE_WRITE_TIMEOUT_MS, "Could not approve this admin.");
+}
+
+export async function rejectAdminRequest(requestId: string, reason = "") {
+  const requestRef = doc(db, "admin_requests", requestId);
+  const requestSnap = await withTimeout(getDoc(requestRef), FIREBASE_READ_TIMEOUT_MS, "Could not load this admin request.");
+  if (!requestSnap.exists()) throw new Error("Admin request not found");
+  const data = requestSnap.data();
+
+  const batch = writeBatch(db);
+  batch.update(requestRef, {
+    status: "rejected",
+    rejectionReason: reason,
+    rejectedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  if (data.uid) {
+    batch.set(
+      doc(db, "users", data.uid),
+      {
+        role: "customer",
+        status: "active",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
+  await withTimeout(batch.commit(), FIREBASE_WRITE_TIMEOUT_MS, "Could not reject this admin.");
+}
+
 export async function deleteUserFromFirestore(uid: string) {
   await withTimeout(deleteDoc(doc(db, "users", uid)), FIREBASE_WRITE_TIMEOUT_MS, "Could not delete this user.");
   const appSnap = await withTimeout(

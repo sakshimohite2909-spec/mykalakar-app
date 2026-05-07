@@ -120,15 +120,15 @@ const LocationSelection = () => {
                         variant="outline"
                         role="combobox"
                         aria-expanded={stateMenuOpen}
-                        className="w-full h-14 justify-between bg-white/40 border-white/50 text-[#1A1A1A] rounded-2xl text-sm font-bold tracking-wide hover:bg-white/60 shadow-sm"
+                        className="w-full h-14 justify-between bg-white/85 border-white/70 !text-[#1A1A1A] rounded-2xl text-sm font-bold tracking-wide shadow-sm hover:bg-white hover:!text-[#1A1A1A] focus:!text-[#1A1A1A] data-[state=open]:!text-[#1A1A1A]"
                       >
-                        {selectedState || "Select your State..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        <span className="truncate !text-[#1A1A1A]">{selectedState || "Select your State..."}</span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-[#1A1A1A] opacity-60" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 bg-white/95 backdrop-blur-3xl border border-white/50 rounded-2xl shadow-xl z-[100]">
                       <Command className="bg-transparent h-full">
-                        <CommandInput placeholder="Search state..." className="h-12 text-sm" />
+                        <CommandInput placeholder="Search state..." className="h-12 text-sm text-[#1A1A1A] placeholder:text-slate-500" />
                         <CommandList
                           className="dropdown-scroll-area max-h-[min(320px,48vh)] touch-pan-y scroll-smooth"
                           onWheelCapture={scrollDropdownOnWheel}
@@ -143,7 +143,7 @@ const LocationSelection = () => {
                                   handleStateSelect(s.name);
                                   setStateMenuOpen(false);
                                 }}
-                                className="min-h-11 cursor-pointer rounded-xl mx-2 my-1 px-3 data-[selected=true]:bg-orange-50 data-[selected=true]:text-orange-700"
+                                className="min-h-11 cursor-pointer rounded-xl mx-2 my-1 px-3 text-[#1A1A1A] data-[selected=true]:bg-orange-50 data-[selected=true]:text-[#1A1A1A]"
                               >
                                 <Check
                                   className={cn(
@@ -168,15 +168,15 @@ const LocationSelection = () => {
                         variant="outline"
                         role="combobox"
                         aria-expanded={districtMenuOpen}
-                        className="w-full h-14 justify-between bg-white/40 border-white/50 text-[#1A1A1A] rounded-2xl text-sm font-bold tracking-wide hover:bg-white/60 shadow-sm"
+                        className="w-full h-14 justify-between bg-white/85 border-white/70 !text-[#1A1A1A] rounded-2xl text-sm font-bold tracking-wide shadow-sm hover:bg-white hover:!text-[#1A1A1A] focus:!text-[#1A1A1A] data-[state=open]:!text-[#1A1A1A]"
                       >
-                        {selectedDistrict || `Select City / District in ${selectedState}...`}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        <span className="truncate !text-[#1A1A1A]">{selectedDistrict || `Select City / District in ${selectedState}...`}</span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-[#1A1A1A] opacity-60" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 bg-white/95 backdrop-blur-3xl border border-white/50 rounded-2xl shadow-xl z-[100]">
                       <Command className="bg-transparent h-full">
-                        <CommandInput placeholder="Search city or district..." className="h-12 text-sm" />
+                        <CommandInput placeholder="Search city or district..." className="h-12 text-sm text-[#1A1A1A] placeholder:text-slate-500" />
                         <CommandList
                           className="dropdown-scroll-area max-h-[min(320px,48vh)] touch-pan-y scroll-smooth"
                           onWheelCapture={scrollDropdownOnWheel}
@@ -191,7 +191,7 @@ const LocationSelection = () => {
                                   handleDistrictSelect(d);
                                   setDistrictMenuOpen(false);
                                 }}
-                                className="min-h-11 cursor-pointer rounded-xl mx-2 my-1 px-3 data-[selected=true]:bg-orange-50 data-[selected=true]:text-orange-700"
+                                className="min-h-11 cursor-pointer rounded-xl mx-2 my-1 px-3 text-[#1A1A1A] data-[selected=true]:bg-orange-50 data-[selected=true]:text-[#1A1A1A]"
                               >
                                 <Check
                                   className={cn(

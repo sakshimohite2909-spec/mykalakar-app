@@ -59,3 +59,55 @@ export function firebaseErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) return error.message;
   return fallback;
 }
+
+/**
+ * Returns true when Firestore throws because a composite index is missing
+ * or is still being built in the Firebase Console.
+ */
+export function isIndexError(error: unknown): boolean {
+  const msg =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message: unknown }).message)
+      : String(error);
+  return (
+    msg.includes("requires an index") ||
+    msg.includes("index is currently building") ||
+    msg.includes("FAILED_PRECONDITION")
+  );
+}
+
+/**
+ * Central helper for onSnapshot / getDocs error handlers.
+ *
+ * • Index / building errors  → soft amber toast ("Optimizing database…")
+ * • All other errors         → red destructive toast with the real message
+ *
+ * Usage:
+ *   toastForFirestoreError(error, "Artists unavailable", "Could not load artists.", toast);
+ */
+export function toastForFirestoreError(
+  error: unknown,
+  title: string,
+  fallback: string,
+  toastFn: (opts: {
+    variant?: "default" | "destructive";
+    title: string;
+    description: string;
+  }) => void
+): void {
+  if (isIndexError(error)) {
+    toastFn({
+      title: "⏳ Optimizing database",
+      description:
+        "Optimizing for faster loading — please check back in a few minutes.",
+    });
+    return;
+  }
+  toastFn({
+    variant: "destructive",
+    title,
+    description: firebaseErrorMessage(error, fallback),
+  });
+}

@@ -31,6 +31,7 @@ const AdminBookings = lazy(() => import("./pages/admin/AdminBookings"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminEvents = lazy(() => import("./pages/admin/AdminEvents"));
 const AdminLocations = lazy(() => import("./pages/admin/AdminLocations"));
+const AdminBootstrap = lazy(() => import("./pages/admin/AdminBootstrap"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AntiGravity = lazy(() => import("./pages/AntiGravity"));
 
@@ -78,6 +79,8 @@ const App = () => (
                 <Route path="/user-login" element={<ArtistLogin />} />
                 <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
                 <Route path="/antigravity" element={<AntiGravity />} />
+                {/* Bootstrap — available to any signed-in user to fix data issues */}
+                <Route path="/bootstrap" element={<ProtectedRoute><AdminBootstrap /></ProtectedRoute>} />
 
                 {/* Public Browsing Routes — no auth required */}
                 <Route path="/artists" element={<SearchPage />} />
@@ -113,6 +116,7 @@ const App = () => (
                   <Route path="bookings" element={<AdminBookings />} />
                   <Route path="locations" element={<AdminLocations />} />
                   <Route path="settings" element={<AdminSettings />} />
+                  <Route path="bootstrap" element={<AdminBootstrap />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

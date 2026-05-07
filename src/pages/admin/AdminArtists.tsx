@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { initialArtists } from "@/data/mockData";
-import { firebaseErrorMessage } from "@/lib/firebaseSafe";
+import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
 
 
@@ -101,17 +101,22 @@ export default function AdminArtists() {
       setLoading(false);
     }, (error) => {
       console.error(error);
-      toast({ variant: "destructive", title: "Artists unavailable", description: firebaseErrorMessage(error, "Could not load artists.") });
+      toastForFirestoreError(error, "Artists unavailable", "Could not load artists.", toast);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const filtered = artists.filter((a) =>
-    a.name.toLowerCase().includes(queryInput.toLowerCase()) ||
-    (a.subcategory && a.subcategory.toLowerCase().includes(queryInput.toLowerCase()))
-  );
+  const filtered = artists.filter((a) => {
+    const q = queryInput.toLowerCase();
+    return (
+      (a.name?.toLowerCase() ?? "").includes(q) ||
+      (a.professionalName?.toLowerCase() ?? "").includes(q) ||
+      (a.subcategory?.toLowerCase() ?? "").includes(q) ||
+      (a.category?.toLowerCase() ?? "").includes(q)
+    );
+  });
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this artist?")) return;

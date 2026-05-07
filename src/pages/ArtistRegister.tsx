@@ -1,6 +1,9 @@
 import {
   type ChangeEvent,
   type ComponentType,
+  type WheelEvent,
+  memo,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -40,18 +43,17 @@ import {
   Users,
   X,
   Youtube,
-  ExternalLink,
 } from "lucide-react";
 import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { getExternalUrl, getYoutubeEmbedUrl } from "@/lib/youtube";
+import { getExternalUrl, getYoutubeThumbnailUrl } from "@/lib/youtube";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
 
 type AuthRole = "admin" | "artist" | "user";
-type PortfolioPlatform = "youtube" | "instagram" | "facebook" | "website";
+type PortfolioPlatform = "youtube";
 type PortfolioLink = { platform: PortfolioPlatform; url: string };
 type ExtraArtEntry = {
   id: string;
@@ -61,17 +63,19 @@ type ExtraArtEntry = {
   teamPrice: string;
 };
 
+const scrollDropdownOnWheel = (event: WheelEvent<HTMLElement>) => {
+  const target = event.currentTarget;
+  if (target.scrollHeight <= target.clientHeight) return;
+
+  target.scrollTop += event.deltaY;
+  event.preventDefault();
+  event.stopPropagation();
+};
+
 const roleTabs: Array<{ id: AuthRole; label: string; icon: ComponentType<{ className?: string }>; color: string }> = [
   { id: "admin", label: "Admin", icon: Building2, color: "from-orange-500 via-amber-400 to-rose-500" },
   { id: "artist", label: "Artist", icon: Music, color: "from-orange-500 to-amber-400" },
   { id: "user", label: "User", icon: User, color: "from-rose-500 to-amber-400" },
-];
-
-const portfolioPlatformOptions: Array<{ value: PortfolioPlatform; label: string }> = [
-  { value: "youtube", label: "YouTube" },
-  { value: "instagram", label: "Instagram" },
-  { value: "facebook", label: "Facebook" },
-  { value: "website", label: "Website" },
 ];
 
 const artCategoryOptions = [
@@ -520,7 +524,12 @@ function SearchableDropdown({
               />
             </div>
           </div>
-          <ul className="dropdown-scroll-area max-h-[min(320px,48vh)] py-1" role="listbox">
+          <ul
+            className="dropdown-scroll-area max-h-[min(360px,50vh)] overflow-y-auto py-1"
+            style={{ WebkitOverflowScrolling: "touch" }}
+            role="listbox"
+            onWheelCapture={scrollDropdownOnWheel}
+          >
             {canAddCustom ? (
               <li>
                 <button
@@ -645,7 +654,7 @@ function ArtCategoryCard({
   );
 }
 
-function PortfolioLinksEditor({
+const PortfolioLinksEditor = memo(function PortfolioLinksEditor({
   links,
   onAdd,
   onRemove,
@@ -660,35 +669,24 @@ function PortfolioLinksEditor({
     <div className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
       {links.map((link, index) => {
         const trimmedUrl = link.url.trim();
-        const embedUrl = link.platform === "youtube" ? getYoutubeEmbedUrl(trimmedUrl) : null;
+        const thumbnailUrl = link.platform === "youtube" ? getYoutubeThumbnailUrl(trimmedUrl) : null;
 
         return (
           <div key={index} className="rounded-2xl border border-white/70 bg-white/65 p-4 shadow-sm backdrop-blur-md">
             <div className="grid gap-3 md:grid-cols-[132px_1fr_auto]">
-              <label className="relative block">
-                <span className="sr-only">Portfolio platform</span>
-                <select
-                  value={link.platform}
-                  onChange={(event) => onUpdate(index, { ...link, platform: event.target.value as PortfolioPlatform })}
-                  className="input-glass h-12 w-full appearance-none px-4 pr-9 text-sm font-semibold text-slate-700"
-                >
-                  {portfolioPlatformOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              </label>
+              <div className="input-glass flex h-12 items-center gap-2 px-4 text-sm font-semibold text-[#1A1A1A]">
+                <Youtube className="h-4 w-4 text-red-500" />
+                YouTube
+              </div>
 
               <input
                 type="url"
                 inputMode="url"
                 value={link.url}
-                onChange={(event) => onUpdate(index, { ...link, url: event.target.value })}
-                placeholder={link.platform === "youtube" ? "youtube.com/watch?v=..." : "Paste portfolio link here..."}
+                onChange={(event) => onUpdate(index, { platform: "youtube", url: event.target.value })}
+                placeholder="youtube.com/watch?v=..."
                 className="input-glass h-12 w-full px-4 text-sm text-[#1A1A1A] placeholder:text-slate-400"
-                aria-label={`${portfolioPlatformOptions.find((option) => option.value === link.platform)?.label ?? "Portfolio"} link`}
+                aria-label={`YouTube link ${index + 1}`}
               />
 
               {links.length > 1 ? (
@@ -703,36 +701,38 @@ function PortfolioLinksEditor({
               ) : null}
             </div>
 
-            {trimmedUrl ? (
+            {thumbnailUrl ? (
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50/70 px-4 py-3 text-xs font-semibold text-slate-700">
+                  <Youtube className="h-4 w-4 shrink-0 text-red-500" />
+                  <span className="min-w-0 flex-1 truncate">{trimmedUrl}</span>
+                </div>
+                <a
+                  href={getExternalUrl(trimmedUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative block aspect-video overflow-hidden rounded-xl border border-red-100 bg-black/5 shadow-sm"
+                >
+                  <img
+                    src={thumbnailUrl}
+                    alt={`YouTube portfolio preview ${index + 1}`}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                  />
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/15 transition group-hover:bg-black/25">
+                    <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-600 text-white shadow-xl">
+                      <Youtube className="h-8 w-8" />
+                    </span>
+                  </span>
+                </a>
+              </div>
+            ) : trimmedUrl ? (
               <div className="mt-4">
-                {embedUrl ? (
-                  <div className="aspect-video w-full overflow-hidden rounded-2xl border border-orange-100 bg-slate-900 shadow-lg shadow-orange-200/50">
-                    <iframe
-                      width="100%"
-                      height="100%"
-                      src={embedUrl}
-                      title={`YouTube portfolio preview ${index + 1}`}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      allowFullScreen
-                      loading="lazy"
-                    />
-                  </div>
-                ) : link.platform === "youtube" ? (
-                  <div className="flex items-center gap-2 rounded-xl border border-orange-100 bg-white/60 px-4 py-3 text-xs font-semibold text-slate-500">
-                    <Youtube className="h-4 w-4 text-orange-500" />
-                    Paste a valid YouTube video link to preview it here.
-                  </div>
-                ) : (
-                  <a
-                    href={getExternalUrl(trimmedUrl)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between rounded-xl border border-orange-100 bg-white/60 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-white"
-                  >
-                    <span className="truncate">{trimmedUrl}</span>
-                    <ExternalLink className="ml-3 h-4 w-4 shrink-0 text-orange-500" />
-                  </a>
-                )}
+                <div className="flex items-center gap-2 rounded-xl border border-orange-100 bg-white/60 px-4 py-3 text-xs font-semibold text-slate-500">
+                  <Youtube className="h-4 w-4 text-orange-500" />
+                  Paste a valid YouTube video link to preview it here.
+                </div>
               </div>
             ) : null}
           </div>
@@ -749,7 +749,7 @@ function PortfolioLinksEditor({
       </button>
     </div>
   );
-}
+});
 
 function FileDrop({
   label,
@@ -985,25 +985,25 @@ export default function ArtistRegister() {
     setExtraArtEntries((current) => current.filter((entry) => entry.id !== id));
   };
 
-  const addPortfolioLink = () => {
+  const addPortfolioLink = useCallback(() => {
     setPortfolioLinks((current) => [...current, { platform: "youtube", url: "" }]);
-  };
+  }, []);
 
-  const updatePortfolioLink = (index: number, nextLink: PortfolioLink) => {
+  const updatePortfolioLink = useCallback((index: number, nextLink: PortfolioLink) => {
     setPortfolioLinks((current) => {
       const next = current.map((link, linkIndex) => (linkIndex === index ? nextLink : link));
       artistForm.setValue("portfolioUrl", next[0]?.url ?? "", { shouldDirty: true });
       return next;
     });
-  };
+  }, [artistForm]);
 
-  const removePortfolioLink = (index: number) => {
+  const removePortfolioLink = useCallback((index: number) => {
     setPortfolioLinks((current) => {
       const next = current.filter((_, linkIndex) => linkIndex !== index);
       artistForm.setValue("portfolioUrl", next[0]?.url ?? "", { shouldDirty: true });
       return next.length > 0 ? next : [{ platform: "youtube", url: "" }];
     });
-  };
+  }, [artistForm]);
 
   const fallbackProfilePhoto = (name = "Artist") =>
     `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "Artist")}&background=f97316&color=fff&size=256`;
@@ -1019,10 +1019,6 @@ export default function ArtistRegister() {
   };
 
   const submitArtist = async (values: ArtistRegistrationValues) => {
-    if (!profileFile) {
-      toast({ variant: "destructive", title: "Profile photo required", description: "Please upload a profile photo." });
-      return;
-    }
     const preparedExtraArts = extraArtEntries
       .map((entry) => ({
         ...entry,
@@ -1557,7 +1553,6 @@ export default function ArtistRegister() {
                     <FileDrop
                       label="Profile Photo"
                       description="Upload Profile Photo"
-                      required
                       file={profileFile}
                       preview={profilePreview}
                       onChange={(file) => setPreviewFile(file, profilePreview, setProfileFile, setProfilePreview)}
@@ -1769,7 +1764,7 @@ export default function ArtistRegister() {
                   label="Live Stream Link (Optional)"
                   name="liveLink"
                   register={artistForm.register}
-                  placeholder="e.g. YouTube Live, Instagram Live URL"
+                  placeholder="e.g. YouTube Live URL"
                   inputMode="url"
                 />
                 <div className="rounded-2xl bg-sky-100/70 p-4">

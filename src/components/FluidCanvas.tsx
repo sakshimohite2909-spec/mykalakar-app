@@ -47,8 +47,11 @@ const VolumetricBackgrounds = () => {
 const GoldenDancer = () => {
   const meshRef = useRef<THREE.Mesh>(null);
   
-  useFrame((state) => {
-    const t = state.clock.getElapsedTime();
+  const timer = useMemo(() => new THREE.Timer(), []);
+  
+  useFrame((state, delta) => {
+    timer.update();
+    const t = timer.getElapsed();
     if (meshRef.current) {
       meshRef.current.position.y = Math.sin(t * 0.8) * 0.3;
       meshRef.current.rotation.y += 0.005;
@@ -80,10 +83,13 @@ const KineticSwarm = () => {
 // ─── PANEL 3 & 7: Masks (Top-Right / Bottom-Left) ─────────────────────────────
 const DramaMasks = ({ position }: { position: [number, number, number] }) => {
   const groupRef = useRef<THREE.Group>(null);
-  useFrame((state) => {
+  const timer = useMemo(() => new THREE.Timer(), []);
+  useFrame((state, delta) => {
+    timer.update();
+    const t = timer.getElapsed();
     if (groupRef.current) {
-      groupRef.current.rotation.y = state.clock.getElapsedTime() * 0.1;
-      groupRef.current.rotation.z = Math.sin(state.clock.getElapsedTime() * 0.5) * 0.05;
+      groupRef.current.rotation.y = t * 0.1;
+      groupRef.current.rotation.z = Math.sin(t * 0.5) * 0.05;
     }
   });
 
@@ -108,10 +114,13 @@ const DramaMasks = ({ position }: { position: [number, number, number] }) => {
 // ─── PANEL 5: Middle-Middle (Music Explosion) ─────────────────────────────────
 const MusicExplosion = ({ position, scale = 1 }: { position: [number, number, number], scale?: number }) => {
   const groupRef = useRef<THREE.Group>(null);
-  useFrame((state) => {
+  const timer = useMemo(() => new THREE.Timer(), []);
+  useFrame((state, delta) => {
+    timer.update();
+    const t = timer.getElapsed();
     if (groupRef.current) {
-      groupRef.current.rotation.y = state.clock.getElapsedTime() * 0.05;
-      groupRef.current.rotation.x = Math.sin(state.clock.getElapsedTime() * 0.1) * 0.1;
+      groupRef.current.rotation.y = t * 0.05;
+      groupRef.current.rotation.x = Math.sin(t * 0.1) * 0.1;
     }
   });
 
