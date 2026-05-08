@@ -16,6 +16,7 @@ import { z } from "zod";
 import {
   ArrowLeft,
   AtSign,
+  BadgeCheck,
   Building2,
   ChevronDown,
   CreditCard,
@@ -49,6 +50,12 @@ import { toast } from "@/hooks/use-toast";
 import { getExternalUrl, getYoutubeThumbnailUrl } from "@/lib/youtube";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
 import { ARTIST_TYPES, normalizeArtistType } from "@/constants/artistSystem";
+import {
+  PHONE_MAX_LENGTH,
+  PHONE_PLACEHOLDER,
+  sanitizePhoneNumber,
+  validatePhoneNumber,
+} from "@/lib/phoneUtils";
 
 type AuthRole = "artist" | "user";
 type PortfolioPlatform = "youtube";
@@ -86,14 +93,23 @@ const passwordRule = z
   .regex(/\d/, "Password must contain at least one number.")
   .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character.");
 
-const mobileRule = z.string().regex(/^\d{10}$/, "Mobile number must be exactly 10 digits.");
-const emergencyRule = z.string().regex(/^\d{10}$/, "Emergency number must be exactly 10 digits.");
+const mobileRule = z
+  .string()
+  .min(1, "Phone number is required.")
+  .refine(validatePhoneNumber, "Phone number must be exactly 10 digits.");
+
+const emergencyRule = z
+  .string()
+  .min(1, "Emergency contact is required.")
+  .refine(validatePhoneNumber, "Emergency contact must be exactly 10 digits.");
+
 const optionalPhoneRule = z
   .string()
   .optional()
-  .refine((value) => !value || /^\d{10}$/.test(value), {
-    message: "Optional phone number must be exactly 10 digits.",
+  .refine((value) => !value || validatePhoneNumber(value), {
+    message: "Phone number must be exactly 10 digits.",
   });
+
 const aadharRule = z.preprocess(
   (value) => String(value ?? "").replace(/\s/g, ""),
   z.string().regex(/^\d{12}$/, "Aadhar number must be exactly 12 digits.")
@@ -151,7 +167,7 @@ const userRegistrationSchema = z
     username: usernameRule,
     password: passwordRule,
     confirmPassword: z.string().min(1, "Confirm password is required."),
-    phoneOptional: optionalPhoneRule,
+    phoneOptional: mobileRule,
   })
   .refine((values) => values.password === values.confirmPassword, {
     message: "Passwords do not match.",
@@ -1272,15 +1288,15 @@ export default function ArtistRegister() {
                     control={artistForm.control}
                     render={({ field }) => (
                       <div>
-                        <label className="mb-1.5 block text-sm font-bold text-slate-700">Mobile Number *</label>
+                        <label className="mb-1.5 block text-sm font-bold text-slate-700">Phone Number *</label>
                         <input
                           type="tel"
                           inputMode="numeric"
                           value={field.value}
                           onBlur={field.onBlur}
-                          onChange={(event) => field.onChange(digitsOnly(event.target.value, 10))}
-                          placeholder="+91 XXXXX XXXXX"
-                          maxLength={10}
+                          onChange={(event) => field.onChange(sanitizePhoneNumber(event.target.value))}
+                          placeholder={PHONE_PLACEHOLDER}
+                          maxLength={PHONE_MAX_LENGTH}
                           className={`${inputClass} ${artistForm.formState.errors.mobileNumber ? errorInputClass : ""}`}
                         />
                         <FieldError message={artistForm.formState.errors.mobileNumber?.message} />
@@ -1298,9 +1314,9 @@ export default function ArtistRegister() {
                           inputMode="numeric"
                           value={field.value}
                           onBlur={field.onBlur}
-                          onChange={(event) => field.onChange(digitsOnly(event.target.value, 10))}
-                          placeholder="+91 XXXXX XXXXX"
-                          maxLength={10}
+                          onChange={(event) => field.onChange(sanitizePhoneNumber(event.target.value))}
+                          placeholder={PHONE_PLACEHOLDER}
+                          maxLength={PHONE_MAX_LENGTH}
                           className={`${inputClass} ${artistForm.formState.errors.emergencyNumber ? errorInputClass : ""}`}
                         />
                         <FieldError message={artistForm.formState.errors.emergencyNumber?.message} />
@@ -1612,88 +1628,101 @@ export default function ArtistRegister() {
                   placeholder="e.g. YouTube Live URL"
                   inputMode="url"
                 />
-                <div className="rounded-2xl bg-sky-100/70 p-4">
-                  <label className="flex cursor-pointer items-center gap-3 text-sm font-bold text-slate-700">
-                    <input
-                      type="checkbox"
-                      {...artistForm.register("hasAssistant")}
-                      className="h-5 w-5 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                    />
-                    Do you have an assistant/manager?
-                  </label>
-                  {hasAssistant ? (
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <TextField label="Assistant/Manager Name" name="assistantName" register={artistForm.register} placeholder="Their full name" />
-                      <TextField label="Assistant/Manager Contact" name="assistantContact" register={artistForm.register} placeholder="Phone number or email" />
-                    </div>
-                  ) : null}
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <TextField
+                    label="Assistant / Manager Name (Optional)"
+                    name="assistantName"
+                    register={artistForm.register}
+                    placeholder="Enter name"
+                  />
+                  <Controller
+                    name="assistantContact"
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <div>
+                        <label className="mb-1.5 block text-sm font-bold text-slate-700">Assistant Contact (Optional)</label>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          value={field.value}
+                          onBlur={field.onBlur}
+                          onChange={(event) => field.onChange(sanitizePhoneNumber(event.target.value))}
+                          placeholder={PHONE_PLACEHOLDER}
+                          maxLength={PHONE_MAX_LENGTH}
+                          className={inputClass}
+                        />
+                      </div>
+                    )}
+                  />
                 </div>
 
-                <SectionHeading icon={MessageSquare} title="Suggestions & Tips" />
                 <div>
-                  <label className="mb-1.5 block text-sm font-bold text-slate-700">Any suggestions or tips about your art for us?</label>
-                  <p className="mb-2 text-xs font-semibold text-slate-500">
-                    Share anything you would like us to know: special requirements, performance tips, or suggestions for the company.
-                  </p>
+                  <label className="mb-1.5 block text-sm font-bold text-slate-700">Any suggestions or comments?</label>
                   <textarea
                     {...artistForm.register("suggestionComment")}
-                    rows={4}
-                    placeholder="e.g. I need a specific sound setup, I perform best in outdoor venues..."
-                    className={`${inputClass} min-h-32 resize-y`}
+                    rows={3}
+                    placeholder="We'd love to hear from you..."
+                    className={inputClass}
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={!artistForm.formState.isValid || loadingRole === "artist"}
-                  className={`btn-glass-primary flex h-16 w-full items-center justify-center gap-3 rounded-2xl text-sm font-black uppercase tracking-[0.18em] ${
+                  className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-400 text-sm font-black uppercase tracking-widest text-white shadow-lg ${
                     !artistForm.formState.isValid || loadingRole === "artist" ? "cursor-not-allowed opacity-50" : ""
                   }`}
                 >
-                  {loadingRole === "artist" ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                  {loadingRole === "artist" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Submit My Artist Profile
                 </button>
               </motion.form>
-            ) : null}
-
-            {activeRole === "user" ? (
+            ) : role === "user" ? (
               <motion.form
-                key="user"
-                initial={{ opacity: 0, x: -18 }}
+                key="user-form"
+                initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 18 }}
-                transition={{ duration: 0.28 }}
+                exit={{ opacity: 0, x: -20 }}
                 onSubmit={userForm.handleSubmit(submitUser)}
-                className="mx-auto mt-8 max-w-2xl space-y-6 rounded-3xl border border-white/70 bg-white/55 p-6 shadow-sm"
-                noValidate
+                className="space-y-6"
               >
-                <SectionHeading icon={User} title="User Registration" />
-                <TextField label="Full Name *" name="fullName" register={userForm.register} error={userForm.formState.errors.fullName?.message} placeholder="Your full name" />
-                <TextField label="Username *" name="username" register={userForm.register} error={userForm.formState.errors.username?.message} icon={AtSign} placeholder="e.g. rasika_99" />
-                <Controller
-                  name="phoneOptional"
-                  control={userForm.control}
-                  render={({ field }) => (
-                    <div>
-                      <label className="mb-1.5 flex items-center gap-2 text-sm font-bold text-slate-700">
-                        <Phone className="h-4 w-4 text-orange-500" />
-                        Phone Number (Optional)
-                      </label>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        value={field.value ?? ""}
-                        onBlur={field.onBlur}
-                        onChange={(event) => field.onChange(digitsOnly(event.target.value, 10))}
-                        placeholder="+91 XXXXX XXXXX"
-                        maxLength={10}
-                        className={`${inputClass} ${userForm.formState.errors.phoneOptional ? errorInputClass : ""}`}
-                      />
-                      <FieldError message={userForm.formState.errors.phoneOptional?.message} />
-                    </div>
-                  )}
-                />
+                <SectionHeading icon={User} title="User Account Details" />
                 <div className="grid gap-4 md:grid-cols-2">
+                  <TextField
+                    label="Full Name *"
+                    name="fullName"
+                    register={userForm.register}
+                    error={userForm.formState.errors.fullName?.message}
+                    placeholder="Enter your name"
+                  />
+                  <TextField
+                    label="Username *"
+                    name="username"
+                    register={userForm.register}
+                    error={userForm.formState.errors.username?.message}
+                    placeholder="choose_username"
+                  />
+                  <Controller
+                    name="phoneOptional"
+                    control={userForm.control}
+                    render={({ field }) => (
+                      <div className="md:col-span-2">
+                        <label className="mb-1.5 block text-sm font-bold text-slate-700">Phone Number *</label>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          value={field.value}
+                          onBlur={field.onBlur}
+                          onChange={(event) => field.onChange(sanitizePhoneNumber(event.target.value))}
+                          placeholder={PHONE_PLACEHOLDER}
+                          maxLength={PHONE_MAX_LENGTH}
+                          className={`${inputClass} ${userForm.formState.errors.phoneOptional ? errorInputClass : ""}`}
+                        />
+                        <FieldError message={userForm.formState.errors.phoneOptional?.message} />
+                      </div>
+                    )}
+                  />
                   <Controller
                     name="password"
                     control={userForm.control}
@@ -1739,7 +1768,6 @@ export default function ArtistRegister() {
                 </button>
               </motion.form>
             ) : null}
-
           </AnimatePresence>
         </div>
       </div>

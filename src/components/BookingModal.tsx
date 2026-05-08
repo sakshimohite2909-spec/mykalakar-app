@@ -6,13 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
-
-const eventTypes = ["Wedding", "Corporate Event", "Birthday Party", "Festival", "Concert", "Private Event"];
 import { Calendar, Send } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
+import { PHONE_MAX_LENGTH, PHONE_PLACEHOLDER, sanitizePhoneNumber, validatePhoneNumber } from "@/lib/phoneUtils";
+
+const eventTypes = ["Wedding", "Corporate Event", "Birthday Party", "Festival", "Concert", "Private Event"];
 
 interface Props {
   open: boolean;
@@ -36,7 +37,11 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === "customerPhone") {
+      setFormData(prev => ({ ...prev, [name]: sanitizePhoneNumber(value) }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSelectChange = (value: string) => {
@@ -45,10 +50,22 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
     if (!formData.eventType) {
       toast({ variant: "destructive", title: "Event type required", description: "Please select the event type." });
       return;
     }
+
+    if (!validatePhoneNumber(formData.customerPhone)) {
+      toast({ 
+        variant: "destructive", 
+        title: "Invalid Phone Number", 
+        description: "Please enter a valid 10-digit phone number." 
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       await withTimeout(
@@ -70,6 +87,7 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
 
       onOpenChange(false);
       toast({ title: "Inquiry Sent! ✨", description: `Your inquiry for ${artistName} has been submitted.` });
+      
       // Reset form
       setFormData({
         customerName: "",
@@ -100,8 +118,16 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
               <Input name="customerName" value={formData.customerName} onChange={handleChange} placeholder="Enter your name" required />
             </div>
             <div>
-              <Label>Phone Number</Label>
-              <Input name="customerPhone" value={formData.customerPhone} onChange={handleChange} placeholder="+91 XXXXX XXXXX" type="tel" required />
+              <Label>Phone Number *</Label>
+              <Input 
+                name="customerPhone" 
+                value={formData.customerPhone} 
+                onChange={handleChange} 
+                placeholder={PHONE_PLACEHOLDER} 
+                type="tel" 
+                maxLength={PHONE_MAX_LENGTH}
+                required 
+              />
             </div>
           </div>
 
