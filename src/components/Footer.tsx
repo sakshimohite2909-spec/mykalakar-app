@@ -30,7 +30,7 @@ export default function Footer() {
                 {[Facebook, Instagram, Twitter, Youtube].map((Icon, i) => (
                   <Link
                     key={i}
-                    to="#"
+                    to="/"
                     className="p-2.5 rounded-xl border border-orange-100 bg-orange-50 text-slate-400 hover:text-orange-500 hover:border-orange-300 hover:bg-orange-50 transition-all hover:scale-110 active:scale-95 shadow-sm"
                   >
                     <Icon className="h-4 w-4" />
@@ -45,7 +45,7 @@ export default function Footer() {
               <div className="flex flex-col gap-3.5">
                 {[
                   { label: "Find Artists", path: "/search" },
-                  { label: "Become an Artist", path: "/register" },
+                  { label: "Become an Artist", path: "/register?role=artist" },
                   { label: "Browse Categories", path: "/search" },
                   { label: "Book Events", path: "/events" },
                 ].map(({ label, path }) => (
@@ -65,10 +65,15 @@ export default function Footer() {
             <div className="space-y-5">
               <h4 className="text-[#1A1A1A] font-black uppercase text-[10px] tracking-[0.25em]">Company</h4>
               <div className="flex flex-col gap-3.5">
-                {["About Us", "Our Goal", "Career Path", "Privacy Policy"].map((label) => (
+                {[
+                  { label: "About Us", path: "/" },
+                  { label: "Our Goal", path: "/" },
+                  { label: "Career Path", path: "/register?role=artist" },
+                  { label: "Privacy Policy", path: "/" },
+                ].map(({ label, path }) => (
                   <Link
                     key={label}
-                    to="#"
+                    to={path}
                     className="text-slate-500 hover:text-orange-600 font-semibold text-sm transition-colors flex items-center gap-2 group"
                   >
                     <span className="w-1 h-1 rounded-full bg-slate-300 group-hover:bg-orange-400 transition-colors" />
@@ -110,10 +115,14 @@ export default function Footer() {
               © {new Date().getFullYear()} MyKalakar India. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
-              {["Cookies", "Security", "Accessibility"].map((label) => (
+              {[
+                { label: "Cookies", path: "/" },
+                { label: "Security", path: "/" },
+                { label: "Accessibility", path: "/" },
+              ].map(({ label, path }) => (
                 <Link
                   key={label}
-                  to="#"
+                  to={path}
                   className="text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-orange-500 transition-colors"
                 >
                   {label}

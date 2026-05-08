@@ -34,7 +34,7 @@ import {
   limit,
 } from "firebase/firestore";
 
-export type UserRole = "admin" | "artist" | "customer" | "admin_request" | null;
+export type UserRole = "admin" | "artist" | "user" | "customer" | "admin_request" | null;
 export type ApplicationStatus = "pending" | "approved" | "rejected" | "active" | "hidden" | "suspended" | null;
 
 export interface ArtistData {
@@ -48,11 +48,15 @@ export interface ArtistData {
 }
 
 interface AuthContextType {
+  user: User | null;
   currentUser: User | null;
+  role: UserRole;
   artistData: ArtistData | null;
   userRole: UserRole;
   userProfile: Record<string, unknown> | null;
   applicationStatus: ApplicationStatus;
+  isAdmin: boolean;
+  isArtist: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
   register: (email: string, password: string) => Promise<{ success: boolean; uid: string; message: string }>;
@@ -97,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const appProfile = appDocRef.current;
 
     const adminActive = adminProfile?.status === "active";
-    const userAdmin = userProfile?.role === "admin" && userProfile?.status === "active";
+    const userAdmin = userProfile?.role === "admin" && (userProfile?.status === "active" || userProfile?.status === "approved");
 
     if (adminActive && userAdmin) {
       setUserRole("admin");
@@ -153,8 +157,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Default: customer
-      setUserRole("customer");
+      // Default: end-user/customer. Expose the UI role as "user" while keeping
+      // Firestore's existing profile fields unchanged for compatibility.
+      setUserRole("user");
       setUserProfile(userProfile);
       setArtistData(null);
       setApplicationStatus(null);
@@ -391,11 +396,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthContextType = useMemo(
     () => ({
+      user: currentUser,
       currentUser,
+      role: userRole,
       artistData,
       userRole,
       userProfile,
       applicationStatus,
+      isAdmin: userRole === "admin",
+      isArtist: userRole === "artist" && (applicationStatus === "approved" || applicationStatus === "active"),
       loading,
       login,
       register,

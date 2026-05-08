@@ -5,15 +5,16 @@ import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Star, MapPin, BadgeCheck, Clock, Phone, Heart, Share2, Calendar, ChevronLeft, Play, Loader2, Instagram, Facebook, Globe, User, Users } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import BookingModal from "@/components/BookingModal";
+import LazyYouTubeEmbed from "@/components/LazyYouTubeEmbed";
 import { db, storage } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { ref, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
-import { getExternalUrl, getYoutubeEmbedUrl } from "@/lib/youtube";
+import { getExternalUrl, getYoutubeVideoId } from "@/lib/youtube";
 import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
 
 export default function ArtistProfile() {
@@ -92,29 +93,6 @@ export default function ArtistProfile() {
     };
     fetchArtist();
   }, [id, currentUser]);
-
-  /**
-   * Scroll-hijack prevention for YouTube iframes.
-   * While the user is wheeling the page, a transparent overlay sits on top of
-   * each iframe (pointer-events-auto) so the iframe never captures the event.
-   * After 500ms of scroll idle the overlay steps back (pointer-events-none).
-   */
-  const [isScrolling, setIsScrolling] = useState(false);
-  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    const onWheel = () => {
-      setIsScrolling(true);
-      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
-      scrollTimerRef.current = setTimeout(() => setIsScrolling(false), 500);
-    };
-    window.addEventListener("wheel", onWheel, { passive: true });
-    window.addEventListener("touchmove", onWheel, { passive: true });
-    return () => {
-      window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchmove", onWheel);
-      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
-    };
-  }, []);
 
   const handleSaveArtist = async () => {
     if (!currentUser) {
@@ -197,9 +175,10 @@ export default function ArtistProfile() {
       )
     : [];
   const socialLinkUrls = new Set(socialLinks.map((link: any) => link.url.trim()));
-  const youtubeLinks = Array.isArray(artist.youtubeLinks)
-    ? artist.youtubeLinks.filter((link: string) => typeof link === "string" && link.trim().length > 0 && !socialLinkUrls.has(link.trim()))
-    : [];
+  const youtubeLinks = [
+    typeof artist.videoLink === "string" ? artist.videoLink : "",
+    ...(Array.isArray(artist.youtubeLinks) ? artist.youtubeLinks : []),
+  ].filter((link: string) => typeof link === "string" && link.trim().length > 0 && !socialLinkUrls.has(link.trim()));
   const hasPerformanceLinks = socialLinks.length > 0 || youtubeLinks.length > 0 || Boolean(artist.videoLink);
 
   return (
@@ -310,26 +289,8 @@ export default function ArtistProfile() {
                 <div className="grid gap-6">
                   {youtubeLinks.map((link: string, i: number) => (
                     <div key={`yt-${i}`}>
-                      {getYoutubeEmbedUrl(link) ? (
-                        {/* Anti scroll-hijack wrapper: overlay blocks iframe pointer events while scrolling */}
-                        <div className="aspect-video w-full rounded-xl overflow-hidden border border-border relative">
-                          <iframe
-                            width="100%" height="100%"
-                            src={getYoutubeEmbedUrl(link)!}
-                            title={`Performance ${i + 1}`}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            loading="lazy"
-                            className="block will-change-transform"
-                          />
-                          {/* Transparent scroll-guard overlay */}
-                          <div
-                            aria-hidden="true"
-                            className={`absolute inset-0 z-10 transition-none ${
-                              isScrolling ? "pointer-events-auto" : "pointer-events-none"
-                            }`}
-                          />
-                        </div>
+                      {getYoutubeVideoId(link) ? (
+                        <LazyYouTubeEmbed url={link} title={`Performance ${i + 1}`} />
                       ) : (
                         <a href={getExternalUrl(link)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary">
                           <Play className="h-5 w-5" /> Video Link {i + 1}
@@ -339,27 +300,10 @@ export default function ArtistProfile() {
                   ))}
                   {socialLinks.map((link: any, i: number) => (
                     <div key={`social-${i}`}>
-                      {getYoutubeEmbedUrl(link.url) ? (
+                      {getYoutubeVideoId(link.url) ? (
                         <div className="space-y-2">
                           <span className="text-sm font-medium text-muted-foreground flex items-center gap-2"><Play className="h-4 w-4" /> YouTube Performance</span>
-                          {/* Anti scroll-hijack wrapper */}
-                          <div className="aspect-video w-full rounded-xl overflow-hidden border border-border shadow-sm relative">
-                            <iframe
-                              width="100%" height="100%"
-                              src={getYoutubeEmbedUrl(link.url)!}
-                              title="YouTube video player"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                              loading="lazy"
-                              className="block will-change-transform"
-                            />
-                            <div
-                              aria-hidden="true"
-                              className={`absolute inset-0 z-10 transition-none ${
-                                isScrolling ? "pointer-events-auto" : "pointer-events-none"
-                              }`}
-                            />
-                          </div>
+                          <LazyYouTubeEmbed url={link.url} title={`${artist.name} YouTube performance`} />
                         </div>
                       ) : (
                         <a href={getExternalUrl(link.url)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors border border-border/50">

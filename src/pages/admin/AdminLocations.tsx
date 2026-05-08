@@ -227,7 +227,7 @@ export default function AdminLocations() {
                             <Plus className="h-4 w-4 mr-2" /> Add State
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+                    <DialogContent className="max-w-lg max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar">
                         <DialogHeader>
                             <DialogTitle className="font-display text-xl">Add New State</DialogTitle>
                         </DialogHeader>
@@ -278,7 +278,7 @@ export default function AdminLocations() {
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground">
                                         Added Districts ({newDistricts.length})
                                     </Label>
-                                    <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-secondary/30 border max-h-48 overflow-y-auto">
+                                    <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-secondary/30 border max-h-48 overflow-y-auto no-scrollbar">
                                         {newDistricts.map((dist) => (
                                             <Badge key={dist} variant="secondary" className="pl-3 pr-1 py-1.5 text-sm flex items-center gap-1 group">
                                                 {dist}

@@ -9,8 +9,10 @@ import { Plus, Edit, Trash2, ChevronDown, ChevronRight, Loader2, Database } from
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, orderBy } from "firebase/firestore";
-import { initialCategories, platformCategories } from "@/data/mockData";
 import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
+import { CATEGORY_GROUP_ICONS, CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
+
+const systemCategories = CATEGORY_GROUP_OPTIONS;
 
 
 export default function AdminCategories() {
@@ -33,12 +35,12 @@ export default function AdminCategories() {
         id: doc.id,
         ...doc.data()
       }));
-      setCats(data.length > 0 ? data : platformCategories);
+      setCats(data.length > 0 ? data : systemCategories);
       setLoading(false);
     }, (error) => {
       console.error(error);
       toastForFirestoreError(error, "Categories unavailable", "Could not load categories.", toast);
-      setCats(platformCategories);
+      setCats(systemCategories);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -193,7 +195,7 @@ export default function AdminCategories() {
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      platformCategories.forEach((cat) => {
+      systemCategories.forEach((cat) => {
         const docRef = doc(db, "categories", cat.id);
         batch.set(docRef, {
           ...cat,
@@ -217,7 +219,7 @@ export default function AdminCategories() {
       const batch = writeBatch(db);
       let updated = 0;
       cats.forEach((cat) => {
-        const matchingData = initialCategories.find(ic => ic.name === cat.name);
+        const matchingData = systemCategories.find(ic => ic.name === cat.name);
         if (matchingData?.subcategoryTypes) {
           const mergedTypes = { ...(cat.subcategoryTypes || {}), ...matchingData.subcategoryTypes };
           batch.update(doc(db, "categories", cat.id), { subcategoryTypes: mergedTypes, updatedAt: serverTimestamp() });
@@ -249,7 +251,7 @@ export default function AdminCategories() {
         const rawIcon = cat.icon || "";
         // Only needs fixing if icon is a word (Lucide name), not an emoji
         const needsFix = rawIcon.length <= 15 && !rawIcon.match(/\p{Emoji}/u);
-        const correctEmoji = ICON_EMOJI_MAP[rawIcon] || platformCategories.find(p => p.name === cat.name)?.icon || "🎭";
+        const correctEmoji = ICON_EMOJI_MAP[rawIcon] || CATEGORY_GROUP_ICONS[cat.name as keyof typeof CATEGORY_GROUP_ICONS] || systemCategories.find(p => p.name === cat.name)?.icon || "🎭";
         if (needsFix) {
           batch.update(doc(db, "categories", cat.id), { icon: correctEmoji, updatedAt: serverTimestamp() });
           fixed++;

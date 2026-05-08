@@ -29,15 +29,12 @@ const SelectTrigger = React.forwardRef<
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
 /**
- * SelectContent — native scroll, no arrow buttons.
+ * SelectContent — native wheel/trackpad/touch scroll, no arrow buttons.
  *
- * Key changes vs shadcn default:
- *  • Removed SelectScrollUpButton / SelectScrollDownButton entirely
- *  • Replaced SelectPrimitive.Viewport with a plain <div> so the browser
- *    handles scrolling natively (mouse-wheel, trackpad, touch all work)
- *  • overflow-y-auto + max-h-64 gives the browser a definite boundary
- *  • no-scrollbar hides the OS scrollbar for a premium aesthetic
- *  • overscroll-contain prevents scroll bleeding to the page
+ * KEY FIX: We keep SelectPrimitive.Viewport (required for Radix keyboard
+ * navigation and item-measurement), but we apply overflow-y: auto + a
+ * definite max-height directly on it so the browser owns scrolling.
+ * No scroll buttons rendered → no arrow-only UX.
  */
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
@@ -47,7 +44,8 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
+        // Keep overflow-hidden on the outer shell so rounded corners clip correctly
+        "relative z-[100] min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md pointer-events-auto",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
@@ -60,16 +58,27 @@ const SelectContent = React.forwardRef<
       position={position}
       {...props}
     >
-      {/* Plain div — lets the browser handle wheel/trackpad/touch scroll natively */}
-      <div
+      {/*
+       * SelectPrimitive.Viewport is KEPT for proper Radix item measurement and
+       * keyboard navigation. We override its scroll behaviour with inline styles
+       * so it scrolls natively with wheel/trackpad/touch rather than arrow buttons.
+       *
+       * max-h uses the CSS var Radix provides for available screen space, with a
+       * 300px fallback so the list never grows past a comfortable reading height.
+       */}
+      <SelectPrimitive.Viewport
         className={cn(
-          "overflow-y-auto overscroll-contain no-scrollbar p-1 max-h-64",
+          "scroll-container no-scrollbar pointer-events-auto p-1",
           position === "popper" &&
             "w-full min-w-[var(--radix-select-trigger-width)]",
         )}
+        style={{
+          overflowY: "auto",
+          maxHeight: "min(300px, var(--radix-select-content-available-height, 300px))",
+        }}
       >
         {children}
-      </div>
+      </SelectPrimitive.Viewport>
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
 ));

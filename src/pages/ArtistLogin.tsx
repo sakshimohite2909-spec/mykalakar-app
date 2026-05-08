@@ -1,5 +1,5 @@
-import { type ComponentType, useState } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,25 +7,23 @@ import { z } from "zod";
 import {
   ArrowLeft,
   AtSign,
-  Building2,
   Eye,
   EyeOff,
   Loader2,
   Lock,
   LogIn,
   Music,
-  Sparkles,
-  User,
 } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { auth, db } from "@/lib/firebase";
 
-type AuthRole = "admin" | "artist" | "user";
+type LoginRole = "artist" | "user";
 
-const roleTabs: Array<{ id: AuthRole; label: string; icon: ComponentType<{ className?: string }>; color: string }> = [
-  { id: "admin", label: "Admin", icon: Building2, color: "from-orange-500 via-amber-400 to-rose-500" },
-  { id: "artist", label: "Artist", icon: Sparkles, color: "from-orange-500 to-amber-400" },
-  { id: "user", label: "User", icon: User, color: "from-rose-500 to-amber-400" },
+const roleTabs: Array<{ id: LoginRole; label: string; color: string }> = [
+  { id: "user", label: "User", color: "from-rose-500 to-amber-400" },
+  { id: "artist", label: "Artist", color: "from-orange-500 to-amber-400" },
 ];
 
 const loginSchema = z.object({
@@ -42,70 +40,36 @@ function syntheticEmail(username: string) {
   return `${username.toLowerCase().trim()}@mykalakar.app`;
 }
 
-function useRoleFromQuery(defaultRole: AuthRole = "user") {
-  const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const roleParam = searchParams.get("role");
-  const pathRole: AuthRole | null = location.pathname.includes("admin")
-    ? "admin"
-    : location.pathname.includes("artist")
-    ? "artist"
-    : location.pathname.includes("user")
-    ? "user"
-    : null;
-  const activeRole: AuthRole = roleParam === "admin" || roleParam === "artist" || roleParam === "user" ? roleParam : pathRole ?? defaultRole;
-
-  const setActiveRole = (role: AuthRole) => {
-    setSearchParams({ role }, { replace: true });
-  };
-
-  return [activeRole, setActiveRole] as const;
-}
-
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <p className="mt-1.5 text-xs font-semibold text-red-500">{message}</p>;
 }
 
-function RoleTabs({
-  activeRole,
-  onChange,
-}: {
-  activeRole: AuthRole;
-  onChange: (role: AuthRole) => void;
-}) {
-  return (
-    <div className="glass-card mb-6 grid grid-cols-3 gap-1.5 rounded-2xl p-1.5">
-      {roleTabs.map((tab) => {
-        const Icon = tab.icon;
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => onChange(tab.id)}
-            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
-              activeRole === tab.id
-                ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
-                : "text-slate-500 hover:bg-white/70 hover:text-slate-700"
-            }`}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
-  );
+async function resolvePostLoginPath(uid: string, fallbackPath: string) {
+  const userSnap = await getDoc(doc(db, "users", uid));
+  const profile = userSnap.exists() ? userSnap.data() : null;
+  const role = profile?.role;
+
+  if (role === "admin") {
+    const adminSnap = await getDoc(doc(db, "admins", uid));
+    if (adminSnap.exists() && adminSnap.data()?.status === "active") {
+      return "/admin";
+    }
+  }
+
+  if (role === "artist") return "/artist/dashboard";
+
+  return fallbackPath && fallbackPath !== "/login" ? fallbackPath : "/";
 }
 
 export default function ArtistLogin() {
-  const [activeRole, setActiveRole] = useRoleFromQuery("user");
+  const [activeRole, setActiveRole] = useState<LoginRole>("user");
   const [showPassword, setShowPassword] = useState(false);
-  const [loadingRole, setLoadingRole] = useState<AuthRole | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const destination = location.state?.from?.pathname || "/artists";
+  const destination = location.state?.from?.pathname || "/";
 
   const {
     control,
@@ -122,7 +86,7 @@ export default function ArtistLogin() {
   });
 
   const submitLogin = async (values: LoginValues) => {
-    setLoadingRole(activeRole);
+    setSubmitting(true);
     try {
       const result = await login(syntheticEmail(values.username), values.password);
 
@@ -131,22 +95,17 @@ export default function ArtistLogin() {
         return;
       }
 
-      toast({ title: "Welcome back", description: "Redirecting you now." });
+      const uid = auth.currentUser?.uid;
+      const path = uid ? await resolvePostLoginPath(uid, destination) : destination;
 
-      if (activeRole === "artist") {
-        navigate("/artist/dashboard");
-      } else if (activeRole === "admin") {
-        navigate("/admin");
-      } else {
-        navigate(destination === "/artists" ? "/profile" : destination);
-      }
+      toast({ title: "Welcome back", description: "Redirecting you now." });
+      navigate(path, { replace: true });
     } finally {
-      setLoadingRole(null);
+      setSubmitting(false);
     }
   };
 
-  const activeTab = roleTabs.find((tab) => tab.id === activeRole) ?? roleTabs[2];
-  const ActiveIcon = activeTab.icon;
+  const activeTab = roleTabs.find((tab) => tab.id === activeRole) ?? roleTabs[0];
 
   return (
     <div className="relative z-10 flex min-h-screen w-full flex-col px-4 py-8">
@@ -183,7 +142,22 @@ export default function ArtistLogin() {
             <p className="mt-2 text-sm font-semibold text-slate-500">Sign in to your MyKalakar account</p>
           </div>
 
-          <RoleTabs activeRole={activeRole} onChange={setActiveRole} />
+          <div className="glass-card mb-6 grid grid-cols-2 gap-1.5 rounded-2xl p-1.5">
+            {roleTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveRole(tab.id)}
+                className={`flex min-h-11 items-center justify-center rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+                  activeRole === tab.id
+                    ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-700"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
           <form
             onSubmit={handleSubmit(submitLogin)}
@@ -192,12 +166,10 @@ export default function ArtistLogin() {
           >
             <div className="mb-6 flex items-center gap-3 border-b border-slate-200/70 pb-4">
               <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r ${activeTab.color} text-white`}>
-                <ActiveIcon className="h-5 w-5" />
+                <LogIn className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="font-display text-xl font-bold text-[#2E3A47]">
-                  {activeRole === "admin" ? "Admin Login" : activeRole === "artist" ? "Artist Login" : "User Login"}
-                </h2>
+                <h2 className="font-display text-xl font-bold text-[#2E3A47]">Account Login</h2>
                 <p className="text-xs font-semibold text-slate-500">Use your username and password.</p>
               </div>
             </div>
@@ -205,13 +177,13 @@ export default function ArtistLogin() {
             <div className="space-y-5">
               <div>
                 <label className="mb-1.5 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
-                  {activeRole === "admin" ? <Building2 className="h-4 w-4 text-orange-500" /> : <AtSign className="h-4 w-4 text-orange-500" />}
-                  {activeRole === "admin" ? "Admin Username" : "Username"}
+                  <AtSign className="h-4 w-4 text-orange-500" />
+                  Username
                 </label>
                 <input
                   type="text"
                   {...register("username")}
-                  placeholder={activeRole === "admin" ? "admin_username" : "your_username"}
+                  placeholder="your_username"
                   className={`input-glass w-full px-4 py-3 pl-4 text-sm ${errors.username ? "border-red-400 focus:border-red-500" : ""}`}
                 />
                 <FieldError message={errors.username?.message} />
@@ -251,13 +223,13 @@ export default function ArtistLogin() {
 
               <button
                 type="submit"
-                disabled={!isValid || loadingRole === activeRole}
+                disabled={!isValid || submitting}
                 className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r ${activeTab.color} text-sm font-black uppercase tracking-widest text-white shadow-lg transition ${
-                  !isValid || loadingRole === activeRole ? "cursor-not-allowed opacity-50" : "hover:shadow-xl"
+                  !isValid || submitting ? "cursor-not-allowed opacity-50" : "hover:shadow-xl"
                 }`}
               >
-                {loadingRole === activeRole ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-                Sign In as {activeTab.label}
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+                Sign In
               </button>
             </div>
 

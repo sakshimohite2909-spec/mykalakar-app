@@ -159,7 +159,7 @@ export const platformCategories = [
 export const initialArtists = [
     {
         name: "Rahul Sharma",
-        category: "Music Artists",
+        category: "Singer",
         subcategory: "Classical Singer",
         state: "Maharashtra",
         district: "Mumbai",
@@ -176,7 +176,7 @@ export const initialArtists = [
     },
     {
         name: "Priya Patil",
-        category: "Dance Artists",
+        category: "Dancer",
         subcategory: "Kathak",
         state: "Maharashtra",
         district: "Pune",
@@ -193,7 +193,7 @@ export const initialArtists = [
     },
     {
         name: "Amit Deshmukh",
-        category: "Stage & Entertainment",
+        category: "Anchor",
         subcategory: "Anchor/MC",
         state: "Maharashtra",
         district: "Nagpur",

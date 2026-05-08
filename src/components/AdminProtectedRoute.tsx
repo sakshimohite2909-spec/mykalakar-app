@@ -1,10 +1,10 @@
 import { Navigate, useLocation, Link } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 
 export default function AdminProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { currentUser, userRole, userProfile, loading } = useAuth();
+  const { currentUser, isAdmin, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -20,45 +20,20 @@ export default function AdminProtectedRoute({ children }: { children: React.Reac
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (userRole !== "admin") {
-    const isPendingRequest = userRole === "admin_request";
-    // User has admin role in users doc but admins collection doc not active yet — run bootstrap
-    const needsBootstrap = userProfile?.role === "admin" || isPendingRequest;
-
+  if (!isAdmin) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-transparent px-4">
         <div className="max-w-md rounded-2xl border bg-background/80 p-8 text-center shadow-xl backdrop-blur space-y-4">
-          <div className="w-16 h-16 rounded-full bg-orange-500/10 flex items-center justify-center mx-auto">
-            <span className="text-3xl">🔐</span>
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-orange-500/10 text-orange-500">
+            <ShieldAlert className="h-8 w-8" />
           </div>
-          <h1 className="text-2xl font-display font-bold">
-            {isPendingRequest ? "Admin Access Pending" : "Admin Access Required"}
-          </h1>
+          <h1 className="text-2xl font-display font-bold">Access Denied</h1>
           <p className="text-sm text-muted-foreground">
-            {isPendingRequest
-              ? "Your admin request has been submitted and is pending approval."
-              : "Your account does not have admin privileges."}
+            This area requires an active admin role in Firebase.
           </p>
-
-          {needsBootstrap && (
-            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-left space-y-2">
-              <p className="text-sm font-semibold text-orange-800">
-                ⚡ If your admin request was already approved in Firebase Console:
-              </p>
-              <p className="text-xs text-orange-700">
-                The admins collection document needs to be created. Click below to fix it automatically.
-              </p>
-              <Link to="/bootstrap">
-                <Button className="gradient-bg border-0 text-primary-foreground font-semibold w-full mt-2">
-                  🚀 Run Bootstrap Fix → Get Admin Access
-                </Button>
-              </Link>
-            </div>
-          )}
-
-          <p className="text-xs text-muted-foreground/60">
-            This page will automatically update once your access is granted — no refresh needed.
-          </p>
+          <Link to="/">
+            <Button className="gradient-bg border-0 text-primary-foreground font-semibold">Go Home</Button>
+          </Link>
         </div>
       </div>
     );
@@ -66,4 +41,3 @@ export default function AdminProtectedRoute({ children }: { children: React.Reac
 
   return <>{children}</>;
 }
-

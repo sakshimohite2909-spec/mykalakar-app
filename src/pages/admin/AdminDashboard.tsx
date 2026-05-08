@@ -10,9 +10,9 @@ import {
   collection, query, where, onSnapshot, orderBy,
   writeBatch, doc, getDocs, serverTimestamp,
 } from "firebase/firestore";
-import { platformCategories } from "@/data/mockData";
 import { firebaseErrorMessage } from "@/lib/firebaseSafe";
 import { migrateApprovedArtists } from "@/scripts/migrateArtistData";
+import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
 
 export default function AdminDashboard() {
   const [counts, setCounts] = useState({
@@ -72,7 +72,7 @@ export default function AdminDashboard() {
     // ── Categories ────────────────────────────────────────────────────────
     try {
       unsubs.push(onSnapshot(collection(db, "categories"), (snap) => {
-        setCounts(prev => ({ ...prev, categories: snap.size || platformCategories.length }));
+        setCounts(prev => ({ ...prev, categories: snap.size || CATEGORY_GROUP_OPTIONS.length }));
       }, (err) => console.warn("categories:", err)));
     } catch (e) { console.warn(e); }
 
@@ -86,7 +86,7 @@ export default function AdminDashboard() {
       const batch = writeBatch(db);
       const existing = await getDocs(collection(db, "categories"));
       existing.forEach(s => batch.delete(s.ref));
-      platformCategories.forEach(cat => {
+      CATEGORY_GROUP_OPTIONS.forEach(cat => {
         batch.set(doc(db, "categories", cat.id), {
           ...cat, updatedAt: serverTimestamp(), createdAt: serverTimestamp(),
         });

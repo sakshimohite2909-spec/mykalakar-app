@@ -23,11 +23,28 @@ import {
   writeBatch,
   serverTimestamp,
 } from "firebase/firestore";
+import { normalizeArtistType } from "@/constants/artistSystem";
 
 const numberOrZero = (value: unknown) => Number(value) || 0;
 
 function toArtistDoc(applicationId: string, data: Record<string, any>) {
   const primaryArt = Array.isArray(data.artsList) ? data.artsList[0] || {} : {};
+  const rawArts = Array.isArray(data.artsList) ? data.artsList : [];
+  const normalizedArts = rawArts.map((art: any) => ({
+    ...art,
+    category: normalizeArtistType(art?.category) ?? String(art?.category ?? "").trim(),
+  }));
+  const normalizedPrimaryCategory =
+    normalizeArtistType(data.category) ??
+    normalizeArtistType(primaryArt.category) ??
+    normalizedArts[0]?.category ??
+    "";
+  const normalizedCategories = Array.from(new Set([
+    ...normalizedArts.map((art: any) => art.category),
+    ...(Array.isArray(data.categories) ? data.categories.map((category: any) => normalizeArtistType(category) ?? String(category ?? "").trim()) : []),
+    normalizedPrimaryCategory,
+  ].filter(Boolean)));
+
   return {
     uid: data.uid,
     applicationId,
@@ -43,10 +60,10 @@ function toArtistDoc(applicationId: string, data: Record<string, any>) {
     bio: data.bio || "",
     experience: numberOrZero(data.experience),
     availability: data.availability || "available",
-    category: data.category || primaryArt.category || "",
+    category: normalizedPrimaryCategory,
     subcategory: data.subcategory || primaryArt.subcategory || "",
-    categories: Array.isArray(data.categories) ? data.categories : [data.category].filter(Boolean),
-    artsList: Array.isArray(data.artsList) ? data.artsList : [],
+    categories: normalizedCategories,
+    artsList: normalizedArts,
     services: Array.isArray(data.services) ? data.services : [],
     types: Array.isArray(data.types) ? data.types : primaryArt.types || [],
     pricing: data.pricing || {

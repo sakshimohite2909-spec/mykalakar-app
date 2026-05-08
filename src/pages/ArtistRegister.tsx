@@ -1,7 +1,6 @@
 import {
   type ChangeEvent,
   type ComponentType,
-  type WheelEvent,
   memo,
   useCallback,
   useEffect,
@@ -17,7 +16,6 @@ import { z } from "zod";
 import {
   ArrowLeft,
   AtSign,
-  BadgeCheck,
   Building2,
   ChevronDown,
   CreditCard,
@@ -26,7 +24,6 @@ import {
   FileImage,
   Globe,
   IndianRupee,
-  Landmark,
   Loader2,
   Lock,
   MapPin,
@@ -51,8 +48,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getExternalUrl, getYoutubeThumbnailUrl } from "@/lib/youtube";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
+import { ARTIST_TYPES, normalizeArtistType } from "@/constants/artistSystem";
 
-type AuthRole = "admin" | "artist" | "user";
+type AuthRole = "artist" | "user";
 type PortfolioPlatform = "youtube";
 type PortfolioLink = { platform: PortfolioPlatform; url: string };
 type ExtraArtEntry = {
@@ -63,64 +61,12 @@ type ExtraArtEntry = {
   teamPrice: string;
 };
 
-const scrollDropdownOnWheel = (event: WheelEvent<HTMLElement>) => {
-  const target = event.currentTarget;
-  if (target.scrollHeight <= target.clientHeight) return;
-
-  target.scrollTop += event.deltaY;
-  event.preventDefault();
-  event.stopPropagation();
-};
-
 const roleTabs: Array<{ id: AuthRole; label: string; icon: ComponentType<{ className?: string }>; color: string }> = [
-  { id: "admin", label: "Admin", icon: Building2, color: "from-orange-500 via-amber-400 to-rose-500" },
   { id: "artist", label: "Artist", icon: Music, color: "from-orange-500 to-amber-400" },
   { id: "user", label: "User", icon: User, color: "from-rose-500 to-amber-400" },
 ];
 
-const artCategoryOptions = [
-  "Actors",
-  "Singer",
-  "Karaoke Singers",
-  "Orchestra",
-  "Magicians",
-  "Puppet Show",
-  "DJ's",
-  "Anchors / Hosts",
-  "Motivational Speakers",
-  "Photo & Videography",
-  "Makeup / Mehndi Artist",
-  "Folk Art",
-  "Gondhal",
-  "Jagran",
-  "Bharud",
-  "Shahir & Powada",
-  "Lezim Pathak",
-  "Zanz Pathak",
-  "Dhol Pathak",
-  "Waghya-Murali",
-  "Jalsa & Dashavtar",
-  "Dhangari & Dhol Ovi",
-  "Bahurupiya",
-  "Varkari Sampraday",
-  "Kirtankar",
-  "Pravachankar",
-  "Vyaspethchalak",
-  "Chopdar",
-  "Gayak",
-  "Mrudangmani",
-  "Bharudkar",
-  "Soundsystem",
-  "Mandap & Decoration",
-  "Venekari",
-  "Taalkari",
-  "Varkari Sanstha",
-  "Bhajani Mandal",
-  "Shastriya Bhajan",
-  "Tabla Vadak",
-  "Harmonium Vadak",
-  "Dholki Vadak",
-];
+const artCategoryOptions = [...ARTIST_TYPES];
 
 const fullNameRule = z
   .string()
@@ -212,25 +158,8 @@ const userRegistrationSchema = z
     path: ["confirmPassword"],
   });
 
-const adminRegistrationSchema = z
-  .object({
-    fullName: fullNameRule,
-    username: usernameRule,
-    password: passwordRule,
-    confirmPassword: z.string().min(1, "Confirm password is required."),
-    mobileNumber: mobileRule,
-    capName: z.string().min(2, "Cap name must be at least 2 characters."),
-    bloodGroup: z.string().min(1, "Blood group is required."),
-    about: z.string().min(10, "Tell us about yourself in at least 10 characters."),
-  })
-  .refine((values) => values.password === values.confirmPassword, {
-    message: "Passwords do not match.",
-    path: ["confirmPassword"],
-  });
-
 type ArtistRegistrationValues = z.infer<typeof artistRegistrationSchema>;
 type UserRegistrationValues = z.infer<typeof userRegistrationSchema>;
-type AdminRegistrationValues = z.infer<typeof adminRegistrationSchema>;
 
 const artistDefaults: ArtistRegistrationValues = {
   fullName: "",
@@ -270,17 +199,6 @@ const userDefaults: UserRegistrationValues = {
   password: "",
   confirmPassword: "",
   phoneOptional: "",
-};
-
-const adminDefaults: AdminRegistrationValues = {
-  fullName: "",
-  username: "",
-  password: "",
-  confirmPassword: "",
-  mobileNumber: "",
-  capName: "",
-  bloodGroup: "",
-  about: "",
 };
 
 const inputClass =
@@ -525,10 +443,8 @@ function SearchableDropdown({
             </div>
           </div>
           <ul
-            className="dropdown-scroll-area max-h-[min(360px,50vh)] overflow-y-auto py-1"
-            style={{ WebkitOverflowScrolling: "touch" }}
+            className="dropdown-scroll-area no-scrollbar pointer-events-auto max-h-[min(300px,50vh)] overflow-y-auto py-1"
             role="listbox"
-            onWheelCapture={scrollDropdownOnWheel}
           >
             {canAddCustom ? (
               <li>
@@ -820,7 +736,7 @@ function RoleTabs({
   onChange: (role: AuthRole) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-1.5 rounded-2xl border border-orange-100 bg-orange-50/60 p-1.5 shadow-sm backdrop-blur-md">
+    <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-orange-100 bg-orange-50/60 p-1.5 shadow-sm backdrop-blur-md">
       {roleTabs.map((tab) => {
         const Icon = tab.icon;
         return (
@@ -847,14 +763,12 @@ function useRoleFromQuery(defaultRole: AuthRole = "artist") {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const roleParam = searchParams.get("role");
-  const pathRole: AuthRole | null = location.pathname.includes("admin")
-    ? "admin"
-    : location.pathname.includes("user")
+  const pathRole: AuthRole | null = location.pathname.includes("user")
     ? "user"
     : location.pathname.includes("artist")
     ? "artist"
     : null;
-  const activeRole: AuthRole = roleParam === "admin" || roleParam === "user" || roleParam === "artist" ? roleParam : pathRole ?? defaultRole;
+  const activeRole: AuthRole = roleParam === "user" || roleParam === "artist" ? roleParam : pathRole ?? defaultRole;
 
   const setActiveRole = (role: AuthRole) => {
     setSearchParams({ role }, { replace: true });
@@ -899,12 +813,6 @@ export default function ArtistRegister() {
     mode: "onChange",
     resolver: zodResolver(userRegistrationSchema),
   });
-  const adminForm = useForm<AdminRegistrationValues>({
-    defaultValues: adminDefaults,
-    mode: "onChange",
-    resolver: zodResolver(adminRegistrationSchema),
-  });
-
   const selectedState = artistForm.watch("state");
   const selectedDob = artistForm.watch("dob");
   const hasAssistant = artistForm.watch("hasAssistant");
@@ -1080,9 +988,10 @@ export default function ArtistRegister() {
         .map((link) => ({ platform: link.platform, url: link.url.trim() }))
         .filter((link) => link.url.length > 0);
       const youtubeLinks = socialLinks.filter((link) => link.platform === "youtube").map((link) => link.url);
+      const normalizeSubmittedCategory = (value: string) => normalizeArtistType(value) ?? value.trim();
       const artEntries = [
         {
-          category: values.artCategory,
+          category: normalizeSubmittedCategory(values.artCategory),
           subcategory: "",
           types: [],
           soloPrice: Number(values.soloPrice) || 0,
@@ -1090,7 +999,7 @@ export default function ArtistRegister() {
           teamPrice: Number(values.teamPrice) || 0,
         },
         ...preparedExtraArts.map((entry) => ({
-          category: entry.category,
+          category: normalizeSubmittedCategory(entry.category),
           subcategory: "",
           types: [],
           soloPrice: Number(entry.soloPrice) || 0,
@@ -1218,7 +1127,7 @@ export default function ArtistRegister() {
             username: normalizedUsername,
             email,
             phone: values.phoneOptional || "",
-            role: "customer",
+            role: "user",
             status: "active",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -1237,70 +1146,6 @@ export default function ArtistRegister() {
         variant: "destructive",
         title: "Registration failed",
         description: firebaseErrorMessage(error, "Could not create your account."),
-      });
-    } finally {
-      setLoadingRole(null);
-    }
-  };
-
-  const submitAdmin = async (values: AdminRegistrationValues) => {
-    setLoadingRole("admin");
-    try {
-      const normalizedUsername = values.username.toLowerCase().trim();
-      const email = syntheticEmail(normalizedUsername);
-      const authResult = await authRegister(email, values.password);
-
-      if (!authResult.success) {
-        toast({ variant: "destructive", title: "Registration failed", description: authResult.message });
-        return;
-      }
-
-      const adminRequest = {
-        uid: authResult.uid,
-        name: values.fullName,
-        username: normalizedUsername,
-        email,
-        mobileNumber: values.mobileNumber,
-        capName: values.capName,
-        bloodGroup: values.bloodGroup,
-        about: values.about,
-        status: "pending",
-        requestedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      await withTimeout(
-        setDoc(
-          doc(db, "users", authResult.uid),
-          {
-            uid: authResult.uid,
-            name: values.fullName,
-            username: normalizedUsername,
-            email,
-            role: "admin_request",
-            status: "pending",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        ),
-        FIREBASE_WRITE_TIMEOUT_MS,
-        "Could not save your admin request account."
-      );
-      await withTimeout(
-        addDoc(collection(db, "admin_requests"), adminRequest),
-        FIREBASE_WRITE_TIMEOUT_MS,
-        "Could not submit the admin access request."
-      );
-      await logout().catch((logoutError) => console.warn("Logout after admin request failed:", logoutError));
-      toast({ title: "Admin request submitted", description: "Your admin access request is pending approval." });
-      navigate("/login?role=admin");
-    } catch (error) {
-      console.error("Admin request error:", error);
-      toast({
-        variant: "destructive",
-        title: "Request failed",
-        description: firebaseErrorMessage(error, "Could not submit the admin request."),
       });
     } finally {
       setLoadingRole(null);
@@ -1333,7 +1178,7 @@ export default function ArtistRegister() {
             </div>
             <h1 className="font-display text-4xl font-black tracking-tight text-[#1A1A1A] md:text-5xl">
               Join <span className="gradient-text-primary">MyKalakar</span>
-              {activeRole === "artist" ? " as an Artist" : activeRole === "admin" ? " Admin Access" : " as a User"}
+              {activeRole === "artist" ? " as an Artist" : " as a User"}
             </h1>
             <p className="mt-2 text-sm font-semibold text-slate-500">
               India's premier platform for Artists, Performers & Entertainers.
@@ -1895,119 +1740,6 @@ export default function ArtistRegister() {
               </motion.form>
             ) : null}
 
-            {activeRole === "admin" ? (
-              <motion.form
-                key="admin"
-                initial={{ opacity: 0, x: -18 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 18 }}
-                transition={{ duration: 0.28 }}
-                onSubmit={adminForm.handleSubmit(submitAdmin)}
-                className="glass-panel mx-auto mt-8 max-w-2xl space-y-6 rounded-3xl border border-white/60 bg-white/70 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.12)] backdrop-blur-3xl"
-                noValidate
-              >
-                <div className="flex items-center gap-3 border-b border-slate-200/70 pb-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 via-amber-400 to-rose-500 text-white shadow-md shadow-orange-200/60">
-                    <Building2 className="h-5 w-5" />
-                  </div>
-                  <h2 className="font-display text-xl font-bold text-[#2E3A47]">Admin Access Request</h2>
-                </div>
-                <TextField label="Full Name *" name="fullName" register={adminForm.register} error={adminForm.formState.errors.fullName?.message} placeholder="E.g. John Doe" />
-                <TextField label="Username *" name="username" register={adminForm.register} error={adminForm.formState.errors.username?.message} icon={AtSign} placeholder="admin_login" />
-                <Controller
-                  name="mobileNumber"
-                  control={adminForm.control}
-                  render={({ field }) => (
-                    <div>
-                      <label className="mb-1.5 block text-sm font-bold text-slate-700">Mobile Number *</label>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        value={field.value}
-                        onBlur={field.onBlur}
-                        onChange={(event) => field.onChange(digitsOnly(event.target.value, 10))}
-                        placeholder="+91 XXXXX XXXXX"
-                        maxLength={10}
-                        className={`${inputClass} ${adminForm.formState.errors.mobileNumber ? errorInputClass : ""}`}
-                      />
-                      <FieldError message={adminForm.formState.errors.mobileNumber?.message} />
-                    </div>
-                  )}
-                />
-                <div className="grid gap-4 md:grid-cols-2">
-                  <TextField label="Cap Name *" name="capName" register={adminForm.register} error={adminForm.formState.errors.capName?.message} placeholder="E.g. JD" />
-                  <div>
-                    <label className="mb-1.5 block text-sm font-bold text-slate-700">Blood Group *</label>
-                    <select {...adminForm.register("bloodGroup")} className={`${inputClass} ${adminForm.formState.errors.bloodGroup ? errorInputClass : ""}`}>
-                      <option value="">Select Blood Group</option>
-                      <option value="A+">A+</option>
-                      <option value="A-">A-</option>
-                      <option value="B+">B+</option>
-                      <option value="B-">B-</option>
-                      <option value="O+">O+</option>
-                      <option value="O-">O-</option>
-                      <option value="AB+">AB+</option>
-                      <option value="AB-">AB-</option>
-                    </select>
-                    <FieldError message={adminForm.formState.errors.bloodGroup?.message} />
-                  </div>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Controller
-                    name="password"
-                    control={adminForm.control}
-                    render={({ field }) => (
-                      <PasswordField
-                        label="Password *"
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        error={adminForm.formState.errors.password?.message}
-                        show={showPassword}
-                        onToggle={() => setShowPassword((current) => !current)}
-                        placeholder="Min 8 characters"
-                      />
-                    )}
-                  />
-                  <Controller
-                    name="confirmPassword"
-                    control={adminForm.control}
-                    render={({ field }) => (
-                      <PasswordField
-                        label="Confirm Password *"
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        error={adminForm.formState.errors.confirmPassword?.message}
-                        show={showPassword}
-                        onToggle={() => setShowPassword((current) => !current)}
-                        placeholder="Re-enter password"
-                      />
-                    )}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-bold text-slate-700">Tell us about yourself *</label>
-                  <textarea
-                    {...adminForm.register("about")}
-                    rows={5}
-                    placeholder="Briefly describe your role and experience..."
-                    className={`${inputClass} min-h-32 resize-y ${adminForm.formState.errors.about ? errorInputClass : ""}`}
-                  />
-                  <FieldError message={adminForm.formState.errors.about?.message} />
-                </div>
-                <button
-                  type="submit"
-                  disabled={!adminForm.formState.isValid || loadingRole === "admin"}
-                  className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl gradient-bg text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-orange-200/70 transition hover:shadow-xl ${
-                    !adminForm.formState.isValid || loadingRole === "admin" ? "cursor-not-allowed opacity-50" : ""
-                  }`}
-                >
-                  {loadingRole === "admin" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Landmark className="h-4 w-4" />}
-                  Request Admin Access
-                </button>
-              </motion.form>
-            ) : null}
           </AnimatePresence>
         </div>
       </div>

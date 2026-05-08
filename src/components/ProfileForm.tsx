@@ -25,6 +25,7 @@ import {
 import CreatableSelect from "react-select/creatable";
 import { toast } from "@/hooks/use-toast";
 import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
+import { ARTIST_TYPE_OPTIONS, normalizeArtistType } from "@/constants/artistSystem";
 
 interface ProfileCategory {
   category: string;
@@ -44,64 +45,7 @@ interface ProfileFormProps {
   disabled?: boolean;
 }
 
-const categoryOptions = [
-  {
-    label: "General Categories",
-    options: [
-      { value: "Actors", label: "Actors" },
-      { value: "Singer", label: "Singer" },
-      { value: "Karaoke Singers", label: "Karaoke Singers" },
-      { value: "Orchestra", label: "Orchestra" },
-      { value: "Magicians", label: "Magicians" },
-      { value: "Pappate show", label: "Pappate show" },
-      { value: "DJ's", label: "DJ's" },
-      { value: "Anchors / Hosts", label: "Anchors / Hosts" },
-      { value: "Motivational speakers", label: "Motivational speakers" },
-      { value: "Photo & Videography", label: "Photo & Videography" },
-      { value: "Makeup / Mehndi Artist", label: "Makeup / Mehndi Artist" }
-    ]
-  },
-  {
-    label: "Folk Art",
-    options: [
-      { value: "Folk Art", label: "Folk Art (General)" },
-      { value: "Gondhal", label: "Gondhal" },
-      { value: "Jagran", label: "Jagran" },
-      { value: "Bharud", label: "Bharud" },
-      { value: "Shahir & Powada", label: "Shahir & Powada" },
-      { value: "Lezim pathak", label: "Lezim pathak" },
-      { value: "Zanz pathak", label: "Zanz pathak" },
-      { value: "Dhol pathak", label: "Dhol pathak" },
-      { value: "Waghya-Murali", label: "Waghya-Murali" },
-      { value: "Jalsa & Dashavtar", label: "Jalsa & Dashavtar" },
-      { value: "Dhagari & dhol ovi", label: "Dhagari & dhol ovi" },
-      { value: "Bahurupiya", label: "Bahurupiya" }
-    ]
-  },
-  {
-    label: "Varkari Sampraday",
-    options: [
-      { value: "Varkari Sampraday", label: "Varkari Sampraday (General)" },
-      { value: "Kirtankar", label: "Kirtankar" },
-      { value: "Pravachankar", label: "Pravachankar" },
-      { value: "Vyaspethchalak", label: "Vyaspethchalak" },
-      { value: "Chopdar", label: "Chopdar" },
-      { value: "Gayak", label: "Gayak" },
-      { value: "Mrudangmani", label: "Mrudangmani" },
-      { value: "Bharudkar", label: "Bharudkar" },
-      { value: "Soundsystem", label: "Soundsystem" },
-      { value: "Mandap & decoration", label: "Mandap & decoration" },
-      { value: "Venekari", label: "Venekari" },
-      { value: "Taalkari", label: "Taalkari" },
-      { value: "Varkari Sanstha", label: "Varkari Sanstha" },
-      { value: "Bhajani Mandal", label: "Bhajani Mandal" },
-      { value: "Shastriya Bhajan", label: "Shastriya Bhajan" },
-      { value: "Tabla vadak", label: "Tabla vadak" },
-      { value: "Harmonium vadak", label: "Harmonium vadak" },
-      { value: "Dholki vadak", label: "Dholki vadak" }
-    ]
-  }
-];
+const categoryOptions = ARTIST_TYPE_OPTIONS;
 
 // ─── YouTube embed utility ────────────────────────────────────────────────────
 function getYoutubeEmbedUrl(url: string): string | null {
@@ -229,7 +173,7 @@ export function ProfileForm({ initial = {}, onSave, disabled = false }: ProfileF
 
   const updateCategory = (index: number, field: keyof ProfileCategory, val: string) => {
     const next = [...form.categories];
-    next[index] = { ...next[index], [field]: val };
+    next[index] = { ...next[index], [field]: normalizeArtistType(val) ?? "" };
     set("categories", next);
   };
 
@@ -378,10 +322,10 @@ export function ProfileForm({ initial = {}, onSave, disabled = false }: ProfileF
                         isClearable
                         isDisabled={disabled}
                         options={categoryOptions}
-                        placeholder="Search or add your art form..."
+                        placeholder="Search your art type..."
                         value={catEntry.category ? { label: catEntry.category, value: catEntry.category } : null}
                         onChange={(newValue: any) => updateCategory(idx, "category", newValue ? newValue.value : "")}
-                        formatCreateLabel={(inputValue) => `Add "${inputValue}"`}
+                        isValidNewOption={() => false}
                         menuPortalTarget={document.body}
                         menuPosition="fixed"
                         maxMenuHeight={300}

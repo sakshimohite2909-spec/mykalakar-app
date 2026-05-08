@@ -4,7 +4,7 @@ import { ChevronRight, Loader2, Sparkles, ArrowRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
-import { platformCategories } from "@/data/mockData";
+import { CATEGORY_GROUP_ICONS, CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
 
 const pastelColors = [
   "bg-orange-50 border-orange-100/50 text-orange-500",
@@ -36,11 +36,11 @@ export default function CategoriesGrid() {
     const qCats = query(collection(db, "categories"), orderBy("sortOrder"));
     const unsubCats = onSnapshot(qCats, (catSnap) => {
       const cats = catSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setCategories(cats.length > 0 ? cats : platformCategories);
+      setCategories(cats.length > 0 ? cats : CATEGORY_GROUP_OPTIONS);
       setLoading(false);
     }, (error) => {
       console.warn("Categories unavailable, using local defaults.", error);
-      setCategories(platformCategories);
+      setCategories(CATEGORY_GROUP_OPTIONS);
       setLoading(false);
     });
     return () => unsubCats();
@@ -85,7 +85,7 @@ export default function CategoriesGrid() {
                   <div className="absolute inset-0 bg-white/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   
                   <div className="z-10 flex flex-col items-center gap-4 text-center">
-                     <span className="text-5xl group-hover:scale-125 transition-transform duration-500 transform-gpu group-hover:rotate-6">{iconMap[cat.icon] || cat.icon || "✨"}</span>
+                     <span className="text-5xl group-hover:scale-125 transition-transform duration-500 transform-gpu group-hover:rotate-6">{CATEGORY_GROUP_ICONS[cat.name as keyof typeof CATEGORY_GROUP_ICONS] || cat.icon || "✨"}</span>
                      <div className="space-y-1">
                         <h3 className={`font-black text-xl tracking-tight transition-colors ${colorClass.split(' ').slice(2).join(' ')}`}>{cat.name}</h3>
                         <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Creative Hub</p>

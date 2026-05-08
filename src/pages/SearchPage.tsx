@@ -25,7 +25,102 @@ import { collection, query, onSnapshot, where, orderBy } from "firebase/firestor
 import { ref, getDownloadURL } from "firebase/storage";
 import { gsap } from "gsap";
 import { useAuth } from "@/contexts/AuthContext";
-import { initialArtists, platformCategories } from "@/data/mockData";
+import { initialArtists } from "@/data/mockData";
+import {
+  CATEGORY_GROUP_OPTIONS,
+  getCategoriesForFilter,
+  getCategoryGroupForCategory,
+  normalizeArtistCategory,
+  normalizeCategoryKey,
+} from "@/constants/artistSystem";
+
+type ArtistCardEntry = {
+  entryId: string;
+  artist: any;
+  category: string;
+  subcategory?: string;
+};
+
+function collectArtistCategoryEntries(artist: any): ArtistCardEntry[] {
+  const seen = new Set<string>();
+  const entries: ArtistCardEntry[] = [];
+
+  const addEntry = (category?: unknown, subcategory?: unknown) => {
+    const cleanCategory = normalizeArtistCategory(category) ?? normalizeArtistCategory(subcategory);
+    if (!cleanCategory) return;
+    const key = normalizeCategoryKey(cleanCategory);
+    if (seen.has(key)) return;
+    seen.add(key);
+    entries.push({
+      entryId: `${artist.id || artist.uid || artist.username || "artist"}::${key}`,
+      artist: {
+        ...artist,
+        category: cleanCategory,
+        subcategory: String(subcategory ?? artist.subcategory ?? "").trim(),
+      },
+      category: cleanCategory,
+      subcategory: String(subcategory ?? artist.subcategory ?? "").trim(),
+    });
+  };
+
+  if (Array.isArray(artist.artsList)) {
+    artist.artsList.forEach((art: any) => addEntry(art?.category, art?.subcategory));
+  }
+
+  if (Array.isArray(artist.categories)) {
+    artist.categories.forEach((category: string) => addEntry(category));
+  }
+
+  addEntry(artist.category, artist.subcategory);
+  addEntry(artist.subcategory);
+
+  return entries.length
+    ? entries
+    : [{
+        entryId: `${artist.id || artist.uid || artist.username || "artist"}::uncategorized`,
+        artist,
+        category: "",
+        subcategory: "",
+      }];
+}
+
+function uniqueArtistsById(artists: any[]) {
+  const seen = new Set<string>();
+  return artists.filter((artist, index) => {
+    const key = String(artist.id || artist.uid || artist.username || `${artist.name}-${index}`);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeLoadedArtist(artist: any) {
+  const primaryCategory =
+    normalizeArtistCategory(artist.category) ??
+    normalizeArtistCategory(artist.subcategory) ??
+    normalizeArtistCategory(artist.artsList?.[0]?.category) ??
+    String(artist.category ?? "").trim();
+  const artsList = Array.isArray(artist.artsList) && artist.artsList.length > 0
+    ? artist.artsList.map((art: any) => ({
+        ...art,
+        category: normalizeArtistCategory(art?.category) ?? normalizeArtistCategory(art?.subcategory) ?? String(art?.category ?? "").trim(),
+      }))
+    : [{ category: primaryCategory, subcategory: artist.subcategory ?? "", types: [] }];
+  const categories = Array.from(new Set([
+    primaryCategory,
+    ...artsList.map((art: any) => art.category),
+    ...(Array.isArray(artist.categories)
+      ? artist.categories.map((category: any) => normalizeArtistCategory(category) ?? String(category ?? "").trim())
+      : []),
+  ].filter(Boolean)));
+
+  return {
+    ...artist,
+    category: primaryCategory,
+    categories,
+    artsList,
+  };
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 function updateOgMeta(title: string, description: string, image?: string) {
@@ -323,10 +418,10 @@ export default function SearchPage() {
     const artistFilters = [where("status", "==", "active")];
     const qArtists = query(collection(db, "artists"), ...artistFilters);
     const unsubArtists = onSnapshot(qArtists, (snapshot) => {
-      const liveArtists = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const liveArtists = snapshot.docs.map((doc) => normalizeLoadedArtist({ id: doc.id, ...doc.data() }));
       const sourceArtists = liveArtists.length > 0
         ? liveArtists
-        : initialArtists.map((artist, index) => ({
+        : initialArtists.map((artist, index) => normalizeLoadedArtist({
             id: `demo-artist-${index + 1}`,
             uid: `demo-artist-${index + 1}`,
             status: "active",
@@ -352,7 +447,7 @@ export default function SearchPage() {
       setLoading(false);
     }, (error) => {
       console.warn("Artists unavailable, using local defaults.", error);
-      setArtists(initialArtists.map((artist, index) => ({
+      setArtists(initialArtists.map((artist, index) => normalizeLoadedArtist({
         id: `demo-artist-${index + 1}`,
         uid: `demo-artist-${index + 1}`,
         status: "active",
@@ -392,10 +487,10 @@ export default function SearchPage() {
           : rawIcon;
         return { id: doc.id, ...data, icon };
       });
-      setCategories(liveCategories.length > 0 ? liveCategories : platformCategories);
+      setCategories(CATEGORY_GROUP_OPTIONS);
     }, (error) => {
       console.warn("Categories unavailable, using local defaults.", error);
-      setCategories(platformCategories);
+      setCategories(CATEGORY_GROUP_OPTIONS);
     });
     return () => {
       unsubArtists();
@@ -405,73 +500,72 @@ export default function SearchPage() {
 
   // Build a map: categoryName (lowercase-keyed) → list of artists
   // This makes all lookups case-insensitive by normalizing keys
+  const artistEntries = useMemo(
+    () => artists.flatMap(collectArtistCategoryEntries),
+    [artists]
+  );
+
   const artistsByCategory = useMemo(() => {
     // map key: lowercase category name, value: { displayName, artists[] }
     const map: Record<string, { displayName: string; artists: any[] }> = {};
 
-    artists.forEach((artist) => {
-      const catNames = new Set<string>();
-
-      if (Array.isArray(artist.artsList) && artist.artsList.length > 0) {
-        artist.artsList.forEach((art: any) => { if (art.category) catNames.add(String(art.category).trim()); });
-      }
-      if (Array.isArray(artist.categories) && artist.categories.length > 0) {
-        artist.categories.forEach((c: string) => { if (c) catNames.add(String(c).trim()); });
-      }
-      if (artist.category) catNames.add(String(artist.category).trim());
-
-      catNames.forEach((cat) => {
-        const key = cat.toLowerCase();
-        if (!map[key]) map[key] = { displayName: cat, artists: [] };
-        if (!map[key].artists.find((a: any) => a.id === artist.id)) {
-          map[key].artists.push({ ...artist, category: cat });
-        }
-      });
+    artistEntries.forEach((entry) => {
+      if (!entry.category) return;
+      const key = normalizeCategoryKey(entry.category);
+      if (!map[key]) map[key] = { displayName: entry.category, artists: [] };
+      map[key].artists.push(entry.artist);
     });
 
     return map;
-  }, [artists]);
+  }, [artistEntries]);
 
   // Helper: find artists for a given category name (case-insensitive)
   const getArtistsForCategory = (catName: string) => {
-    const entry = artistsByCategory[catName.toLowerCase()];
-    return entry?.artists || [];
+    const filterCategories = getCategoriesForFilter(catName);
+    if (!filterCategories.length) return [];
+    return uniqueArtistsById(
+      filterCategories.flatMap((category) => artistsByCategory[normalizeCategoryKey(category)]?.artists || []),
+    );
   };
 
-  // Flat filtered list for grid mode / search
-  const filteredArtists = useMemo(() => {
-    // Get artists matching selected category via case-insensitive map
-    let results = selectedCategory !== "all"
-      ? getArtistsForCategory(selectedCategory)
-      : Object.values(artistsByCategory).flatMap(e => e.artists)
-          // de-duplicate by id
-          .filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i);
+  // Flat filtered card entries for grid mode / search.
+  // Grid keeps one card per artist/category entry so it matches category view availability.
+  const filteredArtistCards = useMemo(() => {
+    const selectedCategories = selectedCategory !== "all" ? getCategoriesForFilter(selectedCategory) : [];
+    let results = selectedCategories.length > 0
+      ? artistEntries.filter((entry) => selectedCategories.includes(entry.category as any))
+      : artistEntries;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       results = results.filter(
-        (a) =>
-          (a.name?.toLowerCase().includes(q)) ||
-          (a.professionalName?.toLowerCase().includes(q)) ||
-          (a.brandName?.toLowerCase().includes(q)) ||
-          (a.category?.toLowerCase().includes(q)) ||
-          (a.subcategory?.toLowerCase().includes(q)) ||
-          (a.artsList?.some((art: any) => art.category?.toLowerCase().includes(q)))
+        (entry) => {
+          const artist = entry.artist;
+          return (
+            artist.name?.toLowerCase().includes(q) ||
+            artist.professionalName?.toLowerCase().includes(q) ||
+            artist.brandName?.toLowerCase().includes(q) ||
+            entry.category.toLowerCase().includes(q) ||
+            String(entry.subcategory ?? "").toLowerCase().includes(q) ||
+            String(getCategoryGroupForCategory(entry.category) ?? "").toLowerCase().includes(q) ||
+            artist.artsList?.some((art: any) => String(art.category ?? "").toLowerCase().includes(q))
+          );
+        }
       );
     }
     return results;
-  }, [artistsByCategory, selectedCategory, searchQuery]);
+  }, [artistEntries, selectedCategory, searchQuery]);
 
   // effectiveCategories: Merge Firestore categories + artist-derived categories
   // This ensures artists with category names not in Firestore still show up
   const effectiveCategories = useMemo(() => {
-    // Start with Firestore categories (or platformCategories as fallback)
-    const base: any[] = categories.length > 0 ? categories : [];
-    const baseNamesLower = new Set(base.map(c => c.name.toLowerCase()));
+    const base: any[] = categories.length > 0 ? categories : CATEGORY_GROUP_OPTIONS;
+    const baseNamesLower = new Set(base.map(c => normalizeCategoryKey(c.name)));
 
     // Derive categories from actual artist data
     const derived: any[] = [];
     Object.entries(artistsByCategory).forEach(([key, entry]) => {
+      if (getCategoryGroupForCategory(entry.displayName)) return;
       if (!baseNamesLower.has(key)) {
         // This artist category isn't in Firestore categories — add it
         derived.push({
@@ -496,7 +590,7 @@ export default function SearchPage() {
         return { ...cat, artists: arts };
       })
       .filter((c) => {
-        if (filterName) return c.name.toLowerCase() === filterName.toLowerCase() && c.artists.length > 0;
+        if (filterName) return normalizeCategoryKey(c.name) === normalizeCategoryKey(filterName) && c.artists.length > 0;
         return c.artists.length > 0;
       });
   }, [effectiveCategories, artistsByCategory, selectedCategory]);
@@ -523,7 +617,7 @@ export default function SearchPage() {
         { opacity: 1, y: 0, stagger: 0.08, duration: 0.7, ease: "power3.out", clearProps: "all" }
       );
     }
-  }, [filteredArtists, loading, showCategoryView]);
+  }, [filteredArtistCards, loading, showCategoryView]);
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center relative overflow-x-hidden font-sans bg-transparent">
@@ -628,8 +722,8 @@ export default function SearchPage() {
               {loading
                 ? "Curating the extraordinary..."
                 : showCategoryView
-                ? `${activeCategories.length} Categor${activeCategories.length !== 1 ? "ies" : "y"} · ${artists.length} Artist${artists.length !== 1 ? "s" : ""}`
-                : `Viewing ${filteredArtists.length} Profile${filteredArtists.length !== 1 ? "s" : ""}${selectedCategory !== "all" ? ` · ${selectedCategory}` : ""}`}
+                ? `${activeCategories.length} Categor${activeCategories.length !== 1 ? "ies" : "y"} · ${artistEntries.length} Profile${artistEntries.length !== 1 ? "s" : ""}`
+                : `Viewing ${filteredArtistCards.length} Profile${filteredArtistCards.length !== 1 ? "s" : ""}${selectedCategory !== "all" ? ` · ${selectedCategory}` : ""}`}
             </h3>
             {(selectedCategory !== "all" || searchQuery) && (
               <button
@@ -667,14 +761,15 @@ export default function SearchPage() {
             )
           ) : (
             // ── Flat grid view (search results or grid toggle) ─────────────────
-            filteredArtists.length > 0 ? (
+            filteredArtistCards.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
-                {filteredArtists.map((artist, idx) => (
+                {filteredArtistCards.map((entry, idx) => (
                   <PremiumArtistCard
-                    key={artist.id}
-                    artist={artist}
+                    key={entry.entryId}
+                    artist={entry.artist}
                     index={idx}
                     onClick={() => {}}
+                    highlightCategory={entry.category}
                   />
                 ))}
               </div>

@@ -8,7 +8,7 @@ function withProtocol(url: string) {
 
 export function getYoutubeEmbedUrl(url?: string | null) {
   const videoId = getYoutubeVideoId(url);
-  return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+  return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1` : null;
 }
 
 export function getYoutubeVideoId(url?: string | null) {
@@ -41,7 +41,7 @@ export function getYoutubeVideoId(url?: string | null) {
 
 export function getYoutubeThumbnailUrl(url?: string | null) {
   const videoId = getYoutubeVideoId(url);
-  return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null;
+  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
 }
 
 export function getExternalUrl(url: string) {

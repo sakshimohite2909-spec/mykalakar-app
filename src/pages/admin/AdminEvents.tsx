@@ -1,18 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Edit, Trash2, Calendar, Database, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, Calendar, Database, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from "firebase/firestore";
 import { toast } from "@/hooks/use-toast";
 import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
+import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
 
 // Define data locally
 const events = [
@@ -21,29 +21,30 @@ const events = [
     name: "Marriage",
     icon: "💒",
     description: "Complete wedding celebration",
-    requiredCategories: ["1", "2", "3", "4"]
+    requiredCategories: ["Music Artists", "Dance Artists", "Stage & Entertainment", "Creative Artists"]
   },
   {
     id: "2",
     name: "Birthday Party", 
     icon: "🎂",
     description: "Birthday celebrations",
-    requiredCategories: ["3", "4"]
+    requiredCategories: ["Stage & Entertainment", "Creative Artists", "Event Artists"]
   }
 ];
 
-const categories = [
-  { id: "1", name: "Music Artists", icon: "🎵" },
-  { id: "2", name: "Dance Artists", icon: "💃" },
-  { id: "3", name: "Stage & Entertainment", icon: "🎭" },
-  { id: "4", name: "Creative Artists", icon: "📸" },
-];
+const categories = CATEGORY_GROUP_OPTIONS.map((category) => ({
+  id: category.name,
+  name: category.name,
+  icon: category.icon,
+}));
 
-const eventCategoryMappings = [
-  { eventId: "1", categoryId: "1", priority: 1 },
-  { eventId: "1", categoryId: "2", priority: 1 },
-  { eventId: "2", categoryId: "3", priority: 1 },
-];
+const eventCategoryMappings = events.flatMap((event) =>
+  event.requiredCategories.map((categoryId) => ({
+    eventId: event.id,
+    categoryId,
+    priority: 1,
+  }))
+);
 
 const AdminEvents = () => {
   const [eventList, setEventList] = useState<any[]>([]);
@@ -57,10 +58,25 @@ const AdminEvents = () => {
     description: "",
     requiredCategories: [] as string[]
   });
-  const [categoryList, setCategoryList] = useState(categories);
+  const [categoryList, setCategoryList] = useState(
+    CATEGORY_GROUP_OPTIONS.map((category) => ({
+      id: category.name,
+      name: category.name,
+      icon: category.icon,
+      categories: category.subcategories,
+    })),
+  );
   const [categoryPriorities, setCategoryPriorities] = useState<Record<string, number>>({});
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCategory, setNewCategory] = useState({ name: "", icon: "🎵" });
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollCategoryList = (direction: "up" | "down") => {
+    categoryScrollRef.current?.scrollBy({
+      top: direction === "down" ? 180 : -180,
+      behavior: "smooth",
+    });
+  };
 
   // Load events and mappings from Firestore
   useEffect(() => {
@@ -309,7 +325,7 @@ const AdminEvents = () => {
     return mappings
       .filter(m => m.eventId === eventId)
       .map(m => {
-        const category = categories.find(c => c.id === m.categoryId);
+        const category = categoryList.find(c => c.id === m.categoryId || c.name === m.categoryId);
         return { ...category, priority: m.priority };
       })
       .filter(Boolean);
@@ -328,113 +344,103 @@ const AdminEvents = () => {
             {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Database className="h-4 w-4 mr-2" />}
             Seed Events
           </Button>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => {
-                setEditingEvent(null);
-                setFormData({ name: "", icon: "", description: "", requiredCategories: [] });
-                setCategoryPriorities({});
-              }}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Event
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col p-0 gap-0">
-            <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b">
-              <DialogTitle>{editingEvent ? 'Edit Event' : 'Add New Event'}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
-              <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-6 py-4 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+          <Button onClick={() => {
+            setEditingEvent(null);
+            setFormData({ name: "", icon: "", description: "", requiredCategories: [] });
+            setCategoryPriorities({});
+            setIsDialogOpen(true);
+          }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Event
+          </Button>
+          {isDialogOpen && (
+            <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-sm pointer-events-auto">
+              <div className="flex min-h-full items-start justify-center py-6 sm:items-center">
+                <div className="relative flex h-[min(92vh,820px)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/80 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.35)]">
+                  <button
+                    type="button"
+                    onClick={() => setIsDialogOpen(false)}
+                    className="absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                    aria-label="Close event modal"
+                  >
+                    ×
+                  </button>
+            <div className="shrink-0 border-b border-slate-200/80 bg-white/95 px-6 py-5">
+              <h2 className="text-2xl font-bold text-slate-950">{editingEvent ? "Edit Event" : "Add New Event"}</h2>
+            </div>
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pointer-events-auto px-6 py-5 pb-28 space-y-5">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <Label htmlFor="name">Event Name</Label>
+                  <Label htmlFor="name" className="text-sm font-bold text-slate-800">Event Name</Label>
                   <Input
                     id="name"
                     value={formData.name}
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g., Marriage"
+                    className="mt-2 h-12 rounded-xl border-slate-200 bg-white text-slate-950 shadow-inner placeholder:text-slate-400 focus-visible:ring-orange-300"
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="icon">Icon (Emoji)</Label>
+                  <Label htmlFor="icon" className="text-sm font-bold text-slate-800">Icon (Emoji)</Label>
                   <Input
                     id="icon"
                     value={formData.icon}
                     onChange={(e) => setFormData(prev => ({ ...prev, icon: e.target.value }))}
                     placeholder="e.g., 💒"
+                    className="mt-2 h-12 rounded-xl border-slate-200 bg-white text-slate-950 shadow-inner placeholder:text-slate-400 focus-visible:ring-orange-300"
                     required
                   />
                 </div>
               </div>
               
               <div>
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description" className="text-sm font-bold text-slate-800">Description</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Brief description of the event"
+                  className="mt-2 min-h-28 rounded-xl border-slate-200 bg-white text-slate-950 shadow-inner placeholder:text-slate-400 focus-visible:ring-orange-300"
                   required
                 />
               </div>
 
-              <div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <Label>Required Artist Categories</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowAddCategory(!showAddCategory)}
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add New Category
-                  </Button>
+                  <Label className="text-sm font-bold text-slate-900">Required Artist Categories</Label>
+                  <span className="rounded-full bg-orange-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-orange-600 ring-1 ring-orange-100">
+                    Centralized
+                  </span>
                 </div>
                 
-                {showAddCategory && (
-                  <div className="mb-3 p-3 border rounded-lg bg-secondary/20">
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Icon (emoji)"
-                        value={newCategory.icon}
-                        onChange={(e) => setNewCategory(prev => ({ ...prev, icon: e.target.value }))}
-                        className="w-20"
-                      />
-                      <Input
-                        placeholder="Category name"
-                        value={newCategory.name}
-                        onChange={(e) => setNewCategory(prev => ({ ...prev, name: e.target.value }))}
-                        className="flex-1"
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={handleAddNewCategory}
-                        disabled={!newCategory.name.trim()}
-                      >
-                        Add
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                
                 <p className="text-xs text-muted-foreground mb-2">Select categories and set their priority</p>
-                <div className="space-y-3 mt-2 max-h-60 no-scrollbar overflow-y-auto border rounded-lg p-4">
+                <div className="relative mt-3">
+                <div
+                  ref={categoryScrollRef}
+                  className="max-h-56 overflow-y-auto custom-scrollbar pointer-events-auto space-y-3 rounded-2xl border border-slate-200 bg-white p-3 pr-12 shadow-inner"
+                >
                   {categoryList.map((category) => {
                     const isChecked = formData.requiredCategories.includes(category.id);
                     const priority = categoryPriorities[category.id] || 1;
                     
                     return (
-                      <div key={category.id} className="flex items-center justify-between p-3 rounded-lg border bg-secondary/20">
-                        <div className="flex items-center space-x-3">
+                      <div
+                        key={category.id}
+                        className={`flex items-center justify-between gap-3 rounded-xl border p-3 transition-all ${
+                          isChecked
+                            ? "border-orange-200 bg-orange-50 shadow-sm"
+                            : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center space-x-3">
                           <Checkbox
                             id={category.id}
                             checked={isChecked}
                             onCheckedChange={(checked) => handleCategoryToggle(category.id, checked as boolean)}
                           />
-                          <Label htmlFor={category.id} className="text-sm font-medium cursor-pointer">
+                          <Label htmlFor={category.id} className="cursor-pointer truncate text-sm font-bold text-slate-800">
                             {category.icon} {category.name}
                           </Label>
                         </div>
@@ -444,7 +450,7 @@ const AdminEvents = () => {
                             value={priority.toString()} 
                             onValueChange={(v) => handlePriorityChange(category.id, Number(v))}
                           >
-                            <SelectTrigger className="w-32">
+                            <SelectTrigger className="h-10 w-32 rounded-xl border-orange-100 bg-white text-xs font-bold">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -461,23 +467,44 @@ const AdminEvents = () => {
                     );
                   })}
                 </div>
+                <div className="absolute right-3 top-1/2 flex -translate-y-1/2 flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => scrollCategoryList("up")}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-100 bg-white/95 text-orange-600 shadow-md transition hover:bg-orange-50"
+                    aria-label="Scroll categories up"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollCategoryList("down")}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-100 bg-white/95 text-orange-600 shadow-md transition hover:bg-orange-50"
+                    aria-label="Scroll categories down"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </div>
+                </div>
                 <p className="text-xs text-muted-foreground mt-2">
                   💡 Essential categories are required, Optional categories are suggestions
                 </p>
               </div>
 
               </div>{/* end scroll body */}
-              <div className="flex-shrink-0 flex justify-end gap-2 px-6 py-4 border-t bg-background">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <div className="shrink-0 flex justify-end gap-3 border-t border-slate-200/80 bg-white/95 px-6 py-4 shadow-[0_-12px_30px_rgba(15,23,42,0.05)]">
+                <Button type="button" variant="outline" className="h-12 rounded-xl px-6 font-bold" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="gradient-bg border-0 text-white">
+                <Button type="submit" className="gradient-bg h-12 rounded-xl border-0 px-7 font-bold text-white shadow-lg shadow-orange-200">
                   {editingEvent ? 'Update Event' : 'Add Event'}
                 </Button>
               </div>
             </form>
-          </DialogContent>
-          </Dialog>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

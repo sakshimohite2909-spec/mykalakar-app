@@ -89,7 +89,7 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar">
         <DialogHeader>
           <DialogTitle className="font-display">Inquiry for {artistName}</DialogTitle>
         </DialogHeader>

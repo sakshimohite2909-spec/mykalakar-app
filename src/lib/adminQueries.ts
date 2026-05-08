@@ -14,11 +14,19 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, withTimeout } from "@/lib/firebaseSafe";
+import { normalizeArtistRecord, normalizeArtistType } from "@/constants/artistSystem";
 
 const numberOrZero = (value: unknown) => Number(value) || 0;
 
 function toArtistDocument(applicationId: string, data: Record<string, any>) {
   const primaryArt = Array.isArray(data.artsList) ? data.artsList[0] || {} : {};
+  const category = normalizeArtistType(data.category) ?? normalizeArtistType(primaryArt.category) ?? normalizeArtistType(data.subcategory) ?? "";
+  const artsList = Array.isArray(data.artsList)
+    ? data.artsList.map((art: Record<string, any>) => ({
+        ...art,
+        category: normalizeArtistType(art?.category) ?? normalizeArtistType(art?.subcategory) ?? category,
+      }))
+    : [];
   const pricing = data.pricing || {
     soloPrice: numberOrZero(data.soloPrice ?? primaryArt.soloPrice),
     duoPrice: numberOrZero(data.duoPrice ?? primaryArt.duoPrice),
@@ -31,8 +39,9 @@ function toArtistDocument(applicationId: string, data: Record<string, any>) {
     galleryPhotos: data.galleryPhotos || [],
   };
 
-  return {
+  return normalizeArtistRecord({
     uid: data.uid,
+    userId: data.uid,
     applicationId,
     username: data.username || "",
     name: data.name || "",
@@ -43,13 +52,14 @@ function toArtistDocument(applicationId: string, data: Record<string, any>) {
     emergencyNumber: data.emergencyNumber || "",
     state: data.state || "",
     district: data.district || data.city || "",
+    location: data.location || data.district || data.city || data.state || "",
     bio: data.bio || "",
     experience: numberOrZero(data.experience),
     availability: data.availability || "available",
-    category: data.category || primaryArt.category || "",
+    category,
     subcategory: data.subcategory || primaryArt.subcategory || "",
-    categories: Array.isArray(data.categories) ? data.categories : [data.category].filter(Boolean),
-    artsList: Array.isArray(data.artsList) ? data.artsList : [],
+    categories: Array.isArray(data.categories) ? data.categories.map(normalizeArtistType).filter(Boolean) : [category].filter(Boolean),
+    artsList,
     services: Array.isArray(data.services) ? data.services : [],
     types: Array.isArray(data.types) ? data.types : primaryArt.types || [],
     pricing,
@@ -74,7 +84,7 @@ function toArtistDocument(applicationId: string, data: Record<string, any>) {
     approvedAt: serverTimestamp(),
     createdAt: data.createdAt || serverTimestamp(),
     updatedAt: serverTimestamp(),
-  };
+  });
 }
 
 function bookingFromInquiry(inquiryId: string, data: Record<string, any>) {

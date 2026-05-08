@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { initialArtists } from "@/data/mockData";
 import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
+import { ARTIST_TYPES, normalizeArtistRecord, normalizeArtistType } from "@/constants/artistSystem";
 
 
 export default function AdminArtists() {
@@ -52,19 +53,6 @@ export default function AdminArtists() {
 
   const stateOptions = useMemo(() => getIndiaStates().map((state) => state.name), []);
   const [districtOptions, setDistrictOptions] = useState<string[]>([]);
-  const categories = [
-    "Music Artists",
-    "Dance Artists",
-    "Stage & Entertainment",
-    "Creative Artists",
-    "Spiritual / Religious",
-    "Visual Artists",
-    "Cultural Artists",
-    "Event Artists",
-    "Acting & Media",
-    "Traditional Maharashtra"
-  ];
-
   useEffect(() => {
     let active = true;
 
@@ -93,7 +81,7 @@ export default function AdminArtists() {
   useEffect(() => {
     const q = query(collection(db, "artists"), where("status", "==", "active"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
+      const data = snapshot.docs.map(doc => normalizeArtistRecord({
         id: doc.id,
         ...doc.data()
       }));
@@ -113,8 +101,12 @@ export default function AdminArtists() {
     return (
       (a.name?.toLowerCase() ?? "").includes(q) ||
       (a.professionalName?.toLowerCase() ?? "").includes(q) ||
+      (a.brandName?.toLowerCase() ?? "").includes(q) ||
+      (a.nickname?.toLowerCase() ?? "").includes(q) ||
       (a.subcategory?.toLowerCase() ?? "").includes(q) ||
-      (a.category?.toLowerCase() ?? "").includes(q)
+      (a.category?.toLowerCase() ?? "").includes(q) ||
+      (Array.isArray(a.tags) ? a.tags.join(" ").toLowerCase().includes(q) : false) ||
+      (Array.isArray(a.types) ? a.types.join(" ").toLowerCase().includes(q) : false)
     );
   });
 
@@ -168,16 +160,22 @@ export default function AdminArtists() {
     setLoading(true);
     try {
       const servicesArray = newArtist.services.split(',').map(s => s.trim()).filter(Boolean);
+      const canonicalCategory = normalizeArtistType(newArtist.category);
+      if (!canonicalCategory) {
+        toast({ variant: "destructive", title: "Invalid Category", description: "Please select a supported artist type." });
+        return;
+      }
 
       const artistRef = doc(collection(db, "artists"));
       await setDoc(artistRef, {
         uid: artistRef.id,
+        userId: artistRef.id,
         name: newArtist.name,
-        category: newArtist.category,
+        category: canonicalCategory,
         subcategory: newArtist.subcategory,
-        categories: [newArtist.category],
+        categories: [canonicalCategory],
         artsList: [{
-          category: newArtist.category,
+          category: canonicalCategory,
           subcategory: newArtist.subcategory,
           types: [],
           soloPrice: 0,
@@ -186,6 +184,7 @@ export default function AdminArtists() {
         }],
         state: newArtist.state,
         district: newArtist.city,
+        location: newArtist.city || newArtist.state,
         bio: newArtist.bio,
         mobileNumber: newArtist.contactNumber,
         experience: Number(newArtist.experience),
@@ -253,9 +252,11 @@ export default function AdminArtists() {
       const batch = writeBatch(db);
       initialArtists.forEach((a) => {
         const docRef = doc(collection(db, "artists"));
+        const normalized = normalizeArtistRecord({ ...a, id: docRef.id, uid: docRef.id, userId: docRef.id });
         batch.set(docRef, {
           uid: docRef.id,
-          ...a,
+          userId: docRef.id,
+          ...normalized,
           status: "active",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -493,7 +494,7 @@ export default function AdminArtists() {
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((cat) => (
+                    {ARTIST_TYPES.map((cat) => (
                       <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                     ))}
                   </SelectContent>
