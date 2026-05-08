@@ -1678,7 +1678,7 @@ export default function ArtistRegister() {
                   Submit My Artist Profile
                 </button>
               </motion.form>
-            ) : role === "user" ? (
+            ) : activeRole === "user" ? (
               <motion.form
                 key="user-form"
                 initial={{ opacity: 0, x: 20 }}
