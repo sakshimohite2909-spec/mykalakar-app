@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        display: ["Montserrat", "system-ui", "sans-serif"],
+        sans: ["Montserrat", "Noto Sans Devanagari", "system-ui", "sans-serif"],
+        display: ["Poppins", "Montserrat", "Noto Sans Devanagari", "system-ui", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -61,6 +61,9 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+      },
+      boxShadow: {
+        premium: "0 4px 20px -2px rgba(0, 0, 0, 0.05)",
       },
       borderRadius: {
         lg: "var(--radius)",

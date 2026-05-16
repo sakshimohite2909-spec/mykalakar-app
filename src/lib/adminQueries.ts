@@ -14,7 +14,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, withTimeout } from "@/lib/firebaseSafe";
-import { normalizeArtistRecord, normalizeArtistType } from "@/constants/artistSystem";
+import { getArtistArtForms, normalizeArtistRecord, normalizeArtistType } from "@/constants/artistSystem";
 
 const numberOrZero = (value: unknown) => Number(value) || 0;
 
@@ -38,6 +38,12 @@ function toArtistDocument(applicationId: string, data: Record<string, any>) {
     coverPhoto: data.coverPhoto || "",
     galleryPhotos: data.galleryPhotos || [],
   };
+  const artForms = getArtistArtForms({
+    ...data,
+    category,
+    artsList,
+    categories: Array.isArray(data.categories) ? data.categories : [category].filter(Boolean),
+  });
 
   return normalizeArtistRecord({
     uid: data.uid,
@@ -60,6 +66,13 @@ function toArtistDocument(applicationId: string, data: Record<string, any>) {
     subcategory: data.subcategory || primaryArt.subcategory || "",
     categories: Array.isArray(data.categories) ? data.categories.map(normalizeArtistType).filter(Boolean) : [category].filter(Boolean),
     artsList,
+    artistProfile: {
+      artForms,
+      experience: numberOrZero(data.experience),
+      bio: data.bio || "",
+      location: data.location || data.district || data.city || data.state || "",
+      profileImage: media.profilePhoto || data.profilePhoto || "",
+    },
     services: Array.isArray(data.services) ? data.services : [],
     types: Array.isArray(data.types) ? data.types : primaryArt.types || [],
     pricing,
@@ -162,6 +175,13 @@ export async function approveArtist(applicationId: string) {
       email: data.email || "",
       phone: data.mobileNumber || data.phone || "",
       profilePhoto: data.media?.profilePhoto || data.profilePhoto || "",
+      artistProfile: {
+        artForms: getArtistArtForms(data),
+        experience: numberOrZero(data.experience),
+        bio: data.bio || "",
+        location: data.location || data.district || data.city || data.state || "",
+        profileImage: data.media?.profilePhoto || data.profilePhoto || "",
+      },
       role: "artist",
       status: "active",
       updatedAt: serverTimestamp(),

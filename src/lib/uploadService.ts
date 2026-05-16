@@ -5,6 +5,13 @@ import { FIREBASE_UPLOAD_TIMEOUT_MS } from "@/lib/firebaseSafe";
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const DOWNLOAD_URL_VALIDATE_TIMEOUT_MS = 8000;
+
+export type UploadedImageAsset = {
+  url: string;
+  fullPath: string;
+  thumbnailUrl: string | null;
+};
 
 // ─── Compress + Resize image before upload ───────────────────────────────────
 export function compressImage(file: File, maxWidthPx = 1200, quality = 0.82): Promise<File> {
@@ -52,11 +59,40 @@ export function validateImageFile(file: File): { valid: boolean; error?: string 
 }
 
 // ─── Upload with progress callback ───────────────────────────────────────────
-export function uploadFileWithProgress(
+async function validateDownloadUrl(url: string) {
+  if (!url) throw new Error("Storage returned an empty download URL.");
+
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      throw new Error("Storage returned a non-HTTP download URL.");
+    }
+  } catch {
+    throw new Error("Storage returned an invalid download URL.");
+  }
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), DOWNLOAD_URL_VALIDATE_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      mode: "cors",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Storage download URL responded with ${response.status}.`);
+    }
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export function uploadFileAssetWithProgress(
   file: File,
   storagePath: string,
   onProgress?: (percent: number) => void
-): Promise<string> {
+): Promise<UploadedImageAsset> {
   return new Promise((resolve, reject) => {
     const storageRef = ref(storage, `${storagePath}/${Date.now()}_${file.name.replace(/\s+/g, "_")}`);
     const uploadTask = uploadBytesResumable(storageRef, file, {
@@ -89,13 +125,29 @@ export function uploadFileWithProgress(
       async () => {
         try {
           const url = await getDownloadURL(uploadTask.snapshot.ref);
-          finish(() => resolve(url));
+          await validateDownloadUrl(url);
+          finish(() =>
+            resolve({
+              url,
+              fullPath: uploadTask.snapshot.ref.fullPath,
+              thumbnailUrl: null,
+            })
+          );
         } catch (err) {
           finish(() => reject(err));
         }
       }
     );
   });
+}
+
+export async function uploadFileWithProgress(
+  file: File,
+  storagePath: string,
+  onProgress?: (percent: number) => void
+): Promise<string> {
+  const asset = await uploadFileAssetWithProgress(file, storagePath, onProgress);
+  return asset.url;
 }
 
 // ─── Main upload helper: validate → compress → upload ────────────────────────
@@ -127,4 +179,30 @@ export async function uploadImageFile(
   }
 
   return uploadFileWithProgress(fileToUpload, storagePath, onProgress);
+}
+
+export async function uploadImageAsset(
+  file: File | null | undefined,
+  storagePath: string,
+  onProgress?: (percent: number) => void
+): Promise<UploadedImageAsset | null> {
+  if (!file) return null;
+
+  const validation = validateImageFile(file);
+  if (!validation.valid) {
+    console.warn(`File validation failed for ${storagePath}: ${validation.error}`);
+    throw new Error(validation.error);
+  }
+
+  let fileToUpload = file;
+  if (file.size > 200 * 1024 && ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    try {
+      fileToUpload = await compressImage(file);
+    } catch (compressErr) {
+      console.warn("Image compression failed, uploading original:", compressErr);
+      fileToUpload = file;
+    }
+  }
+
+  return uploadFileAssetWithProgress(fileToUpload, storagePath, onProgress);
 }

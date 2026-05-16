@@ -2,9 +2,9 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { ChevronRight, Loader2, Sparkles, ArrowRight } from "lucide-react";
 import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase";
-import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
 import { CATEGORY_GROUP_ICONS, CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
+import { getCategoryGroups } from "@/services/dataService";
+import { SmartImage } from "@/components/SmartImage";
 
 const pastelColors = [
   "bg-orange-50 border-orange-100/50 text-orange-500",
@@ -33,17 +33,19 @@ export default function CategoriesGrid() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const qCats = query(collection(db, "categories"), orderBy("sortOrder"));
-    const unsubCats = onSnapshot(qCats, (catSnap) => {
-      const cats = catSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let mounted = true;
+    getCategoryGroups().then((cats) => {
+      if (!mounted) return;
       setCategories(cats.length > 0 ? cats : CATEGORY_GROUP_OPTIONS);
-      setLoading(false);
-    }, (error) => {
+    }).catch((error) => {
       console.warn("Categories unavailable, using local defaults.", error);
-      setCategories(CATEGORY_GROUP_OPTIONS);
-      setLoading(false);
+      if (mounted) setCategories(CATEGORY_GROUP_OPTIONS);
+    }).finally(() => {
+      if (mounted) setLoading(false);
     });
-    return () => unsubCats();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (
@@ -82,6 +84,15 @@ export default function CategoriesGrid() {
                   to={`/search?category=${cat.name}`}
                   className={`flex flex-col items-center justify-center p-8 rounded-[2.5rem] border transition-all group relative overflow-hidden h-64 ${colorClass.split(' ').slice(0, 2).join(' ')}`}
                 >
+                  <SmartImage
+                    src=""
+                    alt={cat.name}
+                    usageId={`categories-grid:${cat.id || cat.name}`}
+                    category={cat.name}
+                    orientation="landscape"
+                    aspectRatio="aspect-auto"
+                    containerClassName="absolute inset-0 h-full w-full opacity-25 transition-transform duration-700 group-hover:scale-[1.03]"
+                  />
                   <div className="absolute inset-0 bg-white/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   
                   <div className="z-10 flex flex-col items-center gap-4 text-center">

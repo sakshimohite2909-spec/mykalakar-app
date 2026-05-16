@@ -1,0 +1,145 @@
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+
+export type Language = "en" | "mr" | "hi";
+
+type Messages = Record<string, string>;
+
+type TranslateOptions = Record<string, string | number>;
+
+interface LanguageOption {
+  code: Language;
+  label: string;
+}
+
+interface I18nContextValue {
+  language: Language;
+  languages: LanguageOption[];
+  setLanguage: (language: Language) => void;
+  t: (key: string, options?: TranslateOptions) => string;
+  formatNumber: (value: number) => string;
+  formatCurrency: (value: number) => string;
+  isLoading: boolean;
+}
+
+const STORAGE_KEY = "mykalakar-language";
+
+export const LANGUAGE_OPTIONS: LanguageOption[] = [
+  { code: "en", label: "English" },
+  { code: "mr", label: "मराठी" },
+  { code: "hi", label: "हिंदी" },
+];
+
+const localeLoaders: Record<Language, () => Promise<{ default: Messages }>> = {
+  en: () => import("@/locales/en/common.json"),
+  mr: () => import("@/locales/mr/common.json"),
+  hi: () => import("@/locales/hi/common.json"),
+};
+
+const I18nContext = createContext<I18nContextValue | null>(null);
+
+function isLanguage(value: string | null | undefined): value is Language {
+  return value === "en" || value === "mr" || value === "hi";
+}
+
+function detectLanguage(): Language {
+  if (typeof window === "undefined") return "en";
+
+  const saved = window.localStorage.getItem(STORAGE_KEY);
+  if (isLanguage(saved)) return saved;
+
+  const browserLanguages = navigator.languages?.length ? navigator.languages : [navigator.language];
+  const normalized = browserLanguages.map((lang) => lang.toLowerCase());
+
+  if (normalized.some((lang) => lang.startsWith("mr"))) return "mr";
+  if (normalized.some((lang) => lang.startsWith("hi"))) return "hi";
+  if (normalized.some((lang) => lang === "en-in")) return "mr";
+
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (timeZone === "Asia/Kolkata" || timeZone === "Asia/Calcutta") return "mr";
+
+  return "en";
+}
+
+function interpolate(text: string, options?: TranslateOptions) {
+  if (!options) return text;
+  return text.replace(/\{\{(\w+)\}\}/g, (_, key) => String(options[key] ?? ""));
+}
+
+export function I18nProvider({ children }: { children: React.ReactNode }) {
+  const [language, setLanguageState] = useState<Language>(() => detectLanguage());
+  const [messages, setMessages] = useState<Messages>({});
+  const [fallbackMessages, setFallbackMessages] = useState<Messages>({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    setIsLoading(true);
+
+    Promise.all([localeLoaders.en(), localeLoaders[language]()])
+      .then(([english, selected]) => {
+        if (!mounted) return;
+        setFallbackMessages(english.default);
+        setMessages(selected.default);
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [language]);
+
+  const setLanguage = useCallback((nextLanguage: Language) => {
+    window.localStorage.setItem(STORAGE_KEY, nextLanguage);
+    setLanguageState(nextLanguage);
+  }, []);
+
+  const t = useCallback(
+    (key: string, options?: TranslateOptions) => {
+      const value = messages[key] ?? fallbackMessages[key] ?? key;
+      return interpolate(value, options);
+    },
+    [fallbackMessages, messages],
+  );
+
+  const locale = language === "mr" ? "mr-IN" : language === "hi" ? "hi-IN" : "en-IN";
+
+  const formatNumber = useCallback(
+    (value: number) => new Intl.NumberFormat(locale).format(value),
+    [locale],
+  );
+
+  const formatCurrency = useCallback(
+    (value: number) =>
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: "INR",
+        maximumFractionDigits: 0,
+      }).format(value),
+    [locale],
+  );
+
+  const value = useMemo(
+    () => ({
+      language,
+      languages: LANGUAGE_OPTIONS,
+      setLanguage,
+      t,
+      formatNumber,
+      formatCurrency,
+      isLoading,
+    }),
+    [formatCurrency, formatNumber, isLoading, language, setLanguage, t],
+  );
+
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+export function useI18n() {
+  const context = useContext(I18nContext);
+  if (!context) {
+    throw new Error("useI18n must be used within I18nProvider");
+  }
+  return context;
+}

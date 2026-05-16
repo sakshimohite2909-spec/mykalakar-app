@@ -1,820 +1,352 @@
-import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react";
-import { useSearchParams, Link, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ArrowRight, CalendarDays, Search, Sparkles, UsersRound } from "lucide-react";
+import { LayoutGroup, motion } from "framer-motion";
+import type { QueryDocumentSnapshot } from "firebase/firestore";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SmartImage } from "@/components/SmartImage";
+import { ImageRegistryService } from "@/services/ImageRegistryService";
+import { getActiveArtistsPage, getApprovedEvents } from "@/services/dataService";
+import { filterEvents } from "@/services/filterEngine";
+import { useMarketplaceFilters } from "@/hooks/useMarketplaceFilters";
+import { buildArtistCards, filterArtistCards, type ArtistCardViewModel } from "@/services/marketplaceCards";
 import {
-  Search,
-  User,
-  Youtube,
-  Loader2,
-  Sparkles,
-  X,
-  ExternalLink,
-  Share2,
-  MapPin,
-  Phone,
-  Star,
-  ChevronDown,
-  Music,
-  Mic,
-} from "lucide-react";
-import { db, storage } from "@/lib/firebase";
-import { collection, query, onSnapshot, where, orderBy } from "firebase/firestore";
-import { ref, getDownloadURL } from "firebase/storage";
-import { gsap } from "gsap";
-import { useAuth } from "@/contexts/AuthContext";
-import { initialArtists } from "@/data/mockData";
-import {
-  CATEGORY_GROUP_OPTIONS,
-  getCategoriesForFilter,
-  getCategoryGroupForCategory,
-  normalizeArtistCategory,
-  normalizeCategoryKey,
-} from "@/constants/artistSystem";
+  AnimatePresence,
+  LuxuryArtistCard,
+  LuxuryEmptyState,
+  LuxuryEventCard,
+  LuxuryFilterBar,
+} from "@/components/discovery/LuxuryDiscovery";
 
-type ArtistCardEntry = {
-  entryId: string;
-  artist: any;
-  category: string;
-  subcategory?: string;
-};
+type ExploreTab = "artists" | "events";
+type EventRecord = Record<string, unknown>;
 
-function collectArtistCategoryEntries(artist: any): ArtistCardEntry[] {
+const DEFAULT_EVENT_TYPES = ["Wedding", "Festival", "Corporate", "Spiritual", "Birthday"];
+
+function getHeroImage(tab: ExploreTab) {
+  return ImageRegistryService.getMappedImage(tab === "events" ? "Marriage" : "Kirtankar") || ImageRegistryService.getBestImage("Kirtankar", "artist");
+}
+
+function splitParam(value: string | null) {
+  return (value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeLocation(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function compact(values: unknown[]) {
   const seen = new Set<string>();
-  const entries: ArtistCardEntry[] = [];
-
-  const addEntry = (category?: unknown, subcategory?: unknown) => {
-    const cleanCategory = normalizeArtistCategory(category) ?? normalizeArtistCategory(subcategory);
-    if (!cleanCategory) return;
-    const key = normalizeCategoryKey(cleanCategory);
-    if (seen.has(key)) return;
-    seen.add(key);
-    entries.push({
-      entryId: `${artist.id || artist.uid || artist.username || "artist"}::${key}`,
-      artist: {
-        ...artist,
-        category: cleanCategory,
-        subcategory: String(subcategory ?? artist.subcategory ?? "").trim(),
-      },
-      category: cleanCategory,
-      subcategory: String(subcategory ?? artist.subcategory ?? "").trim(),
+  return values
+    .flat()
+    .map((value) => String(value ?? "").trim())
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (!value || seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
-  };
+}
 
-  if (Array.isArray(artist.artsList)) {
-    artist.artsList.forEach((art: any) => addEntry(art?.category, art?.subcategory));
+function artistMatchesLocation(artist: ArtistCardViewModel, state: string, district: string) {
+  const values = [
+    artist.location,
+    artist.artist?.location,
+    artist.artist?.district,
+    artist.artist?.city,
+    artist.artist?.state,
+    artist.artist?.artistProfile?.location,
+  ].map(normalizeLocation).filter(Boolean);
+
+  const matchesState = !state || values.some((value) => value.includes(normalizeLocation(state)));
+  const matchesDistrict = !district || values.some((value) => value.includes(normalizeLocation(district)));
+  return matchesState && matchesDistrict;
+}
+
+async function getInitialArtistCollection() {
+  const firstPage = await getActiveArtistsPage(50);
+  const items = [...(firstPage.items as Record<string, unknown>[])];
+  let cursor = firstPage.nextCursor;
+  let hasMore = firstPage.hasMore;
+  let pageCount = 1;
+
+  while (hasMore && cursor && pageCount < 4) {
+    const nextPage = await getActiveArtistsPage(50, cursor);
+    items.push(...(nextPage.items as Record<string, unknown>[]));
+    cursor = nextPage.nextCursor;
+    hasMore = nextPage.hasMore;
+    pageCount += 1;
   }
 
-  if (Array.isArray(artist.categories)) {
-    artist.categories.forEach((category: string) => addEntry(category));
-  }
-
-  addEntry(artist.category, artist.subcategory);
-  addEntry(artist.subcategory);
-
-  return entries.length
-    ? entries
-    : [{
-        entryId: `${artist.id || artist.uid || artist.username || "artist"}::uncategorized`,
-        artist,
-        category: "",
-        subcategory: "",
-      }];
+  return { items, cursor, hasMore };
 }
 
-function uniqueArtistsById(artists: any[]) {
-  const seen = new Set<string>();
-  return artists.filter((artist, index) => {
-    const key = String(artist.id || artist.uid || artist.username || `${artist.name}-${index}`);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function normalizeLoadedArtist(artist: any) {
-  const primaryCategory =
-    normalizeArtistCategory(artist.category) ??
-    normalizeArtistCategory(artist.subcategory) ??
-    normalizeArtistCategory(artist.artsList?.[0]?.category) ??
-    String(artist.category ?? "").trim();
-  const artsList = Array.isArray(artist.artsList) && artist.artsList.length > 0
-    ? artist.artsList.map((art: any) => ({
-        ...art,
-        category: normalizeArtistCategory(art?.category) ?? normalizeArtistCategory(art?.subcategory) ?? String(art?.category ?? "").trim(),
-      }))
-    : [{ category: primaryCategory, subcategory: artist.subcategory ?? "", types: [] }];
-  const categories = Array.from(new Set([
-    primaryCategory,
-    ...artsList.map((art: any) => art.category),
-    ...(Array.isArray(artist.categories)
-      ? artist.categories.map((category: any) => normalizeArtistCategory(category) ?? String(category ?? "").trim())
-      : []),
-  ].filter(Boolean)));
-
-  return {
-    ...artist,
-    category: primaryCategory,
-    categories,
-    artsList,
-  };
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────────────
-function updateOgMeta(title: string, description: string, image?: string) {
-  const setMeta = (property: string, content: string) => {
-    let el = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement | null;
-    if (!el) {
-      el = document.createElement("meta");
-      el.setAttribute("property", property);
-      document.head.appendChild(el);
-    }
-    el.setAttribute("content", content);
-  };
-  setMeta("og:title", title);
-  setMeta("og:description", description);
-  if (image) setMeta("og:image", image);
-  document.title = title;
-}
-
-function resetOgMeta() {
-  updateOgMeta(
-    "MyKalakar | Discover & Book Premium Artists in India",
-    "Discover and book verified artists for weddings, corporate events & more on MyKalakar.",
-    "/mykalakar-logo.png"
-  );
-}
-
-
-
-// ─── Artist Card ───────────────────────────────────────────────────────────────
-function PremiumArtistCard({
-  artist,
-  index,
-  onClick,
-  highlightCategory,
-}: {
-  artist: any;
-  index: number;
-  onClick: () => void;
-  highlightCategory?: string;
-}) {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
-  const [resolvedProfilePic, setResolvedProfilePic] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    const fetchImage = async () => {
-      const picUrl = artist.media?.profilePhoto || artist.profilePhoto;
-      if (!picUrl) return;
-
-      if (picUrl.startsWith("http://") || picUrl.startsWith("https://")) {
-        // If it contains the firebasestorage domain but isn't a direct downloadUrl, we might need to parse.
-        // Usually, getDownloadURL natively returns an https string. So we just use it.
-        // Only if they manually stored 'gs://...' we definitely need getDownloadURL.
-        setResolvedProfilePic(picUrl);
-      } else if (picUrl.startsWith("gs://")) {
-        try {
-          const storageUrl = await getDownloadURL(ref(storage, picUrl));
-          if (isMounted) setResolvedProfilePic(storageUrl);
-        } catch (e) {
-          console.warn("Failed to resolve gs:// image:", e);
-        }
-      } else {
-        // Assume it's a relative path in Firebase Storage bucket
-        try {
-          const storageUrl = await getDownloadURL(ref(storage, picUrl));
-          if (isMounted) setResolvedProfilePic(storageUrl);
-        } catch (e) {
-          console.warn("Failed to resolve relative image path:", e);
-          if (isMounted) setResolvedProfilePic(picUrl); // Fallback
-        }
-      }
-    };
-    fetchImage();
-    return () => { isMounted = false; };
-  }, [artist.profilePicUrl, artist.profilePhoto]);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const rotateX = (((e.clientY - rect.top) / rect.height) - 0.5) * -8;
-    const rotateY = (((e.clientX - rect.left) / rect.width) - 0.5) * 8;
-    gsap.to(cardRef.current, { rotateX, rotateY, duration: 0.4, ease: "power2.out" });
-  };
-
-  const handleMouseLeave = () => {
-    if (!cardRef.current) return;
-    gsap.to(cardRef.current, { rotateX: 0, rotateY: 0, duration: 0.8, ease: "power2.out" });
-  };
-
-  const youtubeLink = artist.socialLinks?.find((l: any) => l.platform === "youtube")?.url || null;
-  const artistName = artist.name || artist.professionalName || "Artist";
-  const displayCategory = highlightCategory || artist.category || "";
-
+function ResultSkeleton({ type }: { type: ExploreTab }) {
   return (
-    <div
-      ref={cardRef}
-      onClick={() => navigate(`/artist/${artist.id}`)}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className="artist-card-animate relative overflow-hidden rounded-[2rem] border border-white/70 bg-white/50 p-6 shadow-[0_8px_32px_rgba(163,221,242,0.10)] backdrop-blur-2xl hover:shadow-[0_16px_48px_rgba(163,221,242,0.20)] hover:border-[rgba(163,221,242,0.50)] group cursor-pointer transition-all duration-300 z-10"
-      style={{ transformStyle: "preserve-3d", perspective: "1000px", opacity: 0, transform: "translateY(30px)" }}
-    >
-      {/* Gloss overlay */}
-      <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-white/70 to-transparent pointer-events-none opacity-60" />
-
-      {/* "Click to view" hint */}
-      <div className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-        <span className="flex items-center gap-1 bg-gradient-to-r from-orange-500 to-amber-500 text-foreground text-[8px] font-black tracking-widest uppercase px-2.5 py-1 rounded-full shadow-md">
-          <ExternalLink className="w-2.5 h-2.5" /> View
-        </span>
-      </div>
-
-      {/* Orange accent top strip */}
-      <div className="absolute top-0 left-0 right-0 h-1 rounded-t-[2rem] bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity duration-400" />
-
-      <div className="relative z-10 flex flex-col items-center text-center" style={{ transform: "translateZ(20px)" }}>
-        {/* Avatar */}
-        <div className="relative w-20 h-20 rounded-full border-2 border-orange-200 bg-orange-50 shadow-lg flex items-center justify-center mb-4 group-hover:scale-110 group-hover:border-orange-400 transition-all duration-500 overflow-hidden">
-          {resolvedProfilePic ? (
-            <img
-              src={resolvedProfilePic}
-              alt={artistName}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <User className="h-8 w-8 text-orange-400" />
-          )}
-          {/* Online dot */}
-          <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-emerald-400 border-2 border-white" />
+    <div className="luxury-results-grid">
+      {Array.from({ length: type === "artists" ? 8 : 6 }).map((_, index) => (
+        <div key={index} className="luxury-card luxury-skeleton-card">
+          <div />
+          <span />
+          <strong />
+          <p />
         </div>
-
-        <h3 className="text-lg font-black text-[#1A1A1A] tracking-wider uppercase mb-1 leading-tight">
-          {artistName}
-        </h3>
-
-        {artist.brandName && (
-          <p className="text-[9px] font-bold text-orange-500 tracking-widest uppercase mb-2">
-            {artist.brandName}
-          </p>
-        )}
-
-        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 mb-4 tracking-widest uppercase">
-          <span>{artist.age || "--"} YRS</span>
-          <span className="w-1 h-1 rounded-full bg-slate-300" />
-          <span>{artist.gender || "Any"}</span>
-          {artist.state && (
-            <>
-              <span className="w-1 h-1 rounded-full bg-slate-300" />
-              <MapPin className="w-2.5 h-2.5 text-orange-400" />
-              <span className="text-orange-500">{artist.state}</span>
-            </>
-          )}
-        </div>
-
-        {/* Category badges */}
-        <div className="flex flex-col items-center gap-1.5 mb-5 w-full">
-          {displayCategory && (
-            <span className="w-full max-w-[180px] truncate px-3 py-1.5 rounded-full bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 text-orange-700 text-[10px] font-black uppercase tracking-widest shadow-sm">
-              {displayCategory}
-            </span>
-          )}
-          {artist.subcategory && (
-            <span className="w-full max-w-[180px] truncate px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-widest">
-              {artist.subcategory}
-            </span>
-          )}
-        </div>
-
-        {youtubeLink ? (
-          <a
-            href={youtubeLink}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="w-full mt-auto flex items-center justify-center gap-2 rounded-xl bg-white/60 border border-red-200 py-2.5 text-[#1A1A1A] font-black tracking-widest text-[10px] uppercase hover:bg-gradient-to-r hover:from-orange-500 hover:to-red-500 hover:text-foreground hover:border-transparent hover:shadow-[0_4px_20px_rgba(239,68,68,0.35)] transition-all duration-300"
-          >
-            <Youtube className="h-3.5 w-3.5" /> Watch on YouTube
-          </a>
-        ) : (
-          <div className="w-full mt-auto py-2.5 flex items-center justify-center gap-2 text-slate-400 font-bold tracking-widest text-[10px] uppercase border border-dashed border-slate-200 rounded-xl bg-white/30">
-            <Music className="w-3 h-3" /> No Media Yet
-          </div>
-        )}
-      </div>
+      ))}
     </div>
   );
 }
 
-// ─── Category Section ──────────────────────────────────────────────────────────
-function CategorySection({
-  categoryName,
-  categoryIcon,
-  artists,
-}: {
-  categoryName: string;
-  categoryIcon?: string;
-  artists: any[];
-}) {
-  const [collapsed, setCollapsed] = useState(false);
-  const sectionRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    if (!sectionRef.current || collapsed) return;
-    const cards = sectionRef.current.querySelectorAll(".artist-card-animate");
-    gsap.killTweensOf(cards);
-    gsap.fromTo(
-      cards,
-      { opacity: 0, y: 30 },
-      { opacity: 1, y: 0, stagger: 0.07, duration: 0.6, ease: "power3.out", clearProps: "all" }
-    );
-  }, [artists, collapsed]);
-
-  return (
-    <motion.section
-      className="mb-16"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
-      {/* Section header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center shadow-md shadow-orange-200">
-            <span className="text-lg">{categoryIcon || "🎭"}</span>
-          </div>
-          <div>
-            <h2 className="text-xl font-black text-[#1A1A1A] tracking-tight uppercase">{categoryName}</h2>
-            <p className="text-[10px] font-bold text-orange-500 tracking-widest uppercase">
-              {artists.length} Artist{artists.length !== 1 ? "s" : ""} Available
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={() => setCollapsed((v) => !v)}
-          className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-orange-500 transition-colors px-3 py-2 rounded-xl hover:bg-orange-50"
-        >
-          <ChevronDown
-            className={`w-4 h-4 transition-transform duration-300 ${collapsed ? "-rotate-90" : ""}`}
-          />
-          {collapsed ? "Show" : "Hide"}
-        </button>
-      </div>
-
-      <AnimatePresence>
-        {!collapsed && (
-          <motion.div
-            ref={sectionRef}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.35 }}
-          >
-            {artists.map((artist, idx) => (
-              <PremiumArtistCard
-                key={`${artist.id}-${categoryName}-${idx}`}
-                artist={artist}
-                index={idx}
-                onClick={() => {}}
-                highlightCategory={categoryName}
-              />
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Divider */}
-      <div className="mt-10 h-px bg-gradient-to-r from-transparent via-orange-200 to-transparent" />
-    </motion.section>
-  );
-}
-
-// ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function SearchPage() {
-  const [params] = useSearchParams();
-  const { currentUser } = useAuth();
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [artists, setArtists] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [params, setParams] = useSearchParams();
+  const routeState = params.get("state") || "";
+  const routeDistrict = params.get("district") || "";
+  const routeEventId = params.get("eventId") || "";
+  const routeType = params.get("type") || "";
+  const [activeTab, setActiveTab] = useState<ExploreTab>(() => (params.get("tab") === "events" ? "events" : "artists"));
+  const { filters, debouncedFilters, applyFilters, resetFilters } = useMarketplaceFilters(
+    {
+      query: params.get("q") || "",
+      category: params.get("category"),
+      subCategory: params.get("subcategory"),
+      categories: compact([params.get("category"), ...splitParam(params.get("categories"))]),
+      subCategories: compact([params.get("subcategory"), ...splitParam(params.get("subcategories"))]),
+      tags: splitParam(params.get("tags")),
+      eventTypes: compact([routeType, ...splitParam(params.get("eventTypes"))]),
+    },
+    150,
+  );
+  const [artists, setArtists] = useState<Record<string, unknown>[]>([]);
+  const [events, setEvents] = useState<EventRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<"category" | "grid">("category");
-  const selectedState = params.get("state") || "";
-  const selectedDistrict = params.get("district") || "";
-
-  // Read category filter from URL param set by EventRequirements
-  useEffect(() => {
-    const urlCategory = params.get("category");
-    if (urlCategory) setSelectedCategory(urlCategory);
-  }, [params]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [artistCursor, setArtistCursor] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMoreArtists, setHasMoreArtists] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const artistFilters = [where("status", "==", "active")];
-    const qArtists = query(collection(db, "artists"), ...artistFilters);
-    const unsubArtists = onSnapshot(qArtists, (snapshot) => {
-      const liveArtists = snapshot.docs.map((doc) => normalizeLoadedArtist({ id: doc.id, ...doc.data() }));
-      const sourceArtists = liveArtists.length > 0
-        ? liveArtists
-        : initialArtists.map((artist, index) => normalizeLoadedArtist({
-            id: `demo-artist-${index + 1}`,
-            uid: `demo-artist-${index + 1}`,
-            status: "active",
-            categories: [artist.category],
-            artsList: [{ category: artist.category, subcategory: artist.subcategory, types: [] }],
-            media: {
-              profilePhoto: artist.profilePhoto,
-              coverPhoto: artist.profilePhoto,
-              galleryPhotos: [artist.profilePhoto],
-            },
-            stats: {
-              rating: artist.rating,
-              reviews: artist.reviews,
-              followers: 0,
-              profileViews: 0,
-              totalBookings: 0,
-            },
-            ...artist,
-          }));
-      const stateMatches = selectedState ? sourceArtists.filter((artist: any) => artist.state === selectedState) : sourceArtists;
-      const districtMatches = selectedDistrict ? stateMatches.filter((artist: any) => artist.district === selectedDistrict || artist.city === selectedDistrict) : stateMatches;
-      setArtists(districtMatches.length > 0 ? districtMatches : stateMatches.length > 0 ? stateMatches : sourceArtists);
-      setLoading(false);
-    }, (error) => {
-      console.warn("Artists unavailable, using local defaults.", error);
-      setArtists(initialArtists.map((artist, index) => normalizeLoadedArtist({
-        id: `demo-artist-${index + 1}`,
-        uid: `demo-artist-${index + 1}`,
-        status: "active",
-        categories: [artist.category],
-        artsList: [{ category: artist.category, subcategory: artist.subcategory, types: [] }],
-        media: {
-          profilePhoto: artist.profilePhoto,
-          coverPhoto: artist.profilePhoto,
-          galleryPhotos: [artist.profilePhoto],
-        },
-        stats: {
-          rating: artist.rating,
-          reviews: artist.reviews,
-          followers: 0,
-          profileViews: 0,
-          totalBookings: 0,
-        },
-        ...artist,
-      })));
-      setLoading(false);
-    });
+    const next = new URLSearchParams();
+    if (activeTab === "events") next.set("tab", "events");
+    if (filters.query) next.set("q", filters.query);
+    if (filters.category) next.set("category", filters.category);
+    if (filters.subCategory) next.set("subcategory", filters.subCategory);
+    if (filters.categories?.length) next.set("categories", filters.categories.join(","));
+    if (filters.subCategories?.length) next.set("subcategories", filters.subCategories.join(","));
+    if (filters.tags?.length) next.set("tags", filters.tags.join(","));
+    if (filters.eventTypes?.length) next.set("eventTypes", filters.eventTypes.join(","));
+    if (routeState) next.set("state", routeState);
+    if (routeDistrict) next.set("district", routeDistrict);
+    if (routeEventId) next.set("eventId", routeEventId);
+    if (routeType) next.set("type", routeType);
+    setParams(next, { replace: true });
+  }, [activeTab, filters, routeDistrict, routeEventId, routeState, routeType, setParams]);
 
-    // Lucide icon name → emoji fallback map (for Firestore docs seeded with old string icons)
-    const ICON_EMOJI_MAP: Record<string, string> = {
-      Music: "🎵", Dancer: "💃", Masks: "🎭", Camera: "🎨",
-      Flag: "🥁", Hands: "🛕", PartyPopper: "🎊",
-    };
-
-    const qCategories = query(collection(db, "categories"), orderBy("sortOrder"));
-    const unsubCategories = onSnapshot(qCategories, (snapshot) => {
-      const liveCategories = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        // Normalize icon: if it's a plain word (Lucide component name), swap to emoji
-        const rawIcon = data.icon || "🎭";
-        const icon = rawIcon.length <= 15 && !rawIcon.match(/\p{Emoji}/u)
-          ? (ICON_EMOJI_MAP[rawIcon] ?? "🎭")
-          : rawIcon;
-        return { id: doc.id, ...data, icon };
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([getInitialArtistCollection(), getApprovedEvents()])
+      .then(([artistPage, eventData]) => {
+        if (!mounted) return;
+        setArtists(artistPage.items);
+        setArtistCursor(artistPage.cursor);
+        setHasMoreArtists(artistPage.hasMore);
+        setEvents(eventData as EventRecord[]);
+        setError(null);
+      })
+      .catch((err) => {
+        console.warn("Explore data unavailable.", err);
+        if (mounted) setError("Discovery data is unavailable right now.");
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
       });
-      setCategories(CATEGORY_GROUP_OPTIONS);
-    }, (error) => {
-      console.warn("Categories unavailable, using local defaults.", error);
-      setCategories(CATEGORY_GROUP_OPTIONS);
-    });
-    return () => {
-      unsubArtists();
-      unsubCategories();
-    };
-  }, [selectedDistrict, selectedState]);
 
-  // Build a map: categoryName (lowercase-keyed) → list of artists
-  // This makes all lookups case-insensitive by normalizing keys
-  const artistEntries = useMemo(
-    () => artists.flatMap(collectArtistCategoryEntries),
-    [artists]
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const loadMoreArtists = async () => {
+    if (!hasMoreArtists || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const artistPage = await getActiveArtistsPage(50, artistCursor);
+      setArtists((current) => [...current, ...(artistPage.items as Record<string, unknown>[])]);
+      setArtistCursor(artistPage.nextCursor);
+      setHasMoreArtists(artistPage.hasMore);
+    } catch (err) {
+      console.warn("More artists unavailable.", err);
+      setError("More artists are unavailable right now.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const artistCards = useMemo(() => buildArtistCards(artists), [artists]);
+  const filteredArtists = useMemo(() => filterArtistCards(artistCards, debouncedFilters), [artistCards, debouncedFilters]);
+  const locationMatchedArtists = useMemo(
+    () => filteredArtists.filter((artist) => artistMatchesLocation(artist, routeState, routeDistrict)),
+    [filteredArtists, routeDistrict, routeState],
+  );
+  const hasLocationContext = Boolean(routeState || routeDistrict);
+  const isLocationFallback = hasLocationContext && locationMatchedArtists.length === 0 && filteredArtists.length > 0;
+  const visibleArtists = isLocationFallback ? filteredArtists : locationMatchedArtists;
+  const filteredEvents = useMemo(() => filterEvents(events, debouncedFilters), [events, debouncedFilters]);
+  const resultCount = activeTab === "artists" ? visibleArtists.length : filteredEvents.length;
+  const tagOptions = useMemo(
+    () =>
+      compact([
+        ...artistCards.flatMap((artist) => artist.tags),
+        ...events.flatMap((event) => [event.tags, event.keywords]),
+      ]),
+    [artistCards, events],
+  );
+  const eventTypeOptions = useMemo(
+    () =>
+      compact([
+        ...DEFAULT_EVENT_TYPES,
+        ...artistCards.flatMap((artist) => artist.eventTypes),
+        ...events.flatMap((event) => [event.type, event.eventType, event.eventTypes, event.occasion, event.occasionType]),
+      ]),
+    [artistCards, events],
   );
 
-  const artistsByCategory = useMemo(() => {
-    // map key: lowercase category name, value: { displayName, artists[] }
-    const map: Record<string, { displayName: string; artists: any[] }> = {};
-
-    artistEntries.forEach((entry) => {
-      if (!entry.category) return;
-      const key = normalizeCategoryKey(entry.category);
-      if (!map[key]) map[key] = { displayName: entry.category, artists: [] };
-      map[key].artists.push(entry.artist);
-    });
-
-    return map;
-  }, [artistEntries]);
-
-  // Helper: find artists for a given category name (case-insensitive)
-  const getArtistsForCategory = (catName: string) => {
-    const filterCategories = getCategoriesForFilter(catName);
-    if (!filterCategories.length) return [];
-    return uniqueArtistsById(
-      filterCategories.flatMap((category) => artistsByCategory[normalizeCategoryKey(category)]?.artists || []),
-    );
-  };
-
-  // Flat filtered card entries for grid mode / search.
-  // Grid keeps one card per artist/category entry so it matches category view availability.
-  const filteredArtistCards = useMemo(() => {
-    const selectedCategories = selectedCategory !== "all" ? getCategoriesForFilter(selectedCategory) : [];
-    let results = selectedCategories.length > 0
-      ? artistEntries.filter((entry) => selectedCategories.includes(entry.category as any))
-      : artistEntries;
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      results = results.filter(
-        (entry) => {
-          const artist = entry.artist;
-          return (
-            artist.name?.toLowerCase().includes(q) ||
-            artist.professionalName?.toLowerCase().includes(q) ||
-            artist.brandName?.toLowerCase().includes(q) ||
-            entry.category.toLowerCase().includes(q) ||
-            String(entry.subcategory ?? "").toLowerCase().includes(q) ||
-            String(getCategoryGroupForCategory(entry.category) ?? "").toLowerCase().includes(q) ||
-            artist.artsList?.some((art: any) => String(art.category ?? "").toLowerCase().includes(q))
-          );
-        }
-      );
-    }
-    return results;
-  }, [artistEntries, selectedCategory, searchQuery]);
-
-  // effectiveCategories: Merge Firestore categories + artist-derived categories
-  // This ensures artists with category names not in Firestore still show up
-  const effectiveCategories = useMemo(() => {
-    const base: any[] = categories.length > 0 ? categories : CATEGORY_GROUP_OPTIONS;
-    const baseNamesLower = new Set(base.map(c => normalizeCategoryKey(c.name)));
-
-    // Derive categories from actual artist data
-    const derived: any[] = [];
-    Object.entries(artistsByCategory).forEach(([key, entry]) => {
-      if (getCategoryGroupForCategory(entry.displayName)) return;
-      if (!baseNamesLower.has(key)) {
-        // This artist category isn't in Firestore categories — add it
-        derived.push({
-          id: key,
-          name: entry.displayName,
-          icon: "🎭",
-          sortOrder: 999 + derived.length,
-        });
-      }
-    });
-
-    return [...base, ...derived];
-  }, [categories, artistsByCategory]);
-
-  // Categories that have at least one artist
-  const activeCategories = useMemo(() => {
-    const filterName = selectedCategory !== "all" ? selectedCategory : null;
-
-    return effectiveCategories
-      .map((cat) => {
-        const arts = getArtistsForCategory(cat.name);
-        return { ...cat, artists: arts };
-      })
-      .filter((c) => {
-        if (filterName) return normalizeCategoryKey(c.name) === normalizeCategoryKey(filterName) && c.artists.length > 0;
-        return c.artists.length > 0;
-      });
-  }, [effectiveCategories, artistsByCategory, selectedCategory]);
-
-  // When a category is selected from dropdown, switch to Category view
-  // so the grouped CategorySection view appears automatically
-  const handleCategoryChange = (value: string) => {
-    setSelectedCategory(value);
-    if (value !== "all") {
-      setViewMode("category");
-    }
-  };
-
-  const showCategoryView =
-    viewMode === "category" && !searchQuery.trim();
-
-  // Grid fallback animation
-  useLayoutEffect(() => {
-    if (!loading && !showCategoryView) {
-      gsap.killTweensOf(".artist-card-animate");
-      gsap.fromTo(
-        ".artist-card-animate",
-        { opacity: 0, y: 30 },
-        { opacity: 1, y: 0, stagger: 0.08, duration: 0.7, ease: "power3.out", clearProps: "all" }
-      );
-    }
-  }, [filteredArtistCards, loading, showCategoryView]);
-
   return (
-    <div className="min-h-screen w-full flex flex-col items-center relative overflow-x-hidden font-sans bg-transparent">
+    <div className="luxury-page explore-page min-h-screen antialiased">
       <Navbar />
 
-
-
-      <main className="flex-1 w-full pt-32 pb-24 z-10 relative">
-        <div className="container mx-auto px-6 max-w-7xl">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "circOut" }}
-            className="mb-12"
-          >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-orange-200 bg-orange-50 text-orange-600 backdrop-blur-md shadow-sm text-xs font-black tracking-[0.2em] uppercase mb-6">
-              <Sparkles className="h-3 w-3" /> MyKalakar Artist Directory
+      <main className="container-shell" style={{ paddingBottom: "64px" }}>
+        <section className="page-hero events-hero grid max-h-none gap-4 overflow-hidden rounded-2xl bg-white p-4 shadow-sm transition-shadow duration-200 hover:shadow-md md:max-h-[340px] md:grid-cols-[1fr_360px] md:p-5 lg:grid-cols-[1fr_420px]">
+          <div className="flex min-w-0 flex-col justify-center">
+            <motion.span
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+              className="inline-flex w-max items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-orange-700"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Artists
+            </motion.span>
+            <motion.h1
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.04, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-2 max-w-3xl text-3xl font-extrabold leading-[1.08] text-stone-950 md:text-[40px]"
+            >
+              Connect with precise artists for every occasion.
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-stone-600"
+            >
+              Browse native art forms, locations, tags, and occasions in one clean discovery flow.
+            </motion.p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link to="/events" className="inline-flex h-10 items-center gap-2 rounded-full bg-orange-600 px-4 text-xs font-extrabold uppercase tracking-widest text-white shadow-sm transition hover:bg-orange-700 hover:shadow-md">
+                <CalendarDays className="h-4 w-4" />
+                Post an Event
+              </Link>
+              <Link to="/register?role=artist" className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-xs font-extrabold uppercase tracking-widest text-stone-700 shadow-sm transition hover:border-orange-200 hover:text-orange-600">
+                <UsersRound className="h-4 w-4" />
+                Join as Artist
+              </Link>
             </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tight text-[#1A1A1A]">
-              DISCOVER <span className="gradient-text-primary">TALENT</span>
-            </h1>
-            <p className="mt-5 text-slate-500 max-w-2xl font-medium leading-relaxed">
-              Explore our exclusive network of premium artists across every category. Click any card to see full details & share their profile.
-            </p>
-          </motion.div>
-
-          {/* Search & Filter Bar */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.2, ease: "circOut" }}
-            className="glass-panel rounded-3xl p-5 mb-10 flex flex-col md:flex-row gap-4 md:items-center"
-          >
-            {/* Search */}
-            <div className="relative flex-1 group">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-orange-500 transition-colors z-10" />
-              <input
-                type="text"
-                placeholder="Search by artist, category, nickname..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="input-glass w-full rounded-2xl pl-14 pr-4 py-4 text-[#1A1A1A] font-medium shadow-inner placeholder:text-slate-400"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Category filter */}
-            <div className="w-full md:w-64">
-              <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-                <SelectTrigger className="h-14 bg-white/60 border-orange-100 text-[#1A1A1A] rounded-2xl uppercase tracking-widest text-xs font-black shadow-inner shadow-black/5 hover:bg-white/80 transition-colors focus:ring-orange-400">
-                  <SelectValue placeholder="ALL CATEGORIES" />
-                </SelectTrigger>
-                <SelectContent className="bg-white/90 backdrop-blur-xl border-orange-100 text-[#1A1A1A] rounded-2xl shadow-xl">
-                  <SelectItem value="all" className="font-bold py-3 uppercase text-xs tracking-widest focus:bg-orange-50 focus:text-orange-600">
-                    ALL CATEGORIES
-                  </SelectItem>
-                  {effectiveCategories.map((cat) => (
-                    <SelectItem key={cat.id || cat.name} value={cat.name} className="font-bold py-3 uppercase text-xs tracking-widest focus:bg-orange-50 focus:text-orange-600">
-                      {cat.icon} {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* View toggle */}
-            <div className="flex items-center gap-2 bg-orange-50 rounded-2xl p-1.5 border border-orange-100">
-              <button
-                onClick={() => setViewMode("category")}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  viewMode === "category"
-                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-foreground shadow-md"
-                    : "text-slate-500 hover:text-orange-600"
-                }`}
-              >
-                By Category
-              </button>
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  viewMode === "grid"
-                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-foreground shadow-md"
-                    : "text-slate-500 hover:text-orange-600"
-                }`}
-              >
-                Grid
-              </button>
-            </div>
-          </motion.div>
-
-          {/* Count bar */}
-          <div className="flex items-center justify-between mb-8 pb-4 border-b border-orange-100">
-            <h3 className="text-slate-500 text-[10px] font-black tracking-[0.25em] uppercase">
-              {loading
-                ? "Curating the extraordinary..."
-                : showCategoryView
-                ? `${activeCategories.length} Categor${activeCategories.length !== 1 ? "ies" : "y"} · ${artistEntries.length} Profile${artistEntries.length !== 1 ? "s" : ""}`
-                : `Viewing ${filteredArtistCards.length} Profile${filteredArtistCards.length !== 1 ? "s" : ""}${selectedCategory !== "all" ? ` · ${selectedCategory}` : ""}`}
-            </h3>
-            {(selectedCategory !== "all" || searchQuery) && (
-              <button
-                onClick={() => { setSelectedCategory("all"); setSearchQuery(""); }}
-                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-600 transition-colors"
-              >
-                <X className="w-3 h-3" /> Clear Filters
-              </button>
-            )}
           </div>
+          <div className="relative min-h-[210px] overflow-hidden rounded-xl bg-stone-100 md:min-h-0">
+            <SmartImage
+              src={getHeroImage(activeTab)}
+              alt="Curated artist discovery"
+              priority
+              usageId="artists:compact-hero"
+              category={activeTab === "events" ? "Marriage" : "Kirtankar"}
+              orientation="landscape"
+              aspectRatio="aspect-video"
+              sizes="(max-width: 768px) 100vw, 420px"
+              containerClassName="h-full w-full"
+              imageClassName="object-cover object-center"
+            />
+            <div className="absolute inset-x-3 bottom-3 flex items-center gap-2 rounded-full bg-white/95 px-3 py-2 text-xs font-extrabold text-stone-900 shadow-sm backdrop-blur">
+              <Search className="h-4 w-4 text-orange-600" />
+              <span>{loading ? "Building the collection" : `${resultCount} refined matches`}</span>
+            </div>
+          </div>
+        </section>
 
-          {/* Main content */}
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 space-y-4">
-              <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-              <p className="text-orange-600 text-[10px] font-black tracking-widest uppercase">
-                Curating the extraordinary...
+        <LayoutGroup>
+          <LuxuryFilterBar
+            filters={filters}
+            onChange={applyFilters}
+            onReset={resetFilters}
+            resultCount={resultCount}
+            loading={loading}
+            tagOptions={tagOptions}
+            eventTypeOptions={eventTypeOptions}
+          />
+
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ExploreTab)}>
+            <div className="luxury-results-toolbar">
+              <TabsList className="luxury-tabs">
+                <TabsTrigger value="artists">Artists</TabsTrigger>
+                <TabsTrigger value="events">Events</TabsTrigger>
+              </TabsList>
+              <p>
+                {loading ? "Loading the collection" : error ? "Discovery paused" : resultCount === 0 ? "No matches" : `${resultCount} curated match${resultCount === 1 ? "" : "es"}`}
               </p>
             </div>
-          ) : showCategoryView ? (
-            // ── Category-by-Category view ──────────────────────────────────────
-            activeCategories.length > 0 ? (
-              <div>
-                {activeCategories.map((cat) => (
-                  <CategorySection
-                    key={cat.id || cat.name}
-                    categoryName={cat.name}
-                    categoryIcon={cat.icon}
-                    artists={cat.artists}
-                  />
-                ))}
-              </div>
+
+            {activeTab === "artists" && isLocationFallback ? (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="luxury-notice">
+                No exact match was found in {routeDistrict || routeState}. Showing artists that match the selected art form.
+              </motion.div>
+            ) : null}
+
+            {loading ? (
+              <ResultSkeleton type={activeTab} />
+            ) : error ? (
+              <LuxuryEmptyState label={activeTab} onReset={resetFilters} />
+            ) : activeTab === "artists" ? (
+              visibleArtists.length > 0 ? (
+                <>
+                  <motion.div layout className="luxury-results-grid">
+                    <AnimatePresence mode="popLayout">
+                      {visibleArtists.map((artist, index) => (
+                        <LuxuryArtistCard key={artist.cardId} artist={artist} index={index} />
+                      ))}
+                    </AnimatePresence>
+                  </motion.div>
+                  {hasMoreArtists ? (
+                    <div className="luxury-load-more">
+                      <button type="button" onClick={loadMoreArtists} disabled={loadingMore}>
+                        {loadingMore ? "Loading..." : "Load More Artists"}
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <LuxuryEmptyState label="artists" onReset={resetFilters} />
+              )
+            ) : filteredEvents.length > 0 ? (
+              <motion.div layout className="luxury-results-grid event-grid">
+                <AnimatePresence mode="popLayout">
+                  {filteredEvents.map((event, index) => (
+                    <LuxuryEventCard key={event.id} event={event} index={index} />
+                  ))}
+                </AnimatePresence>
+              </motion.div>
             ) : (
-              <EmptyState selectedCategory={selectedCategory} onClear={() => { setSelectedCategory("all"); setSearchQuery(""); }} />
-            )
-          ) : (
-            // ── Flat grid view (search results or grid toggle) ─────────────────
-            filteredArtistCards.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
-                {filteredArtistCards.map((entry, idx) => (
-                  <PremiumArtistCard
-                    key={entry.entryId}
-                    artist={entry.artist}
-                    index={idx}
-                    onClick={() => {}}
-                    highlightCategory={entry.category}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                selectedCategory={selectedCategory}
-                onClear={() => { setSelectedCategory("all"); setSearchQuery(""); }}
-              />
-            )
-          )}
-        </div>
+              <LuxuryEmptyState label="events" onReset={resetFilters} />
+            )}
+          </Tabs>
+        </LayoutGroup>
       </main>
 
       <Footer />
-    </div>
-  );
-}
-
-// ─── Empty State ───────────────────────────────────────────────────────────────
-function EmptyState({ selectedCategory, onClear }: { selectedCategory: string; onClear: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center glass-card rounded-3xl p-10 max-w-lg mx-auto">
-      <div className="relative w-24 h-24 mb-6">
-        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-orange-200/60 to-amber-200/60 blur-xl animate-pulse" />
-        <div className="relative w-full h-full rounded-full bg-white/70 border border-orange-100 shadow-md flex items-center justify-center">
-          <Mic className="h-9 w-9 text-orange-300" />
-        </div>
-      </div>
-
-      <h3 className="text-xl font-black tracking-wider uppercase text-[#1A1A1A] mb-2">
-        {selectedCategory !== "all" ? `No ${selectedCategory} found` : "No artists found."}
-      </h3>
-      <p className="text-slate-500 text-sm font-medium mb-8 max-w-xs leading-relaxed">
-        {selectedCategory !== "all"
-          ? `There are no registered artists in the "${selectedCategory}" category yet.`
-          : "No artists match your search. Try a different keyword."}
-      </p>
-
-      <button
-        onClick={onClear}
-        className="flex items-center justify-center gap-2 px-7 py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-foreground text-[10px] font-black uppercase tracking-widest shadow-md shadow-orange-200 hover:shadow-lg hover:shadow-orange-300 hover:scale-105 active:scale-95 transition-all"
-      >
-        <Sparkles className="w-3.5 h-3.5" />
-        View All Artists
-      </button>
     </div>
   );
 }

@@ -108,7 +108,7 @@ export default function ArtistLogin() {
   const activeTab = roleTabs.find((tab) => tab.id === activeRole) ?? roleTabs[0];
 
   return (
-    <div className="relative z-10 flex min-h-screen w-full flex-col px-4 py-8">
+    <div className="auth-page relative z-10 flex min-h-screen w-full flex-col justify-center px-4 pt-4 pb-8">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between">
         <Link
           to="/"
@@ -125,12 +125,30 @@ export default function ArtistLogin() {
         </Link>
       </div>
 
-      <div className="flex flex-1 items-center justify-center py-10">
+      <div className="auth-stage mx-auto grid w-full max-w-6xl items-center gap-6 py-8 lg:grid-cols-[0.95fr_1fr]">
+        <div className="auth-visual-panel hidden min-h-[620px] overflow-hidden rounded-lg border border-white/10 bg-white/[0.055] p-8 shadow-2xl backdrop-blur-2xl lg:flex lg:flex-col lg:justify-between">
+          <div>
+            <span className="inline-flex rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-100">
+              MyKalakar Access
+            </span>
+            <h2 className="mt-6 max-w-sm text-5xl font-black leading-[0.98] text-white">
+              Enter the artist network.
+            </h2>
+          </div>
+          <div className="auth-visual-stack grid gap-3">
+            {["Verified talent graph", "Event-ready profiles", "Admin-grade governance"].map((item) => (
+              <div key={item} className="rounded-lg border border-white/10 bg-white/[0.07] p-4 text-sm font-extrabold text-white/82 backdrop-blur-2xl">
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+
         <motion.div
           initial={{ opacity: 0, y: 28 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-md"
+          className="w-full max-w-md justify-self-center"
         >
           <div className="mb-8 text-center">
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl gradient-bg shadow-[0_12px_40px_rgba(232,111,58,0.25)]">

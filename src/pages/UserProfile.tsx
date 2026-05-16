@@ -143,7 +143,7 @@ export default function UserProfile() {
   return (
     <div className="min-h-screen bg-transparent">
       <Navbar />
-      <main className="container mx-auto px-4 pb-16 pt-28">
+      <main className="profile-account-shell page-shell container mx-auto px-4 pb-16">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-4xl space-y-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>

@@ -2,6 +2,26 @@ export const FIREBASE_READ_TIMEOUT_MS = 12000;
 export const FIREBASE_WRITE_TIMEOUT_MS = 20000;
 export const FIREBASE_UPLOAD_TIMEOUT_MS = 45000;
 
+export const sanitizePayload = (payload: any) =>
+  Object.fromEntries(
+    Object.entries(payload).filter(([_, v]) => v !== undefined)
+  );
+
+export function requireAuthUid(currentUser?: { uid?: string } | null) {
+  if (!currentUser?.uid) {
+    throw new Error("User not authenticated");
+  }
+  return currentUser.uid;
+}
+
+export function logFirebaseError(error: any) {
+  console.group("🔥 FIREBASE ERROR");
+  console.error("Code:", error?.code);
+  console.error("Message:", error?.message);
+  console.error("Full:", error);
+  console.groupEnd();
+}
+
 export function getFirebaseErrorCode(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error
     ? String((error as { code?: unknown }).code ?? "")
@@ -97,6 +117,7 @@ export function toastForFirestoreError(
     description: string;
   }) => void
 ): void {
+  logFirebaseError(error);
   if (isIndexError(error)) {
     toastFn({
       title: "⏳ Optimizing database",

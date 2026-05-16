@@ -18,6 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, ShieldCheck, CheckCircle2, AlertCircle, Database } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { seedAllMasterData } from "@/lib/masterDataService";
+import { getArtistArtForms } from "@/constants/artistSystem";
 
 interface Log { type: "ok" | "warn" | "err"; msg: string }
 
@@ -95,6 +96,18 @@ export default function AdminBootstrap() {
         }
 
         const primaryArt = Array.isArray(data.artsList) ? data.artsList[0] || {} : {};
+        const media = data.media || {
+          profilePhoto: data.profilePhoto || "",
+          coverPhoto:   data.coverPhoto   || "",
+          galleryPhotos: data.galleryPhotos || [],
+        };
+        const artistProfile = {
+          artForms: getArtistArtForms(data),
+          experience: Number(data.experience) || 0,
+          bio: data.bio || "",
+          location: data.location || data.district || data.city || data.state || "",
+          profileImage: media.profilePhoto || data.profilePhoto || "",
+        };
         const batch = writeBatch(db);
         batch.set(artistRef, {
           uid, applicationId: d.id, username: data.username || "",
@@ -112,11 +125,8 @@ export default function AdminBootstrap() {
             duoPrice:  Number(data.duoPrice)  || 0,
             teamPrice: Number(data.teamPrice) || 0,
           },
-          media: data.media || {
-            profilePhoto: data.profilePhoto || "",
-            coverPhoto:   data.coverPhoto   || "",
-            galleryPhotos: data.galleryPhotos || [],
-          },
+          artistProfile,
+          media,
           socialLinks: data.socialLinks || [],
           stats: { rating: 0, reviews: 0, followers: 0, profileViews: 0, totalBookings: 0 },
           status: "active", verified: true, trending: false,
@@ -128,6 +138,8 @@ export default function AdminBootstrap() {
         batch.set(doc(db, "users", uid), {
           uid, name: data.name || "", username: data.username || "",
           email: data.email || "", phone: data.mobileNumber || data.phone || "",
+          profilePhoto: artistProfile.profileImage,
+          artistProfile,
           role: "artist", status: "active", updatedAt: serverTimestamp(),
         }, { merge: true });
 

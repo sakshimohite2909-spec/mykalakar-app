@@ -329,7 +329,7 @@ export default function AdminLocations() {
             {/* Empty State */}
             {!loading && states.length === 0 && (
                 <Card>
-                    <CardContent className="py-16 text-center">
+                    <CardContent className="py-10 text-center">
                         <MapPin className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                         <h3 className="text-lg font-semibold mb-2">No States Added Yet</h3>
                         <p className="text-muted-foreground mb-4">Click "Add State" to start adding Indian states and their districts.</p>

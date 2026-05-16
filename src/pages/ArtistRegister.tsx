@@ -42,14 +42,16 @@ import {
   X,
   Youtube,
 } from "lucide-react";
-import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, doc, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
+import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getExternalUrl, getYoutubeThumbnailUrl } from "@/lib/youtube";
+import { uploadImageFile } from "@/lib/uploadService";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
-import { ARTIST_TYPES, normalizeArtistType } from "@/constants/artistSystem";
+import { ARTIST_TYPES, CATEGORY_STRUCTURE, MAIN_CATEGORIES, normalizeArtistType } from "@/constants/artistSystem";
+import { imageRegistry } from "@/services/ImageRegistryService";
 import {
   PHONE_MAX_LENGTH,
   PHONE_PLACEHOLDER,
@@ -62,6 +64,7 @@ type PortfolioPlatform = "youtube";
 type PortfolioLink = { platform: PortfolioPlatform; url: string };
 type ExtraArtEntry = {
   id: string;
+  mainCategory: string;
   category: string;
   soloPrice: string;
   duoPrice: string;
@@ -137,7 +140,8 @@ const artistRegistrationSchema = z
     dob: z.string().min(1, "Date of birth is required."),
     gender: z.string().min(1, "Gender is required."),
     travelWillingness: z.string().min(1, "Travel willingness is required."),
-    artCategory: z.string().min(1, "Category / art form is required."),
+    mainCategory: z.string().min(1, "Main category is required."),
+    artCategory: z.string().min(1, "Subcategory / art form is required."),
     soloPrice: z.string().optional(),
     duoPrice: z.string().optional(),
     teamPrice: z.string().optional(),
@@ -189,6 +193,7 @@ const artistDefaults: ArtistRegistrationValues = {
   dob: "",
   gender: "",
   travelWillingness: "local",
+  mainCategory: "",
   artCategory: "",
   soloPrice: "",
   duoPrice: "",
@@ -218,7 +223,7 @@ const userDefaults: UserRegistrationValues = {
 };
 
 const inputClass =
-  "input-glass w-full px-4 py-3 text-sm text-[#1A1A1A] placeholder:text-slate-400";
+  "input-premium w-full px-4 py-3 text-[#1A1A1A]";
 const errorInputClass = "border-red-400 focus:border-red-500 focus:ring-red-200";
 
 function digitsOnly(value: string, maxLength: number) {
@@ -519,7 +524,7 @@ function ArtCategoryCard({
   };
 
   return (
-    <div className="rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
+    <div className="form-subcard rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-sm font-black text-slate-500">Art #{index + 1}</p>
         {removable ? (
@@ -534,15 +539,28 @@ function ArtCategoryCard({
         ) : null}
       </div>
 
-      <SearchableDropdown
-        label="Category / Art Form *"
-        value={art.category}
-        options={artCategoryOptions}
-        placeholder="Search or add your art form..."
-        error={error}
-        allowCustom
-        onChange={(value) => update("category", value)}
-      />
+      <div className="grid gap-4 md:grid-cols-2">
+        <SearchableDropdown
+          label="Main Category *"
+          value={art.mainCategory}
+          options={[...MAIN_CATEGORIES]}
+          placeholder="Select main category..."
+          onChange={(value) => {
+            onUpdate({ ...art, mainCategory: value, category: "" });
+          }}
+        />
+
+        <SearchableDropdown
+          label="Art Form / Subcategory *"
+          value={art.category}
+          options={art.mainCategory ? [...CATEGORY_STRUCTURE[art.mainCategory as keyof typeof CATEGORY_STRUCTURE].subcategories] : []}
+          placeholder="Select art form..."
+          error={error}
+          disabled={!art.mainCategory}
+          allowCustom
+          onChange={(value) => update("category", value)}
+        />
+      </div>
 
       <div className="my-5 h-px bg-white/80" />
 
@@ -598,7 +616,7 @@ const PortfolioLinksEditor = memo(function PortfolioLinksEditor({
   onUpdate: (index: number, next: PortfolioLink) => void;
 }) {
   return (
-    <div className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
+    <div className="form-subcard space-y-4 rounded-2xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
       {links.map((link, index) => {
         const trimmedUrl = link.url.trim();
         const thumbnailUrl = link.platform === "youtube" ? getYoutubeThumbnailUrl(trimmedUrl) : null;
@@ -752,7 +770,7 @@ function RoleTabs({
   onChange: (role: AuthRole) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-orange-100 bg-orange-50/60 p-1.5 shadow-sm backdrop-blur-md">
+    <div className="role-tabs grid grid-cols-2 gap-1.5 rounded-2xl border border-orange-100 bg-orange-50/60 p-1.5 shadow-sm backdrop-blur-md">
       {roleTabs.map((tab) => {
         const Icon = tab.icon;
         return (
@@ -796,6 +814,7 @@ function useRoleFromQuery(defaultRole: AuthRole = "artist") {
 function createExtraArtEntry(): ExtraArtEntry {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    mainCategory: "",
     category: "",
     soloPrice: "",
     duoPrice: "",
@@ -816,6 +835,7 @@ export default function ArtistRegister() {
   const [galleryFiles, setGalleryFiles] = useState<Array<{ file: File; preview: string }>>([]);
   const [portfolioLinks, setPortfolioLinks] = useState<PortfolioLink[]>([{ platform: "youtube", url: "" }]);
   const [extraArtEntries, setExtraArtEntries] = useState<ExtraArtEntry[]>([]);
+  const errorRef = useRef<HTMLDivElement>(null);
   const { register: authRegister, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -930,30 +950,45 @@ export default function ArtistRegister() {
   }, [artistForm]);
 
   const fallbackProfilePhoto = (name = "Artist") =>
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "Artist")}&background=f97316&color=fff&size=256`;
+    imageRegistry.getStableImage(`registration-profile:${name || "Artist"}`, {
+      category: "Performers",
+      type: "artist",
+      tags: ["artist", "stage", "performance", "portrait"],
+    });
 
-  const getRegistrationImagePath = (
-    file: File | null,
-    path: string,
-    fallback = ""
-  ) => {
-    if (!file) return fallback;
-    const safeName = file.name.trim().replace(/[^\w.-]+/g, "_");
-    return `${path}/${Date.now()}_${safeName || "image"}`;
+  const uploadRegistrationMedia = async (uid: string, fullName: string) => {
+    const [uploadedProfilePhoto, coverPhoto, aadharPhoto, galleryPhotos] = await Promise.all([
+      profileFile ? uploadImageFile(profileFile, `avatars/${uid}`) : Promise.resolve(fallbackProfilePhoto(fullName)),
+      coverFile ? uploadImageFile(coverFile, `covers/${uid}`) : Promise.resolve(""),
+      aadharFile ? uploadImageFile(aadharFile, `identity/${uid}`) : Promise.resolve(""),
+      Promise.all(galleryFiles.map((item) => uploadImageFile(item.file, `galleries/${uid}`))),
+    ]);
+
+    return {
+      profilePhoto: uploadedProfilePhoto,
+      coverPhoto,
+      aadharPhoto,
+      galleryPhotos,
+    };
+  };
+
+  const scrollToError = () => {
+    errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
   const submitArtist = async (values: ArtistRegistrationValues) => {
     const preparedExtraArts = extraArtEntries
       .map((entry) => ({
         ...entry,
+        mainCategory: entry.mainCategory.trim(),
         category: entry.category.trim(),
         soloPrice: entry.soloPrice.trim(),
         duoPrice: entry.duoPrice.trim(),
         teamPrice: entry.teamPrice.trim(),
       }))
       .filter((entry) => entry.category || entry.soloPrice || entry.duoPrice || entry.teamPrice);
-    if (preparedExtraArts.some((entry) => !entry.category)) {
-      toast({ variant: "destructive", title: "Category missing", description: "Please select an art form for every added category." });
+    if (preparedExtraArts.some((entry) => !entry.category || !entry.mainCategory)) {
+      toast({ variant: "destructive", title: "Category missing", description: "Please select both Main Category and Art Form for every entry." });
       return;
     }
 
@@ -970,36 +1005,7 @@ export default function ArtistRegister() {
       }
 
       const uid = authResult.uid;
-      await withTimeout(
-        setDoc(
-          doc(db, "users", uid),
-          {
-            uid,
-            username: normalizedUsername,
-            email,
-            name: values.fullName,
-            phone: values.mobileNumber,
-            role: "artist",
-            status: "pending",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        ),
-        FIREBASE_WRITE_TIMEOUT_MS,
-        "Could not save your user account details."
-      );
-
-      const profilePhoto = getRegistrationImagePath(
-        profileFile,
-        `avatars/${uid}`,
-        fallbackProfilePhoto(values.fullName)
-      );
-      const coverPhoto = getRegistrationImagePath(coverFile, `covers/${uid}`);
-      const aadharPhoto = getRegistrationImagePath(aadharFile, `identity/${uid}`);
-      const galleryPhotos = galleryFiles
-        .map((item) => getRegistrationImagePath(item.file, `galleries/${uid}`))
-        .filter(Boolean);
+      const { profilePhoto, coverPhoto, aadharPhoto, galleryPhotos } = await uploadRegistrationMedia(uid, values.fullName);
       const socialLinks = portfolioLinks
         .map((link) => ({ platform: link.platform, url: link.url.trim() }))
         .filter((link) => link.url.length > 0);
@@ -1023,12 +1029,19 @@ export default function ArtistRegister() {
           teamPrice: Number(entry.teamPrice) || 0,
         })),
       ];
+      const artForms = Array.from(new Set(artEntries.map((entry) => entry.category).filter(Boolean)));
+      const artistProfile = {
+        artForms,
+        experience: Number(values.experience) || 0,
+        bio: values.bio || "",
+        location: [values.district, values.state].filter(Boolean).join(", "),
+        profileImage: profilePhoto,
+      };
 
-      const payload = {
+      const payload = sanitizePayload({
         uid,
         username: normalizedUsername,
         email,
-        role: "artist",
         status: "pending",
         rejectionReason: "",
         name: values.fullName,
@@ -1045,6 +1058,7 @@ export default function ArtistRegister() {
         types: [],
         categories: Array.from(new Set(artEntries.map((entry) => entry.category).filter(Boolean))),
         artsList: artEntries,
+        artistProfile,
         soloPrice: artEntries[0]?.soloPrice || 0,
         duoPrice: artEntries[0]?.duoPrice || 0,
         teamPrice: artEntries[0]?.teamPrice || 0,
@@ -1086,37 +1100,50 @@ export default function ArtistRegister() {
           needAssistant: values.hasAssistant ? "yes" : "no",
         },
         suggestionComment: values.suggestionComment || "",
-        mediaUploadStatus: "path-only",
+        mediaUploadStatus: "verified",
         mediaUploadWarnings: [],
         verified: false,
         trending: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      };
+      });
 
-      await withTimeout(
-        addDoc(collection(db, "artist_applications"), payload),
-        FIREBASE_WRITE_TIMEOUT_MS,
-        "Could not submit your artist application."
+      const batch = writeBatch(db);
+      batch.set(doc(collection(db, "artist_applications")), payload);
+      batch.set(
+        doc(db, "users", uid),
+        sanitizePayload({
+          uid,
+          username: normalizedUsername,
+          email,
+          name: values.fullName,
+          phone: values.mobileNumber,
+          profilePhoto,
+          artistProfile,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }),
+        { merge: true }
       );
       await withTimeout(
-        setDoc(doc(db, "users", uid), { profilePhoto, updatedAt: serverTimestamp() }, { merge: true }),
+        batch.commit(),
         FIREBASE_WRITE_TIMEOUT_MS,
-        "Could not update your profile photo."
+        "Could not submit your artist application."
       );
       await logout().catch((logoutError) => console.warn("Logout after artist registration failed:", logoutError));
       toast({
         title: "Registration submitted",
-        description: "Your artist profile is under review. Image paths were saved without uploading files.",
+        description: "Your artist profile is under review. Uploaded media was verified before submission.",
       });
       navigate("/login?role=artist");
     } catch (error) {
-      console.error("Artist registration error:", error);
+      logFirebaseError(error, "Artist Registration Submission");
       toast({
         variant: "destructive",
         title: "Registration failed",
         description: firebaseErrorMessage(error, "Could not submit your artist registration."),
       });
+      scrollToError();
     } finally {
       setLoadingRole(null);
     }
@@ -1137,17 +1164,15 @@ export default function ArtistRegister() {
       await withTimeout(
         setDoc(
           doc(db, "users", authResult.uid),
-          {
+          sanitizePayload({
             uid: authResult.uid,
             name: values.fullName,
             username: normalizedUsername,
             email,
             phone: values.phoneOptional || "",
-            role: "user",
-            status: "active",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          },
+          }),
           { merge: true }
         ),
         FIREBASE_WRITE_TIMEOUT_MS,
@@ -1157,21 +1182,39 @@ export default function ArtistRegister() {
       toast({ title: "Account created", description: "Welcome to MyKalakar." });
       navigate("/profile");
     } catch (error) {
-      console.error("User registration error:", error);
+      logFirebaseError(error, "User Registration Submission");
       toast({
         variant: "destructive",
         title: "Registration failed",
         description: firebaseErrorMessage(error, "Could not create your account."),
       });
+      scrollToError();
     } finally {
       setLoadingRole(null);
     }
   };
 
   return (
-    <div className="relative z-10 w-full px-4 py-10 sm:py-16">
-      <div className="mx-auto max-w-4xl">
-        <div className="glass-panel min-h-[720px] overflow-hidden rounded-[2rem] border border-white/60 bg-white/65 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-3xl sm:p-8 md:p-10">
+    <div className="register-page auth-page relative z-10 flex min-h-screen w-full flex-col justify-center overflow-visible px-4">
+      <div className="registration-shell mx-auto grid w-full max-w-6xl gap-6 pb-16 lg:grid-cols-[360px_1fr]">
+        <aside className="registration-visual-panel hidden min-h-[720px] overflow-hidden rounded-lg border border-white/10 bg-white/[0.055] p-8 shadow-2xl backdrop-blur-2xl lg:flex lg:flex-col lg:justify-between">
+          <div>
+            <span className="inline-flex rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-100">
+              Creator Onboarding
+            </span>
+            <h2 className="mt-6 text-5xl font-black leading-[0.98] text-white">
+              Build a profile that feels stage-ready.
+            </h2>
+          </div>
+          <div className="grid gap-3">
+            {["Identity", "Art forms", "Pricing", "Portfolio"].map((item) => (
+              <div key={item} className="rounded-lg border border-white/10 bg-white/[0.07] p-4 text-sm font-extrabold text-white/82 backdrop-blur-2xl">
+                {item}
+              </div>
+            ))}
+          </div>
+        </aside>
+        <div className="registration-panel glass-panel min-h-[720px] overflow-visible rounded-[2rem] border border-white/60 bg-white/70 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-3xl sm:p-10 md:p-12">
           <div className="mb-8 flex items-center justify-between gap-3">
             <Link
               to="/"
@@ -1211,13 +1254,14 @@ export default function ArtistRegister() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 18 }}
                 transition={{ duration: 0.28 }}
-                onSubmit={artistForm.handleSubmit(submitArtist)}
+                onSubmit={artistForm.handleSubmit(submitArtist, scrollToError)}
                 className="mt-8 space-y-8"
                 noValidate
               >
+                <div ref={errorRef} className="scroll-mt-24" />
                 <SectionHeading icon={Lock} title="Create Your Login Account" />
 
-                <div className="rounded-2xl border border-orange-200/70 bg-orange-50/50 p-5">
+                <div className="form-subcard rounded-2xl border border-orange-200/70 bg-orange-50/50 p-5">
                   <p className="mb-4 text-sm font-semibold text-slate-500">
                     Choose a unique username and password to log in to your Artist Dashboard.
                   </p>
@@ -1331,9 +1375,11 @@ export default function ArtistRegister() {
                     error={artistForm.formState.errors.dob?.message}
                   />
                   <div>
-                    <label className="mb-1.5 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                      <Sparkles className="h-3.5 w-3.5 text-orange-500" />
-                      Synced Age Display
+                    <label className="mb-1.5 block text-sm font-bold text-slate-700">
+                      <span className="flex items-center gap-2">
+                        <Sparkles className="h-3.5 w-3.5 text-orange-500" />
+                        Age Display
+                      </span>
                     </label>
                     <input
                       value={getAgeLabel(selectedDob)}
@@ -1374,23 +1420,49 @@ export default function ArtistRegister() {
                   </button>
                 </div>
 
-                <div className="rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
+                <div className="form-subcard rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
                   <p className="mb-4 text-sm font-black text-slate-500">Art #1</p>
-                  <Controller
-                    name="artCategory"
-                    control={artistForm.control}
-                    render={({ field }) => (
-                      <SearchableDropdown
-                        label="Category / Art Form *"
-                        value={field.value}
-                        options={artCategoryOptions}
-                        placeholder="Search or add your art form..."
-                        error={artistForm.formState.errors.artCategory?.message}
-                        allowCustom
-                        onChange={field.onChange}
-                      />
-                    )}
-                  />
+                  
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Controller
+                      name="mainCategory"
+                      control={artistForm.control}
+                      render={({ field }) => (
+                        <SearchableDropdown
+                          label="Main Category *"
+                          value={field.value}
+                          options={[...MAIN_CATEGORIES]}
+                          placeholder="Select main category..."
+                          error={artistForm.formState.errors.mainCategory?.message}
+                          onChange={(value) => {
+                            field.onChange(value);
+                            artistForm.setValue("artCategory", "");
+                          }}
+                        />
+                      )}
+                    />
+
+                    <Controller
+                      name="artCategory"
+                      control={artistForm.control}
+                      render={({ field }) => {
+                        const mainCat = artistForm.watch("mainCategory");
+                        const options = mainCat ? [...CATEGORY_STRUCTURE[mainCat as keyof typeof CATEGORY_STRUCTURE].subcategories] : [];
+                        return (
+                          <SearchableDropdown
+                            label="Art Form / Subcategory *"
+                            value={field.value}
+                            options={options}
+                            placeholder="Select art form..."
+                            error={artistForm.formState.errors.artCategory?.message}
+                            disabled={!mainCat}
+                            allowCustom
+                            onChange={field.onChange}
+                          />
+                        );
+                      }}
+                    />
+                  </div>
 
                   <div className="my-5 h-px bg-white/80" />
 
@@ -1684,9 +1756,10 @@ export default function ArtistRegister() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                onSubmit={userForm.handleSubmit(submitUser)}
+                onSubmit={userForm.handleSubmit(submitUser, scrollToError)}
                 className="space-y-6"
               >
+                <div ref={errorRef} className="scroll-mt-24" />
                 <SectionHeading icon={User} title="User Account Details" />
                 <div className="grid gap-4 md:grid-cols-2">
                   <TextField

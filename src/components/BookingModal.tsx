@@ -6,14 +6,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { Calendar, Send } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
-import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
+import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, requireAuthUid, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
 import { PHONE_MAX_LENGTH, PHONE_PLACEHOLDER, sanitizePhoneNumber, validatePhoneNumber } from "@/lib/phoneUtils";
 
 const eventTypes = ["Wedding", "Corporate Event", "Birthday Party", "Festival", "Concert", "Private Event"];
+const INQUIRY_RATE_LIMIT_MS = 60_000;
+const INQUIRY_MESSAGE_MAX_LENGTH = 999;
 
 interface Props {
   open: boolean;
@@ -50,6 +52,18 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!currentUser) {
+      toast({ variant: "destructive", title: "Login required", description: "Please sign in before sending an inquiry." });
+      return;
+    }
+
+    const rateLimitKey = `lastInquiryAt:${currentUser.uid}:${artistId}`;
+    const lastInquiryAt = Number(window.localStorage.getItem(rateLimitKey) || 0);
+    if (Date.now() - lastInquiryAt < INQUIRY_RATE_LIMIT_MS) {
+      toast({ variant: "destructive", title: "Please wait", description: "You can send another inquiry to this artist in a minute." });
+      return;
+    }
     
     // Validation
     if (!formData.eventType) {
@@ -66,27 +80,36 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
       return;
     }
 
+    if (formData.message.length > INQUIRY_MESSAGE_MAX_LENGTH) {
+      toast({ variant: "destructive", title: "Message too long", description: "Please keep your message under 1000 characters." });
+      return;
+    }
+
     setLoading(true);
     try {
+      const uid = requireAuthUid(currentUser);
       await withTimeout(
-        addDoc(collection(db, "inquiries"), {
+        addDoc(collection(db, "inquiries"), sanitizePayload({
           ...formData,
           artistName,
           artistId,
           artistUid: artistId,
-          customerId: currentUser?.uid || "",
-          customerEmail: currentUser?.email || "",
+          customerId: uid,
+          customerEmail: currentUser.email || "",
           customerName: formData.customerName || userProfile?.name || "",
           status: "pending",
+          spamCheckStatus: "pending",
+          spamCheckProvider: "cloud-function-hook",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
-        }),
+        })),
         FIREBASE_WRITE_TIMEOUT_MS,
         "Sending this inquiry is taking too long. Please try again."
       );
 
+      window.localStorage.setItem(rateLimitKey, String(Date.now()));
       onOpenChange(false);
-      toast({ title: "Inquiry Sent! ✨", description: `Your inquiry for ${artistName} has been submitted.` });
+      toast({ title: "Inquiry sent", description: `Your inquiry for ${artistName} has been submitted.` });
       
       // Reset form
       setFormData({
@@ -98,8 +121,10 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
         eventType: "",
         message: ""
       });
-    } catch (error) {
+    } catch (error: any) {
+      logFirebaseError(error);
       toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not send inquiry.") });
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -107,7 +132,7 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar">
+      <DialogContent className="booking-modal sm:max-w-md max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar">
         <DialogHeader>
           <DialogTitle className="font-display">Inquiry for {artistName}</DialogTitle>
         </DialogHeader>
@@ -159,10 +184,27 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId 
 
           <div>
             <Label>Additional Details</Label>
-            <Textarea name="message" value={formData.message} onChange={handleChange} placeholder="Tell the artist more about your event..." rows={2} />
+            <Textarea
+              name="message"
+              value={formData.message}
+              onChange={handleChange}
+              placeholder="Tell the artist more about your event..."
+              maxLength={INQUIRY_MESSAGE_MAX_LENGTH}
+              rows={2}
+            />
           </div>
           <Button type="submit" className="w-full gradient-bg border-0 text-primary-foreground font-bold py-6 text-lg" disabled={loading}>
-            {loading ? "Sending..." : <><Send className="h-5 w-5 mr-2" /> Inquiry Now</>}
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Send Inquiry
+              </>
+            )}
           </Button>
         </form>
       </DialogContent>

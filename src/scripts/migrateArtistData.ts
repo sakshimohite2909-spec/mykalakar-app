@@ -23,7 +23,7 @@ import {
   writeBatch,
   serverTimestamp,
 } from "firebase/firestore";
-import { normalizeArtistType } from "@/constants/artistSystem";
+import { getArtistArtForms, normalizeArtistType } from "@/constants/artistSystem";
 
 const numberOrZero = (value: unknown) => Number(value) || 0;
 
@@ -44,6 +44,23 @@ function toArtistDoc(applicationId: string, data: Record<string, any>) {
     ...(Array.isArray(data.categories) ? data.categories.map((category: any) => normalizeArtistType(category) ?? String(category ?? "").trim()) : []),
     normalizedPrimaryCategory,
   ].filter(Boolean)));
+  const media = data.media || {
+    profilePhoto: data.profilePhoto || "",
+    coverPhoto: data.coverPhoto || "",
+    galleryPhotos: data.galleryPhotos || [],
+  };
+  const artistProfile = {
+    artForms: getArtistArtForms({
+      ...data,
+      category: normalizedPrimaryCategory,
+      categories: normalizedCategories,
+      artsList: normalizedArts,
+    }),
+    experience: numberOrZero(data.experience),
+    bio: data.bio || "",
+    location: data.location || data.district || data.city || data.state || "",
+    profileImage: media.profilePhoto || data.profilePhoto || "",
+  };
 
   return {
     uid: data.uid,
@@ -64,6 +81,7 @@ function toArtistDoc(applicationId: string, data: Record<string, any>) {
     subcategory: data.subcategory || primaryArt.subcategory || "",
     categories: normalizedCategories,
     artsList: normalizedArts,
+    artistProfile,
     services: Array.isArray(data.services) ? data.services : [],
     types: Array.isArray(data.types) ? data.types : primaryArt.types || [],
     pricing: data.pricing || {
@@ -72,11 +90,7 @@ function toArtistDoc(applicationId: string, data: Record<string, any>) {
       teamPrice: numberOrZero(data.teamPrice ?? primaryArt.teamPrice),
       feeNotes: data.feeNotes || "",
     },
-    media: data.media || {
-      profilePhoto: data.profilePhoto || "",
-      coverPhoto: data.coverPhoto || "",
-      galleryPhotos: data.galleryPhotos || [],
-    },
+    media,
     socialLinks: Array.isArray(data.socialLinks) ? data.socialLinks : [],
     liveLink: data.liveLink || "",
     assistant: data.assistant || {
@@ -165,6 +179,14 @@ export async function migrateApprovedArtists(): Promise<MigrationResult> {
           username: data.username || "",
           email: data.email || "",
           phone: data.mobileNumber || data.phone || "",
+          profilePhoto: data.media?.profilePhoto || data.profilePhoto || "",
+          artistProfile: {
+            artForms: getArtistArtForms(data),
+            experience: numberOrZero(data.experience),
+            bio: data.bio || "",
+            location: data.location || data.district || data.city || data.state || "",
+            profileImage: data.media?.profilePhoto || data.profilePhoto || "",
+          },
           role: "artist",
           status: "active",
           updatedAt: serverTimestamp(),

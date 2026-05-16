@@ -1,6 +1,7 @@
-﻿import { motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { imageRegistry } from "@/services/ImageRegistryService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,10 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { uploadImageFile } from "@/lib/uploadService";
-import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
+import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, withTimeout } from "@/lib/firebaseSafe";
+import { getArtistArtForms } from "@/constants/artistSystem";
+import { getYoutubeVideoId } from "@/lib/youtube";
+import { updateUnifiedArtistProfile } from "@/services/UnifiedProfileService";
 import {
     Save,
     Loader2,
@@ -27,6 +29,8 @@ import {
     Building2,
     Phone,
 } from "lucide-react";
+
+const BIO_MAX_LENGTH = 1000;
 
 export default function ArtistEditProfile() {
     const { artistData, refreshArtistData } = useAuth();
@@ -61,6 +65,20 @@ export default function ArtistEditProfile() {
     const coverInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
+    const getValidYoutubeLinks = () =>
+        socialLinks
+            .map((link) => link.url.trim())
+            .filter((url) => url && getYoutubeVideoId(url));
+
+    const buildArtistProfile = (profileImage?: string) => ({
+        artForms: getArtistArtForms(artistData || {}),
+        experience: Number(formData.experience) || 0,
+        bio: formData.bio || "",
+        location: [formData.district || artistData?.district, formData.state || artistData?.state].filter(Boolean).join(", "),
+        profileImage: profileImage || artistData?.media?.profilePhoto || artistData?.profilePhoto || "",
+        youtubeLinks: getValidYoutubeLinks(),
+    });
+
     // Pre-fill form data when artistData loads
     useEffect(() => {
         if (artistData) {
@@ -83,7 +101,10 @@ export default function ArtistEditProfile() {
                 ifscCode: artistData.bankDetails?.ifscCode || artistData.ifscCode || "",
                 accountNumber: artistData.bankDetails?.accountNumber || artistData.accountNumber || "",
             });
-            setSocialLinks(artistData.socialLinks || [{ platform: "youtube", url: "" }]);
+            const existingYoutubeLinks = Array.isArray(artistData.youtubeLinks)
+                ? artistData.youtubeLinks.map((url: string) => ({ platform: "youtube", url }))
+                : [];
+            setSocialLinks(artistData.socialLinks?.length ? artistData.socialLinks : existingYoutubeLinks.length ? existingYoutubeLinks : [{ platform: "youtube", url: "" }]);
             setGalleryPreviews(
                 artistData.media?.galleryPhotos ||
                 (Array.isArray(artistData.galleryPhotos) ? artistData.galleryPhotos : []) ||
@@ -123,35 +144,35 @@ export default function ArtistEditProfile() {
         setUploadingPhoto(type);
         try {
             const ownerId = artistData.uid || artistData.id;
+            if (!ownerId) throw new Error("User not authenticated");
             const url = await uploadFile(file, type === "profile" ? `avatars/${ownerId}` : `covers/${ownerId}`);
             const updateData = type === "profile"
-                ? { "media.profilePhoto": url, profilePhoto: url, updatedAt: serverTimestamp() }
-                : { "media.coverPhoto": url, coverPhoto: url, updatedAt: serverTimestamp() };
+                ? { "media.profilePhoto": url, "artistProfile.profileImage": url, profilePhoto: url }
+                : { "media.coverPhoto": url, coverPhoto: url };
             await withTimeout(
-                updateDoc(doc(db, "artists", artistData.id), updateData),
+                updateUnifiedArtistProfile({
+                    artistId: artistData.id,
+                    uid: ownerId,
+                    artistData: updateData,
+                    userData: type === "profile"
+                        ? {
+                            name: artistData.name || "",
+                            email: artistData.email || "",
+                            phone: artistData.mobileNumber || artistData.phone || "",
+                            profilePhoto: url,
+                            artistProfile: buildArtistProfile(url),
+                        }
+                        : undefined,
+                }),
                 FIREBASE_WRITE_TIMEOUT_MS,
                 "Could not save this photo."
             );
-            if (type === "profile") {
-                await withTimeout(
-                    setDoc(doc(db, "users", ownerId), {
-                        uid: ownerId,
-                        name: artistData.name || "",
-                        email: artistData.email || "",
-                        phone: artistData.mobileNumber || artistData.phone || "",
-                        role: "artist",
-                        status: artistData.status === "pending" ? "pending" : "active",
-                        profilePhoto: url,
-                        updatedAt: serverTimestamp(),
-                    }, { merge: true }),
-                    FIREBASE_WRITE_TIMEOUT_MS,
-                    "Could not sync your user profile photo."
-                );
-            }
             await refreshArtistData();
             toast({ title: `${type === "profile" ? "Profile" : "Cover"} photo updated` });
-        } catch (error) {
+        } catch (error: any) {
+            logFirebaseError(error);
             toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not upload photo.") });
+            throw error;
         } finally {
             setUploadingPhoto(null);
         }
@@ -162,7 +183,7 @@ export default function ArtistEditProfile() {
         const files = e.target.files;
         if (!files || !artistData) return;
 
-        const currentPhotos = artistData.media?.galleryPhotos;
+        const currentPhotos = artistData.media?.galleryPhotos ?? (Array.isArray(artistData.galleryPhotos) ? artistData.galleryPhotos : []);
         if (currentPhotos.length + files.length > 10) {
             toast({ variant: "destructive", title: "Limit Exceeded", description: "Maximum 10 gallery photos allowed." });
             return;
@@ -171,13 +192,18 @@ export default function ArtistEditProfile() {
         setUploadingPhoto("gallery");
         try {
             const ownerId = artistData.uid || artistData.id;
+            if (!ownerId) throw new Error("User not authenticated");
             const newUrls = await Promise.all(Array.from(files).map((f) => uploadFile(f, `galleries/${ownerId}`)));
             const updatedGallery = [...currentPhotos, ...newUrls];
+            if (!ownerId) throw new Error("User not authenticated");
             await withTimeout(
-                updateDoc(doc(db, "artists", artistData.id), {
-                    "media.galleryPhotos": updatedGallery,
-                    galleryPhotos: updatedGallery,
-                    updatedAt: serverTimestamp(),
+                updateUnifiedArtistProfile({
+                    artistId: artistData.id,
+                    uid: ownerId,
+                    artistData: {
+                        "media.galleryPhotos": updatedGallery,
+                        galleryPhotos: updatedGallery,
+                    },
                 }),
                 FIREBASE_WRITE_TIMEOUT_MS,
                 "Could not save gallery photos."
@@ -185,8 +211,10 @@ export default function ArtistEditProfile() {
             await refreshArtistData();
             setGalleryPreviews(updatedGallery);
             toast({ title: "Gallery updated" });
-        } catch (error) {
+        } catch (error: any) {
+            logFirebaseError(error);
             toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not upload gallery photos.") });
+            throw error;
         } finally {
             setUploadingPhoto(null);
         }
@@ -199,11 +227,15 @@ export default function ArtistEditProfile() {
         updatedGallery.splice(index, 1);
 
         try {
+            if (!(artistData.uid || artistData.id)) throw new Error("User not authenticated");
             await withTimeout(
-                updateDoc(doc(db, "artists", artistData.id), {
-                    "media.galleryPhotos": updatedGallery,
-                    galleryPhotos: updatedGallery,
-                    updatedAt: serverTimestamp(),
+                updateUnifiedArtistProfile({
+                    artistId: artistData.id,
+                    uid: artistData.uid || artistData.id,
+                    artistData: {
+                        "media.galleryPhotos": updatedGallery,
+                        galleryPhotos: updatedGallery,
+                    },
                 }),
                 FIREBASE_WRITE_TIMEOUT_MS,
                 "Could not remove this photo."
@@ -211,8 +243,10 @@ export default function ArtistEditProfile() {
             await refreshArtistData();
             setGalleryPreviews(updatedGallery);
             toast({ title: "Photo Removed" });
-        } catch (error) {
+        } catch (error: any) {
+            logFirebaseError(error);
             toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not remove photo.") });
+            throw error;
         }
     };
 
@@ -228,12 +262,21 @@ export default function ArtistEditProfile() {
     // Save all text fields
     const handleSave = async () => {
         if (!artistData) return;
+        const invalidYoutubeLink = socialLinks.find((link) => link.url.trim() && !getYoutubeVideoId(link.url));
+        if (invalidYoutubeLink) {
+            toast({ variant: "destructive", title: "Invalid YouTube link", description: "Please use a valid YouTube video, Shorts, Live, or youtu.be URL." });
+            return;
+        }
+        const validYoutubeLinks = getValidYoutubeLinks();
 
         setLoading(true);
         try {
             const ownerId = artistData.uid || artistData.id;
             await withTimeout(
-                updateDoc(doc(db, "artists", artistData.id), {
+                updateUnifiedArtistProfile({
+                    artistId: artistData.id,
+                    uid: ownerId,
+                    artistData: {
                     name: formData.name,
                     phone: formData.phone,
                     mobileNumber: formData.mobileNumber,
@@ -249,29 +292,28 @@ export default function ArtistEditProfile() {
                     "bankDetails.ifscCode": formData.ifscCode,
                     "bankDetails.accountNumber": formData.accountNumber,
                     socialLinks,
-                    updatedAt: serverTimestamp(),
+                    youtubeLinks: validYoutubeLinks,
+                    portfolioUrl: validYoutubeLinks[0] || "",
+                    videos: validYoutubeLinks.map((url) => ({ platform: "youtube", url })),
+                    artistProfile: buildArtistProfile(),
+                    },
+                    userData: {
+                        name: formData.name,
+                        email: artistData.email || "",
+                        phone: formData.mobileNumber || formData.phone,
+                        profilePhoto: artistData.media?.profilePhoto,
+                        artistProfile: buildArtistProfile(),
+                    },
                 }),
                 FIREBASE_WRITE_TIMEOUT_MS,
                 "Could not save profile changes."
             );
-            await withTimeout(
-                setDoc(doc(db, "users", ownerId), {
-                    uid: ownerId,
-                    name: formData.name,
-                    email: artistData.email || "",
-                    phone: formData.mobileNumber || formData.phone,
-                    profilePhoto: artistData.media?.profilePhoto,
-                    role: "artist",
-                    status: "active",
-                    updatedAt: serverTimestamp(),
-                }, { merge: true }),
-                FIREBASE_WRITE_TIMEOUT_MS,
-                "Could not sync your account profile."
-            );
             await refreshArtistData();
             toast({ title: "Profile updated", description: "Your changes have been saved." });
-        } catch (error) {
+        } catch (error: any) {
+            logFirebaseError(error);
             toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not save changes.") });
+            throw error;
         } finally {
             setLoading(false);
         }
@@ -310,7 +352,7 @@ export default function ArtistEditProfile() {
                                     className="relative border-2 border-dashed border-border rounded-xl h-44 cursor-pointer hover:border-primary/50 transition-colors overflow-hidden group"
                                 >
                                     <img
-                                        src={artistData.media?.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
+                                        src={artistData.media?.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
                                         className="w-full h-full object-cover"
                                         alt="Profile"
                                     />
@@ -546,8 +588,10 @@ export default function ArtistEditProfile() {
                                 value={formData.bio}
                                 onChange={handleChange}
                                 placeholder="Tell about your art, experience, and what makes you unique..."
+                                maxLength={BIO_MAX_LENGTH}
                                 rows={4}
                             />
+                            <p className="mt-1 text-xs text-muted-foreground">{formData.bio.length}/{BIO_MAX_LENGTH}</p>
                         </div>
                     </CardContent>
                 </Card>

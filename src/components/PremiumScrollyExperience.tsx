@@ -1,326 +1,314 @@
-import React, { useLayoutEffect, useRef, useState, useEffect } from "react";
-import { Sparkles as SparklesIcon, ArrowRight, Star, Users, Zap, Search } from "lucide-react";
-import { gsap } from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useEffect, useMemo, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  ArrowRight,
+  CalendarDays,
+  Camera,
+  Drum,
+  Mic2,
+  Music2,
+  Sparkles,
+  Users,
+  Zap,
+} from "lucide-react";
 import Navbar from "./Navbar";
+import Footer from "./Footer";
+import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
+import { SmartImage } from "./SmartImage";
+import { STATIC_IMAGES } from "@/services/ImageRegistryService";
+import { getActiveArtists, getApprovedEvents } from "@/services/dataService";
+import { buildArtistCards } from "@/services/marketplaceCards";
+import { SpotlightSearch } from "@/components/search/SpotlightSearch";
+import { AnimatePresence, LuxuryArtistCard, LuxuryEventCard } from "@/components/discovery/LuxuryDiscovery";
 
-gsap.registerPlugin(ScrollTrigger);
+type ShowcaseArtist = Record<string, unknown>;
+type CulturalEvent = Record<string, unknown>;
 
-// ── GLASS UI PANEL ──────────────────────────────────────────────────────────
-function GlassPanel({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
-  const panelRef = useRef<HTMLDivElement>(null);
+const categoryIcons: Record<string, typeof Music2> = {
+  Performers: Mic2,
+  "Event Services": Camera,
+  "Folk & Traditional Arts": Drum,
+  "Spiritual & Varkari Sampraday": Music2,
+};
 
-  useEffect(() => {
-    if (!panelRef.current) return;
-    gsap.to(panelRef.current, {
-      y: "+=5",
-      duration: 3.5 + delay * 0.3,
-      ease: "sine.inOut",
-      yoyo: true,
-      repeat: -1,
-    });
-  }, [delay]);
-
+function SectionHeading({ eyebrow, title, action, to }: { eyebrow: string; title: string; action?: string; to?: string }) {
   return (
-    <div
-      ref={panelRef}
-      className={`glass-panel rounded-3xl p-8 fade-in-panel border-white/75 bg-white/60 shadow-[0_24px_90px_rgba(184,92,122,0.14),0_10px_36px_rgba(232,111,58,0.10),inset_0_1px_0_rgba(255,255,255,0.78)] ${className}`}
-    >
-      <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/72 via-white/26 to-rose-50/18 pointer-events-none opacity-70" />
-      <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent pointer-events-none" />
-      <div className="relative z-10">{children}</div>
-    </div>
-  );
-}
-
-// ── STAT CHIP ───────────────────────────────────────────────────────────────
-function StatChip({ icon: Icon, value, label }: { icon: any; value: string; label: string }) {
-  return (
-    <div className="glass-card rounded-2xl px-5 py-4 flex items-center gap-3 fade-in-panel">
-      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center flex-shrink-0 shadow-sm shadow-orange-200">
-        <Icon className="w-4 h-4 text-foreground" />
-      </div>
+    <div className="section-heading mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <p className="text-lg font-black text-[#1A1A1A] leading-none tracking-tight">{value}</p>
-        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{label}</p>
+        <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-600">{eyebrow}</p>
+        <h2 className="mt-1 text-2xl font-extrabold leading-tight text-stone-950 md:text-[30px]">{title}</h2>
       </div>
+      {action && to ? (
+        <Link to={to} className="inline-flex h-10 w-max items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-xs font-extrabold text-stone-700 shadow-sm transition hover:border-orange-300 hover:text-orange-600">
+          {action}
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      ) : null}
     </div>
   );
 }
 
-// ── MAIN COMPONENT ───────────────────────────────────────────────────────────
-export default function PremiumScrollyExperience() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const cursorRef = useRef<HTMLDivElement>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [scrolled, setScrolled] = useState(false);
-
-  // Simple scroll listener for navbar header styling
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 30);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  // Mouse tracking
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({
-        x: (e.clientX / window.innerWidth) * 2 - 1,
-        y: -(e.clientY / window.innerHeight) * 2 + 1,
-      });
-      if (cursorRef.current) {
-        gsap.to(cursorRef.current, { x: e.clientX, y: e.clientY, duration: 0.7, ease: "power4.out" });
-      }
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
-
-  // Scroll-driven panel fade-ins
-  useLayoutEffect(() => {
-    const ctx = gsap.context(() => {
-      const panels = gsap.utils.toArray(".fade-in-panel") as HTMLElement[];
-      panels.forEach((panel) => {
-        gsap.to(panel, {
-          opacity: 1,
-          y: 0,
-          duration: 1.1,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: panel,
-            start: "top 88%",
-            toggleActions: "play none none reverse",
-          },
-        });
-      });
-    }, containerRef);
-    return () => ctx.revert();
-  }, []);
-
-  const handleMagneticEnter = (e: React.MouseEvent<HTMLElement>) =>
-    gsap.to(e.currentTarget, { scale: 1.05, duration: 0.3, ease: "power2.out" });
-  const handleMagneticLeave = (e: React.MouseEvent<HTMLElement>) =>
-    gsap.to(e.currentTarget, { x: 0, y: 0, scale: 1, duration: 0.6, ease: "elastic.out(1, 0.4)" });
-  const handleMagneticMove = (e: React.MouseEvent<HTMLElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left - rect.width / 2) * 0.25;
-    const y = (e.clientY - rect.top - rect.height / 2) * 0.25;
-    gsap.to(e.currentTarget, { x, y, duration: 0.3, ease: "power2.out" });
-  };
-
-  const tiltStyle = {
-    transform: `perspective(1200px) rotateX(${mousePos.y * 2.5}deg) rotateY(${mousePos.x * 2.5}deg)`,
-    transition: "transform 0.12s ease-out",
-  };
+function Hero() {
+  const heroImages = useMemo(
+    () => [STATIC_IMAGES.heroDhol, STATIC_IMAGES.heroKirtan, STATIC_IMAGES.heroTabla, STATIC_IMAGES.heroZanj],
+    []
+  );
 
   return (
-    <>
-      {/* ── CURSOR GLOW ── */}
-      <div
-        ref={cursorRef}
-        className="fixed top-0 left-0 w-[500px] h-[500px] -ml-[250px] -mt-[250px] rounded-full pointer-events-none z-[9990] select-none"
-        style={{ background: "radial-gradient(circle, rgba(232, 111, 58, 0.10) 0%, rgba(184, 92, 122, 0.06) 48%, transparent 70%)" }}
-      />
-
-      {/* ── PAGE WRAPPER ── */}
-      <div ref={containerRef} className="relative w-full overflow-hidden flex flex-col font-sans bg-transparent">
-
-        {/* ── HEADER ── */}
-        <Navbar />        {/* ── SECTION 1: HERO ── */}
-        <section id="section-hero" className="min-h-screen w-full flex flex-col justify-center px-[5%] lg:px-[8%] relative py-32 z-10">
-          <div className="flex flex-col gap-6 max-w-2xl">
-            {/* Badge */}
-            <div className="fade-in-panel inline-flex self-start items-center gap-2 px-5 py-2.5 glass-card rounded-full bg-white/50 border border-orange-100">
-              <SparklesIcon className="w-4 h-4 text-orange-500" />
-              <span className="text-[10px] font-black tracking-[0.25em] uppercase text-orange-600">India's Premier Artist Platform</span>
-            </div>
-
-            {/* Headline */}
-            <div className="fade-in-panel">
-              <h1 className="text-5xl lg:text-7xl font-black text-[#1A1A1A] leading-[1.05] tracking-tight">
-                They won't just come,<br />
-                <span className="gradient-text-primary">they'll be drawn in.</span>
-              </h1>
-            </div>
-
-            {/* Subline */}
-            <p className="fade-in-panel text-base md:text-lg text-slate-500 font-medium leading-relaxed max-w-lg mt-2">
-              Discover India's most elite performing artists. Book seamlessly. Experience the extraordinary under total glassmorphic clarity.
-            </p>
-
-            {/* CTAs */}
-            <div className="fade-in-panel flex flex-wrap items-center gap-4 mt-4">
-              <Link
-                to="/artists"
-                onMouseEnter={handleMagneticEnter}
-                onMouseLeave={handleMagneticLeave}
-                onMouseMove={handleMagneticMove}
-                className="btn-glass-primary rounded-2xl px-9 py-4 text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-orange-200 text-foreground"
-              >
-                Explore Artists <ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link
-                to="/register"
-                onMouseEnter={handleMagneticEnter}
-                onMouseLeave={handleMagneticLeave}
-                onMouseMove={handleMagneticMove}
-                className="btn-glass-secondary bg-white/50 border-white/60 rounded-2xl px-9 py-4 text-xs font-black uppercase tracking-widest text-[#1A1A1A] hover:bg-white/80"
-              >
-                Join as Artist
-              </Link>
-            </div>
-
-            {/* Stats row */}
-            <div className="fade-in-panel flex flex-wrap gap-3 mt-10">
-              <StatChip icon={Users} value="2,400+" label="Verified Artists" />
-              <StatChip icon={Star} value="4.9★" label="Avg. Rating" />
-              <StatChip icon={Zap} value="24h" label="Booking Speed" />
-            </div>
-          </div>
-        </section>
-
-        {/* ── SECTION 1.5: MANIFESTO ── */}
-        <section id="section-manifesto" className="w-full flex items-center justify-center px-[5%] lg:px-[10%] py-32 relative z-10">
-          <GlassPanel className="w-full max-w-4xl pointer-events-auto text-center" delay={0.5}>
-            <div className="inline-flex self-start items-center gap-2 px-5 py-2.5 glass-card rounded-full bg-white/50 border border-orange-100 mb-6">
-              <SparklesIcon className="w-4 h-4 text-orange-500" />
-              <span className="text-[10px] font-black tracking-[0.25em] uppercase text-orange-600">✦ OUR ARCHITECTURE</span>
-            </div>
-            <h2 className="text-4xl md:text-5xl font-black text-[#1A1A1A] tracking-tight mb-6">
-              The Architecture of <span className="gradient-text-primary">Awe.</span>
-            </h2>
-          </GlassPanel>
-        </section>
-
-        {/* ── SECTION 2: ORCHESTRA ── */}
-        <section id="section-act2" className="min-h-screen w-full flex items-center justify-start px-[5%] lg:px-[10%] relative z-10 py-20">
-          <GlassPanel className="w-full max-w-md pointer-events-auto shadow-xl">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-1 h-6 rounded-full bg-gradient-to-b from-orange-400 to-amber-500" />
-              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-orange-600">Act II</span>
-            </div>
-            <h2 className="text-4xl font-black text-[#1A1A1A] tracking-tight leading-tight mb-4">
-              Kinetic Orchestra<br /><span className="gradient-text-primary">Re-Assembly.</span>
-            </h2>
-            <p className="text-sm text-slate-500 font-medium leading-relaxed">
-              Feel the resonance of raw energy — musicians, dancers, and visual artists converging in zero gravity to create something entirely unprecedented.
-            </p>
-
-          </GlassPanel>
-        </section>
-
-        {/* ── SECTION 2.5: WHY US GRID ── */}
-        <section id="section-features" className="w-full px-[5%] lg:px-[10%] py-32 relative z-10 flex flex-col items-center">
-            <h2 className="text-3xl font-black text-[#1A1A1A] tracking-widest uppercase mb-12 fade-in-panel">Crystalline Curation.</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
-               {/* Card 1 */}
-               <GlassPanel className="flex flex-col items-start hover:-translate-y-2 transition-transform duration-500" delay={0}>
-                  <div className="w-12 h-12 rounded-2xl bg-orange-100 flex items-center justify-center mb-6">
-                     <Search className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <h3 className="text-xl font-black text-[#1A1A1A] mb-3">Zero-Friction Discovery</h3>
-                  <p className="text-sm text-slate-500 font-medium leading-relaxed">"Glide through our interactive roster. No clutter, just pure, authenticated performance data at your fingertips."</p>
-               </GlassPanel>
-               {/* Card 2 */}
-               <GlassPanel className="flex flex-col items-start hover:-translate-y-2 transition-transform duration-500" delay={0.2}>
-                  <div className="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center mb-6">
-                     <Zap className="w-5 h-5 text-rose-600" />
-                  </div>
-                  <h3 className="text-xl font-black text-[#1A1A1A] mb-3">Intelligent Logistics</h3>
-                  <p className="text-sm text-slate-500 font-medium leading-relaxed">"From initial spark to final applause, smart contracts and automated payments operate seamlessly in the background."</p>
-               </GlassPanel>
-               {/* Card 3 */}
-               <GlassPanel className="flex flex-col items-start hover:-translate-y-2 transition-transform duration-500" delay={0.4}>
-                  <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center mb-6">
-                     <Star className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <h3 className="text-xl font-black text-[#1A1A1A] mb-3">Vetted Brilliance</h3>
-                  <p className="text-sm text-slate-500 font-medium leading-relaxed">"Access is a privilege. Every creator is strictly vetted for professionalism, punctuality, and undeniable talent."</p>
-               </GlassPanel>
-            </div>
-        </section>
-
-        {/* ── SECTION 3: VORTEX ── */}
-        <section id="section-act3" className="min-h-screen w-full flex items-center justify-end px-[5%] lg:px-[10%] relative z-10 py-20">
-          <GlassPanel className="w-full max-w-md pointer-events-auto shadow-xl" delay={1}>
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-1 h-6 rounded-full bg-gradient-to-b from-orange-500 to-amber-400" />
-              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-orange-500">Act III</span>
-            </div>
-            <h2 className="text-4xl font-black text-[#1A1A1A] tracking-tight leading-tight mb-4">
-              The Kinetic<br /><span className="gradient-text-primary">Vortex.</span>
-            </h2>
-            <p className="text-sm text-slate-500 font-medium leading-relaxed">
-              A singular space where creativity and momentum converge. Define your rhythmic edge within the eternal golden spiral of artistic expression.
-            </p>
-            <div className="mt-8">
-              <Link to="/events" className="btn-glass-primary rounded-xl px-6 py-3 text-[10px] font-black uppercase tracking-widest text-foreground shadow-md shadow-orange-200 inline-block">
-                Explore Events
-              </Link>
-            </div>
-          </GlassPanel>
-        </section>
-
-        {/* ── SECTION 4: CTA ── */}
-        <section id="section-act4" className="min-h-[80vh] w-full flex items-center justify-center px-[5%] relative z-10 py-20 mb-20">
-          <GlassPanel className="w-full max-w-xl pointer-events-auto text-center flex flex-col items-center shadow-xl" delay={2}>
-            <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center mx-auto mb-8 shadow-xl shadow-orange-200">
-              <SparklesIcon className="w-6 h-6 text-foreground" />
-            </div>
-            <h2 className="text-5xl font-black text-[#1A1A1A] mb-5 leading-[1.1] tracking-tight">
-              The Visual <span className="gradient-text-primary">Arts Spline.</span>
-            </h2>
-            <p className="text-base text-slate-500 font-medium leading-relaxed max-w-md mb-10">
-              You have traversed the canvas of continuous art. It is time to discover the elite talent holding the brush.
-            </p>
-            <Link
-              to="/artists"
-              onMouseEnter={handleMagneticEnter}
-              onMouseLeave={handleMagneticLeave}
-              onMouseMove={handleMagneticMove}
-              className="btn-glass-primary rounded-2xl px-10 py-4 text-xs font-black uppercase tracking-widest text-foreground shadow-lg shadow-orange-200 hover:shadow-xl hover:shadow-orange-300"
-            >
-              Explore All Art
+    <section className="luxury-home-hero">
+      <div className="luxury-home-hero-bg" aria-hidden="true">
+        <SmartImage
+          src={heroImages[0]}
+          alt=""
+          usageId="home:luxury-hero:bg"
+          category="dhol"
+          orientation="landscape"
+          priority
+          aspectRatio="aspect-auto"
+          containerClassName="h-full w-full"
+        />
+      </div>
+      <div className="luxury-home-hero-inner">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="luxury-home-hero-copy"
+        >
+          <span className="luxury-eyebrow">
+            <Zap className="h-4 w-4" />
+            Maharashtra artist network
+          </span>
+          <h1>MyKalakar</h1>
+          <p>
+            A premium discovery platform for verified artists, cultural mandals, and event-ready creative teams across Maharashtra.
+          </p>
+          <SpotlightSearch className="luxury-spotlight-search" />
+          <div className="luxury-hero-actions">
+            <Link to="/artists">
+              Discover Artists
+              <ArrowRight className="h-4 w-4" />
             </Link>
-          </GlassPanel>
-        </section>
+            <Link to="/events">
+              Post an Event
+              <CalendarDays className="h-4 w-4" />
+            </Link>
+          </div>
+        </motion.div>
 
-        {/* ── SECTION 5: THE ECHOES (TESTIMONIALS) ── */}
-        <section id="section-testimonials" className="w-full flex justify-start overflow-hidden px-[5%] py-32 relative z-10 flex-col">
-            <h2 className="text-xs font-black text-slate-400 tracking-[0.25em] uppercase mb-8 md:ml-[10%] fade-in-panel">✦ THE ECHOES</h2>
-            <div className="flex gap-8 overflow-x-auto pb-10 snap-x w-full max-w-[1400px] mx-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                <GlassPanel className="min-w-[320px] md:min-w-[500px] snap-center shrink-0" delay={0}>
-                   <p className="text-lg text-[#1A1A1A] font-medium leading-relaxed mb-6 italic">"It wasn't just a booking; it was the defining moment of our gala. The platform’s curation is absolutely flawless."</p>
-                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">– Director of Events, Horizon Luxe</p>
-                </GlassPanel>
-                <GlassPanel className="min-w-[320px] md:min-w-[500px] snap-center shrink-0" delay={0.2}>
-                   <p className="text-lg text-[#1A1A1A] font-medium leading-relaxed mb-6 italic">"Finally, a digital space that respects the art as much as the artist. The interface melts away, leaving only the performance."</p>
-                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">– Avant-Garde Violinist, Collective Member</p>
-                </GlassPanel>
-            </div>
-        </section>
+        <motion.div
+          initial={{ opacity: 0, y: 36, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+          className="luxury-home-hero-showcase"
+        >
+          {heroImages.slice(1).map((image, index) => (
+            <Link key={image} to={index === 0 ? "/events" : "/artists"} className="luxury-showcase-tile">
+              <SmartImage
+                src={image}
+                alt={index === 0 ? "Kirtan performance" : "Artist performance"}
+                usageId={`home:luxury-hero:tile:${index}`}
+                category={index === 0 ? "kirtan" : "performer"}
+                orientation="portrait"
+                priority={index === 0}
+                aspectRatio="aspect-auto"
+                containerClassName="h-full w-full transition duration-700"
+              />
+              <span>{index === 0 ? "Live briefs" : index === 1 ? "Verified artists" : "Cultural depth"}</span>
+            </Link>
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
 
-
-        {/* ── FIXED SEARCH BAR ── */}
-        <div className="fixed bottom-8 left-8 z-[100] pointer-events-none hidden lg:block">
-          <Link to="/artists">
-            <div
-              style={tiltStyle}
-              className="pointer-events-auto flex w-64 items-center gap-3 bg-white/60 backdrop-blur-2xl border border-white/60 rounded-full px-5 py-4 shadow-[0_8px_32px_rgba(0,0,0,0.06)] hover:bg-white/80 hover:shadow-lg transition-all cursor-pointer group"
+function CategoryGrid() {
+  return (
+    <section className="container-shell app-section content-section rhythm-right">
+      <SectionHeading eyebrow="Categories" title="A mosaic of event-ready specialties" action="View all" to="/explore" />
+      <div className="category-mosaic">
+        {CATEGORY_GROUP_OPTIONS.map((group, index) => {
+          const Icon = categoryIcons[group.name] || Sparkles;
+          const tileClass = index === 0 ? "mosaic-large" : index < 3 ? "mosaic-medium" : "mosaic-small";
+          return (
+            <Link
+              key={group.id}
+              to={`/artists?category=${encodeURIComponent(group.name)}`}
+              className={`compact-card category-card group ${tileClass}`}
             >
-              <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Search className="h-4 w-4 text-orange-600" />
+              <div className="image-wrapper">
+                <SmartImage
+                  src=""
+                  alt={group.name}
+                  usageId={`home-category:${group.id}`}
+                  category={group.name}
+                  orientation="landscape"
+                  priority={index < 2}
+                  aspectRatio="aspect-auto"
+                  containerClassName="h-full w-full transition duration-300 group-hover:scale-[1.03]"
+                />
+                <div className="absolute left-3 top-3 flex h-10 w-10 items-center justify-center rounded-lg bg-white/92 text-orange-600 shadow-sm">
+                  <Icon className="h-5 w-5" />
+                </div>
               </div>
-              <span className="text-xs font-bold text-[#1A1A1A] tracking-wider uppercase">Explore Artist</span>
+              <div className="card-content">
+                <h3 className="line-clamp-1 text-lg font-extrabold text-stone-950">{group.name}</h3>
+                <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-stone-500">{group.subcategories.slice(0, 4).join(" / ")}</p>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function FeaturedArtistsSection({ artists, loading }: { artists: ShowcaseArtist[]; loading: boolean }) {
+  const cards = useMemo(() => buildArtistCards(artists, 8), [artists]);
+
+  return (
+    <section className="container-shell app-section content-section rhythm-left luxury-section">
+      <SectionHeading eyebrow="Featured Artists" title="Verified talent, ready to book" action="Explore artists" to="/artists" />
+      {loading ? (
+        <div className="luxury-results-grid">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="luxury-card luxury-skeleton-card">
+              <div />
+              <span />
+              <strong />
+              <p />
             </div>
+          ))}
+        </div>
+      ) : cards.length > 0 ? (
+        <div className="luxury-results-grid">
+          <AnimatePresence mode="popLayout">
+            {cards.map((artist, index) => (
+              <LuxuryArtistCard key={artist.cardId} artist={artist} index={index} />
+            ))}
+          </AnimatePresence>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-sm">
+          <p className="text-sm font-bold text-stone-600">Featured artists are refreshing. Browse the full collection while the spotlight updates.</p>
+          <Link to="/artists" className="mt-4 inline-flex h-10 items-center rounded-full bg-stone-950 px-5 text-xs font-extrabold text-white">
+            Browse Artists
           </Link>
         </div>
+      )}
+    </section>
+  );
+}
 
+function UpcomingEventsSection({ events, loading }: { events: CulturalEvent[]; loading: boolean }) {
+  return (
+    <section className="container-shell app-section content-section rhythm-right luxury-section">
+      <SectionHeading eyebrow="Events" title="Live event briefs ready for artists" action="See events" to="/events" />
+      {loading ? (
+        <div className="luxury-results-grid event-grid">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="luxury-card luxury-skeleton-card">
+              <div />
+              <span />
+              <strong />
+              <p />
+            </div>
+          ))}
+        </div>
+      ) : events.length > 0 ? (
+        <div className="luxury-results-grid event-grid">
+          <AnimatePresence mode="popLayout">
+            {events.slice(0, 4).map((event, index) => (
+              <LuxuryEventCard key={event.id} event={event} index={index} />
+            ))}
+          </AnimatePresence>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-stone-200 bg-white p-5 text-center shadow-sm">
+          <p className="text-sm font-bold text-stone-600">No public briefs are active right now.</p>
+          <Link to="/events" className="mt-4 inline-flex h-10 items-center rounded-full bg-orange-600 px-5 text-xs font-extrabold text-white">
+            Create an Event
+          </Link>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CTASection() {
+  return (
+    <section className="home-cta-section container-shell app-section rhythm-full pb-24">
+      <div className="home-cta-panel grid gap-4 overflow-hidden rounded-lg bg-stone-950 p-5 text-white shadow-sm md:grid-cols-[1fr_340px]">
+        <div className="py-3">
+          <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-300">For artists and organizers</p>
+          <h2 className="mt-2 max-w-2xl text-3xl font-extrabold leading-tight text-white md:text-[36px]">One polished profile. Faster event discovery.</h2>
+          <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-white/72">
+            Build a credible artist presence or publish an event brief and let the platform connect the flow.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link to="/register?role=artist" className="inline-flex h-11 items-center gap-2 rounded-full bg-orange-600 px-5 text-sm font-extrabold text-white transition hover:bg-orange-500">
+              <Users className="h-4 w-4" />
+              Join as Artist
+            </Link>
+            <Link to="/events" className="inline-flex h-11 items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 text-sm font-extrabold text-white transition hover:bg-white/15">
+              Post Event
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+        <SmartImage src={STATIC_IMAGES.profileCover} alt="Artist performance" usageId="home:cta" category="hero" orientation="landscape" aspectRatio="aspect-video" containerClassName="self-center rounded-lg" />
       </div>
-    </>
+    </section>
+  );
+}
+
+export default function PremiumScrollyExperience() {
+  const [artists, setArtists] = useState<ShowcaseArtist[]>([]);
+  const [events, setEvents] = useState<CulturalEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([getActiveArtists(8), getApprovedEvents(3)])
+      .then(([artistData, eventData]) => {
+        if (!mounted) return;
+        setArtists(artistData as ShowcaseArtist[]);
+        setEvents(eventData as CulturalEvent[]);
+      })
+      .catch((error) => {
+        console.warn("Homepage Firebase data unavailable.", error);
+        if (!mounted) return;
+        setArtists([]);
+        setEvents([]);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return (
+    <div className="luxury-page home-page min-h-screen font-sans antialiased">
+      <Helmet>
+        <title>MyKalakar | Premium Artist Marketplace</title>
+        <link rel="preload" as="image" href={STATIC_IMAGES.heroDhol} />
+        <link rel="preload" as="image" href={STATIC_IMAGES.heroKirtan} />
+      </Helmet>
+      <Navbar />
+      <main>
+        <Hero />
+        <CategoryGrid />
+        <FeaturedArtistsSection artists={artists} loading={loading} />
+        <UpcomingEventsSection events={events} loading={loading} />
+        <CTASection />
+      </main>
+      <Footer />
+    </div>
   );
 }

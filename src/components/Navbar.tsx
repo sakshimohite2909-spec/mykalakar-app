@@ -1,50 +1,64 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
-import { gsap } from "gsap";
-import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Menu, ShieldCheck, UserCircle, X, ChevronDown, Sparkles as SparklesIcon, Eye } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronDown,
+  Eye,
+  Globe2,
+  Home,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Music2,
+  ShieldCheck,
+  Sparkles,
+  UserCircle,
+  UsersRound,
+  X,
+} from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/contexts/AuthContext";
+import { type Language, useI18n } from "@/i18n/I18nProvider";
+import { SmartImage } from "@/components/SmartImage";
+import { STATIC_IMAGES } from "@/services/ImageRegistryService";
+import { getInitials } from "@/services/dataNormalizer";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { currentUser, artistData, userProfile, userRole, logout } = useAuth();
-  const navRef = useRef<HTMLDivElement>(null);
+  const { language, languages, setLanguage, t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
 
-  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname, location.hash]);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 14);
     window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  useEffect(() => {
-    if (!navRef.current) return;
-    const tween = gsap.to(navRef.current, { y: "+=3", duration: 4, ease: "sine.inOut", yoyo: true, repeat: -1 });
-    return () => tween.kill();
-  }, []);
-
-  const navLinks = [
-    { label: "Home",     path: "/" },
-    { label: "Artists",  path: "/artists" },
-    { label: "Events",   path: "/events" },
-  ];
-
-  const isActive = (path: string) => {
-    const cur = location.pathname;
-    if (path === "/") return cur === "/";
-    if (path === "/artists") return (cur.startsWith("/artist") && !cur.includes("login") && !cur.includes("register")) || cur.startsWith("/search");
-    if (path === "/events") return cur.startsWith("/event") || cur.startsWith("/location");
-    return cur.startsWith(path);
-  };
 
   const profileValue = (key: string) => {
     const value = userProfile?.[key];
     return typeof value === "string" ? value : "";
   };
+
   const artistMedia = typeof artistData?.media === "object" && artistData.media !== null
     ? artistData.media as Record<string, unknown>
     : null;
@@ -62,197 +76,206 @@ export default function Navbar() {
     "User";
   const firstName = displayName.split(" ")[0] || "User";
   const canViewArtistProfile = Boolean(
-    artistData && (artistData.status === "active" || artistData.status === "approved")
+    artistData && (artistData.status === "active" || artistData.status === "approved"),
   );
   const dashboardPath = userRole === "admin" ? "/admin" : userRole === "artist" ? "/artist/dashboard" : "/profile";
-  const dashboardLabel = userRole === "admin" ? "Admin Console" : userRole === "artist" ? "Artist Dashboard" : "My Profile";
+  const dashboardLabel = userRole === "admin" ? t("nav.adminConsole") : userRole === "artist" ? t("nav.artistDashboard") : t("nav.myProfile");
   const showDashboardLink = dashboardPath !== "/profile";
 
+  const navLinks = useMemo(
+    () => [
+      { label: t("nav.home") || "Home", href: "/", icon: Home },
+      { label: t("nav.artists"), href: "/artists", icon: UsersRound },
+      { label: t("nav.events"), href: "/events", icon: CalendarDays },
+    ],
+    [t],
+  );
+
+  const isActive = (href: string) => {
+    if (href === "/") return location.pathname === "/";
+    if (href === "/artists") return location.pathname.startsWith("/artists") || location.pathname.startsWith("/artist/") || location.pathname.startsWith("/search") || location.pathname.startsWith("/explore");
+    if (href === "/events") return location.pathname.startsWith("/events") || location.pathname.startsWith("/event") || location.pathname.startsWith("/location");
+    if (href.includes("#")) return location.pathname === "/" && location.hash === href.slice(href.indexOf("#"));
+    return location.pathname === href;
+  };
+
+  const currentLanguage = languages.find((item) => item.code === language)?.label ?? "English";
+
+  const LanguageSwitcher = ({ compact = false }: { compact?: boolean }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={`nav-icon-button ${compact ? "w-11 px-0" : "px-3"}`}
+          aria-label={t("nav.language")}
+        >
+          <Globe2 className="h-4 w-4" />
+          {!compact && <span>{currentLanguage}</span>}
+          {!compact && <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="rounded-2xl border-orange-100/80 bg-[#fffaf2]/95 p-2 shadow-xl backdrop-blur-xl">
+        {languages.map((item) => (
+          <DropdownMenuItem
+            key={item.code}
+            onClick={() => setLanguage(item.code as Language)}
+            className={`cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold ${
+              item.code === language ? "bg-orange-100 text-orange-700" : "text-stone-700"
+            }`}
+          >
+            {item.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
-    <nav className="fixed inset-x-0 top-0 z-[100] px-4 pt-4 md:px-8 pointer-events-none">
-      <div
-        ref={navRef}
-        className="pointer-events-auto relative mx-auto flex max-w-6xl items-center gap-4 rounded-full px-5 py-3 transition-all duration-500"
-        style={scrolled ? {
-          background: "rgba(255, 255, 255, 0.4)",
-          border: "1px solid rgba(255, 255, 255, 0.5)",
-          backdropFilter: "blur(24px) saturate(160%)",
-          WebkitBackdropFilter: "blur(24px) saturate(160%)",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.05)",
-          transform: "translateZ(0)",          /* GPU layer promotion */
-          willChange: "transform",
-        } : {
-          background: "transparent",
-          transform: "translateZ(0)",
-          willChange: "transform",
-        }}
-      >
-        {/* Tangerine glow line top */}
-        <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 h-px w-3/4 rounded-full"
-          style={{ background: "linear-gradient(90deg, transparent, rgba(232,111,58,0.42), rgba(184,92,122,0.34), transparent)" }}
-        />
-
-        {/* Brand */}
-        <Link to="/" className="relative z-10 flex items-center gap-3 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center shadow-lg shadow-orange-200 group-hover:scale-110 transition-transform">
-            <SparklesIcon className="w-4 h-4 text-foreground" />
-          </div>
-          <span className="font-display text-xl font-black text-[#1A1A1A] tracking-wider">
-            My<span className="gradient-text-primary">Kalakar</span>
-          </span>
-        </Link>
-
-        {/* Desktop nav links */}
-        <div className="relative z-10 hidden lg:flex items-center gap-8 ml-8 mr-auto">
-          {navLinks.map((link) => (
-            <Link
-              key={link.label}
-              to={link.path}
-              className={`text-[11px] font-black uppercase tracking-[0.2em] transition-colors ${isActive(link.path) ? "text-orange-600" : "text-slate-500 hover:text-orange-600"}`}
+    <header className="site-header fixed top-0 inset-x-0 w-full h-20 flex items-center justify-between z-40 bg-white/70 backdrop-blur-md px-3 md:px-4">
+      <div className="site-nav-shell mx-auto flex w-full max-w-[1200px] items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {location.pathname !== "/" && (
+            <button
+              onClick={() => navigate(-1)}
+              className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-orange-600"
+              aria-label="Go back"
             >
-              {link.label}
-            </Link>
-          ))}
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+          <Link to="/" className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/35">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#7C2D12] text-white shadow-[0_10px_24px_rgba(124,45,18,0.20)]">
+              <img src={STATIC_IMAGES.logo} alt="MyKalakar Logo" className="h-10 w-auto object-contain" />
+            </div>
+            <div className="hidden sm:block min-w-0">
+              <span className="block truncate text-base font-extrabold leading-5 text-stone-950">{t("brand.name")}</span>
+              <span className="hidden truncate text-[11px] font-semibold text-stone-500 xl:block">{t("brand.tagline")}</span>
+            </div>
+          </Link>
         </div>
 
-        {/* Right actions */}
-        <div className="relative z-10 ml-auto flex items-center gap-2">
+        <nav className="mx-auto hidden items-center gap-1 lg:flex">
+          {navLinks.map(({ label, href, icon: Icon }) => (
+            <Link
+              key={href}
+              to={href}
+              className={`nav-underline group inline-flex min-h-10 items-center gap-2 rounded-full px-3 py-2 text-sm font-bold drop-shadow-md transition ${
+                isActive(href) ? "text-orange-700" : "text-stone-600 hover:text-stone-950"
+              }`}
+            >
+              <Icon className="h-4 w-4 text-orange-600/80" />
+              {label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="ml-auto hidden items-center gap-2 md:flex">
+          <LanguageSwitcher />
           {currentUser ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <div className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1.5 cursor-pointer transition-all"
-                  style={{ background: "rgba(255,255,255,0.70)", border: "1px solid rgba(255,138,48,0.20)", boxShadow: "0 2px 10px rgba(0,0,0,0.03)" }}>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-foreground text-xs font-black overflow-hidden shrink-0"
-                    style={{ background: "linear-gradient(135deg, #E86F3A, #B85C7A)", boxShadow: "0 0 12px rgba(232,111,58,0.28)" }}>
-                    {profilePhoto ? (
-                      <img src={profilePhoto} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span>{displayName[0]?.toUpperCase() || "U"}</span>
-                    )}
-                  </div>
-                  <div className="hidden sm:block text-left">
-                    <p className="text-[9px] font-bold uppercase tracking-wider leading-none" style={{ color: "#475569" }}>Welcome</p>
-                    <p className="text-xs font-black leading-none mt-0.5" style={{ color: "#1A1A1A" }}>
-                      {firstName}
-                    </p>
-                  </div>
-                  <ChevronDown className="w-3 h-3 ml-1" style={{ color: "#475569" }} />
-                </div>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 rounded-2xl shadow-2xl mt-2 p-2"
-                style={{ background: "rgba(255,246,237,0.95)", border: "1px solid rgba(255,138,48,0.20)", backdropFilter: "blur(24px)" }}>
-                <DropdownMenuItem
-                  className="rounded-xl cursor-pointer font-bold transition-colors text-sm py-2.5 hover:bg-orange-100"
-                  style={{ color: "#1A1A1A" }}
-                  onClick={() => navigate("/profile")}
+                <button
+                  type="button"
+                  className="flex min-h-10 items-center gap-2 rounded-full border border-stone-200 bg-white py-1 pl-1 pr-3 text-stone-800 shadow-sm transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/35"
                 >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-orange-600 text-xs font-extrabold text-white">
+                    {profilePhoto ? <SmartImage src={profilePhoto} alt={displayName} showSkeleton={false} aspectRatio="aspect-auto" containerClassName="h-full w-full rounded-full" /> : getInitials(displayName)}
+                  </span>
+                  <span className="hidden text-left xl:block">
+                    <span className="block text-[11px] font-semibold leading-3 text-stone-500">{t("nav.welcome")}</span>
+                    <span className="block text-sm font-extrabold leading-4 text-stone-950">{firstName}</span>
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 text-stone-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 rounded-2xl border-orange-100/80 bg-[#fffaf2]/95 p-2 shadow-xl backdrop-blur-xl">
+                <DropdownMenuItem className="cursor-pointer rounded-xl py-2.5 font-semibold" onClick={() => navigate("/profile")}>
                   <UserCircle className="mr-2 h-4 w-4" />
-                  My Profile
+                  {t("nav.myProfile")}
                 </DropdownMenuItem>
                 {canViewArtistProfile ? (
-                  <DropdownMenuItem
-                    className="rounded-xl cursor-pointer font-bold transition-colors text-sm py-2.5 hover:bg-orange-100"
-                    style={{ color: "#1A1A1A" }}
-                    onClick={() => navigate(`/artist/${artistData!.uid || artistData!.id}`)}
-                  >
+                  <DropdownMenuItem className="cursor-pointer rounded-xl py-2.5 font-semibold" onClick={() => navigate(`/artist/${artistData!.uid || artistData!.id}`)}>
                     <Eye className="mr-2 h-4 w-4" />
-                    View Public Page
+                    {t("nav.viewPublicPage")}
                   </DropdownMenuItem>
                 ) : null}
                 {showDashboardLink ? (
-                  <DropdownMenuItem
-                    className="rounded-xl cursor-pointer font-bold transition-colors text-sm py-2.5 hover:bg-orange-100"
-                    style={{ color: "#1A1A1A" }}
-                    onClick={() => navigate(dashboardPath)}
-                  >
+                  <DropdownMenuItem className="cursor-pointer rounded-xl py-2.5 font-semibold" onClick={() => navigate(dashboardPath)}>
                     {userRole === "admin" ? <ShieldCheck className="mr-2 h-4 w-4" /> : <LayoutDashboard className="mr-2 h-4 w-4" />}
                     {dashboardLabel}
                   </DropdownMenuItem>
                 ) : null}
-                <DropdownMenuItem
-                  className="rounded-xl cursor-pointer font-bold transition-colors mt-1 text-sm py-2.5 hover:bg-red-50"
-                  style={{ color: "#E11D48" }}
-                  onClick={() => logout()}
-                >
-                  Logout
+                <DropdownMenuItem className="cursor-pointer rounded-xl py-2.5 font-semibold text-red-600 focus:text-red-600" onClick={() => logout()}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {t("nav.logout")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
             <>
-              <Link
-                to="/register"
-                className="hidden sm:block rounded-full px-5 py-2 text-[11px] font-black uppercase tracking-widest transition-all"
-                style={{ color: "#1A1A1A", border: "1px solid rgba(255,138,48,0.25)", background: "rgba(255,255,255,0.60)", boxShadow: "0 2px 10px rgba(0,0,0,0.03)" }}
-              >
-                Register
+              <Link to="/login" className="inline-flex min-h-10 items-center rounded-full px-4 text-sm font-bold text-stone-700 transition hover:bg-white/70">
+                {t("nav.login")}
               </Link>
-              <Link
-                to="/login"
-                className="rounded-full px-5 py-2 text-[11px] font-black uppercase tracking-widest text-[#FFFFFF] transition-all hover:scale-105 active:scale-95"
-                style={{ background: "linear-gradient(135deg, #E86F3A, #F6A15A 52%, #B85C7A)", boxShadow: "0 4px 16px rgba(232,111,58,0.30)" }}
-              >
-                Login
+              <Link to="/register?role=artist" className="btn-glass-primary inline-flex min-h-10 items-center rounded-full px-5 text-sm">
+                <Sparkles className="h-4 w-4" />
+                {t("nav.joinArtist")}
               </Link>
             </>
           )}
+        </div>
 
-          {/* Mobile toggle */}
+        <button
+          type="button"
+          className="nav-icon-button ml-auto md:hidden"
+          onClick={() => setMobileOpen((value) => !value)}
+          aria-label={t("nav.menu")}
+        >
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+
+        {mobileOpen ? (
           <button
-            className="lg:hidden rounded-full p-2.5 transition-all text-[#1A1A1A]"
-            style={{ border: "1px solid rgba(255,138,48,0.25)", background: "rgba(255,255,255,0.70)" }}
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-label="Toggle menu"
-          >
-            {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-          </button>
-        </div>
-      </div>
+            type="button"
+            className="fixed inset-0 z-40 cursor-default bg-stone-950/5 md:hidden"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
+          />
+        ) : null}
 
-      {/* Mobile menu */}
-      {mobileOpen && (
-        <div className="pointer-events-auto mx-auto mt-2 max-w-6xl rounded-3xl px-4 py-4 flex flex-col gap-2 shadow-xl shadow-orange-900/5"
-          style={{ background: "rgba(255,246,237,0.95)", border: "1px solid rgba(255,138,48,0.15)", backdropFilter: "blur(24px)" }}>
-          {navLinks.map((link) => (
-            <Link
-              key={link.label}
-              to={link.path}
-              className={`rounded-xl px-4 py-3 text-sm font-bold uppercase tracking-wider transition-all ${isActive(link.path) ? "text-orange-600 bg-orange-50" : "text-slate-500"}`}
-            >
-              {link.label}
-            </Link>
-          ))}
-          {!currentUser && (
-            <Link
-              to="/register"
-              className="rounded-xl px-4 py-3 text-sm font-bold uppercase tracking-wider text-center transition-all bg-white"
-              style={{ color: "#1A1A1A", border: "1px solid rgba(255,138,48,0.25)", boxShadow: "0 2px 10px rgba(0,0,0,0.03)" }}
-            >
-              Register
-            </Link>
-          )}
-          {currentUser && (
-            <>
-              <Link
-                to="/profile"
-                className="rounded-xl px-4 py-3 text-sm font-bold uppercase tracking-wider transition-all bg-white"
-                style={{ color: "#1A1A1A", border: "1px solid rgba(255,138,48,0.25)" }}
-              >
-                My Profile
-              </Link>
-              {showDashboardLink ? (
+        {mobileOpen ? (
+          <div className="absolute left-3 right-3 top-[calc(100%+0.5rem)] z-50 grid gap-2 rounded-2xl border border-orange-100/70 bg-[#fffaf2]/95 p-2 shadow-xl backdrop-blur-xl md:hidden">
+            <div className="grid gap-1">
+              {navLinks.map(({ label, href, icon: Icon }) => (
                 <Link
-                  to={dashboardPath}
-                  className="rounded-xl px-4 py-3 text-sm font-bold uppercase tracking-wider transition-all bg-white"
-                  style={{ color: "#1A1A1A", border: "1px solid rgba(255,138,48,0.25)" }}
+                  key={href}
+                  to={href}
+                  className="flex min-h-11 items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold text-stone-700 transition hover:bg-white/75"
                 >
-                  {dashboardLabel}
+                  <Icon className="h-4 w-4 text-orange-600" />
+                  {label}
                 </Link>
-              ) : null}
-            </>
-          )}
-        </div>
-      )}
-    </nav>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <LanguageSwitcher compact />
+              {currentUser ? (
+                <Link to="/profile" className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-bold text-white">
+                  {t("nav.myProfile")}
+                </Link>
+              ) : (
+                <>
+                  <Link to="/login" className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-white px-4 text-sm font-bold text-stone-700">
+                    {t("nav.login")}
+                  </Link>
+                  <Link to="/register?role=artist" className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-bold text-white">
+                    {t("nav.joinArtist")}
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </header>
   );
 }

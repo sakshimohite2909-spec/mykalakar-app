@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { imageRegistry } from "@/services/ImageRegistryService";
 import { Button } from "@/components/ui/button";
 import {
     LayoutDashboard,
@@ -39,7 +40,7 @@ export default function ArtistLayout() {
     };
 
     return (
-        <div className="min-h-screen bg-transparent flex">
+        <div className="artist-dashboard-layout min-h-screen bg-transparent flex">
             {/* Sidebar - Desktop */}
             <aside className="hidden lg:flex flex-col w-64 border-r border-border/50 bg-card/50 backdrop-blur-xl p-4 sticky top-0 h-screen">
                 {/* Logo */}
@@ -53,7 +54,7 @@ export default function ArtistLayout() {
                 {/* Artist Info */}
                 <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 border border-border/50 mb-6">
                     <img
-                        src={artistData?.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100"}
+                            src={artistData?.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
                         alt={artistData?.name || "Artist"}
                         className="w-10 h-10 rounded-lg object-cover"
                     />
@@ -125,7 +126,7 @@ export default function ArtistLayout() {
 
                         <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 border border-border/50 mb-6">
                             <img
-                                src={artistData?.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100"}
+                                    src={artistData?.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
                                 alt={artistData?.name || "Artist"}
                                 className="w-10 h-10 rounded-lg object-cover"
                             />
@@ -181,7 +182,7 @@ export default function ArtistLayout() {
                             </Button>
                         </Link>
                         <img
-                            src={artistData?.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100"}
+                                src={artistData?.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
                             alt="Profile"
                             className="w-8 h-8 rounded-lg object-cover"
                         />

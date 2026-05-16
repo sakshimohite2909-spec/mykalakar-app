@@ -1,90 +1,92 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Star, Play, Plus, ThumbsUp, ChevronDown, BadgeCheck, Loader2, ChevronRight, Heart, MapPin, Share2 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase";
-import { collection, query, where, limit, onSnapshot } from "firebase/firestore";
+import { motion } from "framer-motion";
+import { ArrowRight, BadgeCheck, ChevronLeft, ChevronRight, Heart, MapPin, Star } from "lucide-react";
+import { getCategoryGroupForArtistType } from "@/constants/artistSystem";
+import { getActiveArtists } from "@/services/dataService";
+import { SmartImage } from "@/components/SmartImage";
+import { buildArtistCards, type ArtistCardViewModel } from "@/services/marketplaceCards";
 
 interface ArtistCardProps {
-  artist: any;
+  artist: ArtistCardViewModel;
   index?: number;
 }
 
 export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
+  const artType = artist.subCategory || "Artist";
+  const categoryGroup = getCategoryGroupForArtistType(artType) || artist.category || "Default";
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, delay: index * 0.1 }}
+      transition={{ duration: 0.35, delay: Math.min(index * 0.05, 0.25), ease: [0.16, 1, 0.3, 1] }}
       className="relative min-w-[320px] snap-center py-6"
     >
-      <Link to={`/artist/${artist.id}`} className="block h-full">
-        <div className="pastel-card h-full flex flex-col group bg-white shadow-xl hover:shadow-2xl hover:shadow-sky-100 transition-all duration-500 overflow-hidden rounded-[2rem] border-white ring-1 ring-slate-100">
-          
-          {/* Cover Media */}
+      <Link to={`/artist/${artist.artistId}`} className="block h-full">
+        <div className="group flex h-full flex-col overflow-hidden rounded-[20px] border border-stone-100 bg-white shadow-[0_18px_50px_rgba(28,25,23,0.08)] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_28px_70px_rgba(28,25,23,0.14)]">
           <div className="relative h-48 overflow-hidden">
-            <img
-              src={artist.media?.coverPhoto || artist.media?.profilePhoto || artist.coverPhoto || artist.profilePhoto || `https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&auto=format&fit=crop`}
-              alt={artist.name}
-              className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+            <SmartImage
+              src={artist.image}
+              alt={artist.name || artType}
+              usageId={`featured:${artist.cardId}`}
+              category={artType || categoryGroup}
+              orientation="landscape"
+              priority={index < 3}
+              aspectRatio="aspect-auto"
+              sizes="(max-width: 768px) 320px, 360px"
+              containerClassName="h-full w-full transition-transform duration-700 group-hover:scale-[1.03]"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent opacity-60" />
-            
             <div className="absolute bottom-4 left-4 flex flex-col">
-               <span className="text-[10px] font-black uppercase tracking-widest text-orange-500 bg-white/90 backdrop-blur-md px-2 py-1 rounded-lg w-fit mb-1 border border-orange-100">
-                  {artist.category}
-               </span>
-               <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/90 backdrop-blur-md border border-slate-100 w-fit">
-                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                  <span className="text-xs font-black text-slate-800 tracking-tighter">
-                    {artist.stats?.rating || artist.rating || "5.0"} ({artist.stats?.reviews || artist.reviews || "0"} Reviews)
-                  </span>
-               </div>
+              <span className="mb-1 w-fit rounded-lg border border-orange-100 bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-orange-500 backdrop-blur-md">
+                {categoryGroup}
+              </span>
+              <div className="flex w-fit items-center gap-1.5 rounded-lg border border-stone-100 bg-white/90 px-2 py-1 backdrop-blur-md">
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                <span className="text-xs font-black tracking-tighter text-stone-800">
+                  {artist.rating.toFixed(1)} ({artist.reviews} Reviews)
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="p-7 space-y-4 flex-1 flex flex-col">
-             <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                   <div className="flex items-center gap-2">
-                      <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none group-hover:text-primary transition-colors">
-                         {artist.name}
-                      </h3>
-                      {artist.verified && (
-                        <div className="p-0.5 rounded-full bg-orange-50 border border-orange-100">
-                           <BadgeCheck className="h-4 w-4 text-orange-500 fill-orange-100" />
-                        </div>
-                      )}
-                   </div>
-                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{artist.subcategory}</p>
+          <div className="flex flex-1 flex-col space-y-4 p-7">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <h3 className="truncate text-2xl font-black leading-none tracking-tight text-stone-950 transition-colors group-hover:text-orange-600">
+                    {artist.name || "Premium Artist"}
+                  </h3>
+                  {artist.verified ? <BadgeCheck className="h-4 w-4 shrink-0 text-orange-500" /> : null}
                 </div>
-                <div className="flex items-center gap-1.5 text-slate-400 text-xs font-black bg-slate-50 px-2 py-1 rounded-sm">
-                   <MapPin className="h-3.5 w-3.5 text-primary" />
-                   {artist.district?.split(' ')[0]}
-                </div>
-             </div>
-             
-             {/* Bio Section */}
-             <p className="text-slate-500 text-sm font-medium line-clamp-3 leading-relaxed flex-1">
-                {artist.bio || `Professional ${artist.subcategory} from ${artist.district}, bringing a unique energy to every event with years of expertise.`}
-             </p>
+                <p className="text-xs font-bold uppercase tracking-widest text-stone-400">{artType}</p>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-sm bg-stone-50 px-2 py-1 text-xs font-black text-stone-400">
+                <MapPin className="h-3.5 w-3.5 text-orange-600" />
+                {artist.location.split(",")[0] || "MH"}
+              </div>
+            </div>
 
-             <div className="pt-6 mt-auto border-t border-slate-50 flex items-center justify-between">
-                <div className="flex flex-col">
-                   <span className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">Event Booking</span>
-                   <span className="text-2xl font-black text-slate-900">₹{(artist.pricing?.soloPrice || artist.startingPrice || "5,000").toLocaleString('en-IN')}<span className="text-xs text-slate-400 ml-1">/ session</span></span>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center group-hover:bg-primary transition-all shadow-lg group-hover:shadow-primary/30 translate-y-0 group-hover:-translate-y-1">
-                   <ArrowRight className="h-6 w-6 text-foreground" />
-                </div>
-             </div>
+            <p className="line-clamp-3 flex-1 text-sm font-medium leading-relaxed text-stone-500">
+              {artist.artist.bio || `Professional ${artType} from ${artist.location}, ready for premium events.`}
+            </p>
+
+            <div className="mt-auto flex items-center justify-between border-t border-stone-100 pt-6">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Event Booking</span>
+                <span className="text-2xl font-black text-stone-950">
+                  {artist.priceRange}
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-950 shadow-lg transition-all group-hover:-translate-y-1 group-hover:bg-orange-600">
+                <ArrowRight className="h-6 w-6 text-white" />
+              </div>
+            </div>
           </div>
 
-          {/* Side floating heart */}
-          <button className="absolute top-4 right-4 p-3 rounded-2xl bg-white/40 backdrop-blur-xl border border-white/40 text-foreground hover:bg-white hover:text-pink-500 transition-all opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 shadow-2xl">
-             <Heart className="h-5 w-5" />
+          <button className="absolute right-4 top-4 rounded-2xl border border-white/40 bg-white/50 p-3 text-stone-700 opacity-0 shadow-2xl backdrop-blur-xl transition-all hover:bg-white hover:text-pink-500 group-hover:translate-y-0 group-hover:opacity-100">
+            <Heart className="h-5 w-5" />
           </button>
         </div>
       </Link>
@@ -93,94 +95,80 @@ export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
 }
 
 export default function FeaturedArtists() {
-  const [artists, setArtists] = useState<any[]>([]);
+  const [artists, setArtists] = useState<ArtistCardViewModel[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(
-      collection(db, "artists"),
-      where("status", "==", "active"),
-      limit(10)
-    );
-
-    let unsubscribe = () => {};
-    
-    try {
-      unsubscribe = onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setArtists(data);
-        setLoading(false);
-      }, async (error) => {
-        console.warn("Firestore listen error in FeaturedArtists, falling back to getDocs:", error);
-        try {
-          const { getDocs } = await import("firebase/firestore");
-          const snap = await getDocs(q);
-          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setArtists(data);
-        } catch (fallbackError) {
-          console.error("Fallback fetch also failed:", fallbackError);
-        } finally {
-          setLoading(false);
-        }
+    let mounted = true;
+    getActiveArtists(10)
+      .then((data) => {
+        if (mounted) setArtists(buildArtistCards(data, 12));
+      })
+      .catch((error) => {
+        console.warn("Featured artists unavailable.", error);
+        if (mounted) setArtists([]);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
       });
-    } catch (e) {
-      console.error("Error setting up FeaturedArtists listener:", e);
-      setLoading(false);
-    }
 
-    return () => unsubscribe();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  if (loading) return (
-    <div className="py-20 flex justify-center bg-transparent">
-      <Loader2 className="h-8 w-8 animate-spin text-orange-400" />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex gap-6 overflow-hidden py-20">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div key={index} className="min-w-[320px] rounded-[32px] border border-stone-100 bg-white">
+            <div className="h-48 rounded-t-[32px] skeleton-shimmer" />
+            <div className="space-y-4 p-7">
+              <div className="h-7 w-2/3 rounded-full skeleton-shimmer" />
+              <div className="h-4 w-1/2 rounded-full skeleton-shimmer" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   if (artists.length === 0) return null;
 
   return (
-    <section className="py-20 bg-transparent relative z-10">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
+    <section className="relative z-10 bg-transparent py-20">
+      <div className="mb-16 flex flex-col justify-between gap-6 md:flex-row md:items-end">
         <div className="space-y-2">
           <div className="flex items-center gap-3">
-             <div className="h-10 w-1 rounded-full bg-orange-400" />
-             <span className="text-orange-500 font-black tracking-widest uppercase text-sm">Curated Selection</span>
+            <div className="h-10 w-1 rounded-full bg-orange-400" />
+            <span className="text-sm font-black uppercase tracking-widest text-orange-500">Curated Selection</span>
           </div>
-          <h2 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 leading-none">
-             Featured <span className="gradient-text italic">Artists</span>
+          <h2 className="text-4xl font-black tracking-tight text-stone-950 md:text-5xl">
+            Featured <span className="text-orange-600 italic">Artists</span>
           </h2>
         </div>
-        
+
         <div className="flex items-center gap-4">
-           {/* Slider Controls */}
-           <div className="flex items-center gap-2 pr-4 border-r border-slate-200">
-              <button className="p-4 rounded-full border border-slate-200 hover:border-orange-200 hover:bg-orange-50 transition-all group active:scale-90">
-                 <ChevronLeft className="h-5 w-5 text-slate-400 group-hover:text-orange-500" />
-              </button>
-              <button className="p-4 rounded-full border border-slate-200 hover:border-orange-200 hover:bg-orange-50 transition-all group active:scale-90">
-                 <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-orange-500" />
-              </button>
-           </div>
-           <Link to="/search" className="font-bold text-slate-900 group flex items-center gap-2 hover:text-orange-500 transition-colors">
-              View all superstars <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-           </Link>
+          <div className="flex items-center gap-2 border-r border-stone-200 pr-4">
+            <button className="rounded-full border border-stone-200 p-4 transition-all hover:border-orange-200 hover:bg-orange-50 active:scale-90">
+              <ChevronLeft className="h-5 w-5 text-stone-400" />
+            </button>
+            <button className="rounded-full border border-stone-200 p-4 transition-all hover:border-orange-200 hover:bg-orange-50 active:scale-90">
+              <ChevronRight className="h-5 w-5 text-stone-400" />
+            </button>
+          </div>
+          <Link to="/search" className="group flex items-center gap-2 font-bold text-stone-950 transition-colors hover:text-orange-500">
+            View all superstars <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </Link>
         </div>
       </div>
 
-      <div className="row-slider">
-        {artists.map((artist, i) => (
-          <ArtistCard key={artist.id} artist={artist} index={i} />
+      <div className="no-scrollbar flex snap-x gap-6 overflow-x-auto">
+        {artists.map((artist, index) => (
+          <ArtistCard key={artist.cardId} artist={artist} index={index} />
         ))}
-        {/* Placeholder for more spacing at the end */}
         <div className="min-w-[100px]" />
       </div>
     </section>
   );
 }
-
-import { ChevronLeft, ArrowRight as ArrowRightIcon } from "lucide-react";
-const ArrowRight = ArrowRightIcon;

@@ -93,10 +93,10 @@ const LocationSelection = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col relative font-sans" style={{ background: "var(--app-background)" }}>
+    <div className="location-page min-h-screen w-full flex flex-col relative font-sans" style={{ background: "var(--app-background)" }}>
       <Navbar />
 
-      <section className="py-20 px-4">
+      <section className="page-shell px-4">
         <div className="container mx-auto max-w-6xl">
           <div className="mb-8">
             <Button variant="ghost" onClick={handleBack} className="text-muted-foreground">

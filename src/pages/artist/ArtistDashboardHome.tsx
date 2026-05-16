@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { imageRegistry } from "@/services/ImageRegistryService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -120,7 +121,7 @@ export default function ArtistDashboard() {
                             {/* Photo */}
                             <div className="flex-shrink-0">
                                 <img
-                                    src={artistData.media?.profilePhoto || artistData.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
+                                    src={artistData.media?.profilePhoto || artistData.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
                                     alt={artistData.name}
                                     className="w-28 h-28 rounded-2xl object-cover border-2 border-border"
                                 />

@@ -1,197 +1,93 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
+    function isAuth() {
       return request.auth != null;
     }
 
-    function isOwner(uid) {
-      return signedIn() && request.auth.uid == uid;
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function isAdmin() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.status == "active";
+    // ── events ───────────────────────────────────────────────────────────────
+    match /events/{id} {
+      allow read: if true;
+      allow write: if isAuth() && isAdmin();
+    }
+
+    // Public directory metadata used by discovery and location flows.
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if isAuth() && isAdmin();
+    }
+
+    match /states/{id} {
+      allow read: if true;
+      allow write: if isAuth() && isAdmin();
+    }
+
+    // ── artists ──────────────────────────────────────────────────────────────
+    match /artists/{id} {
+      allow read: if true;
+      allow create: if isAuth();
+      allow update: if isAuth() && request.auth.uid == id;
     }
 
     // ── users ────────────────────────────────────────────────────────────────
     match /users/{uid} {
-      allow read: if isOwner(uid) || isAdmin();
+      allow read: if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAuth() && (request.auth.uid == uid || isAdmin());
+    }
 
-      allow create: if isOwner(uid)
-        && request.resource.data.uid == uid
-        && request.resource.data.role in ["customer", "artist", "admin_request"]
-        && request.resource.data.status in ["active", "pending", "blocked"];
+    match /users/{uid}/{document=**} {
+      allow read, write: if isAuth() && (request.auth.uid == uid || isAdmin());
+    }
 
-      allow update: if isAdmin()
-        || (
-          isOwner(uid)
-          && resource.data.uid == uid
-          && request.resource.data.uid == resource.data.uid
-          && request.resource.data.role == resource.data.role
-          && request.resource.data.status == resource.data.status
-        );
+    // Artist registration writes applications before admin approval.
+    match /artist_applications/{id} {
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow read: if isAuth() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow update, delete: if isAuth() && isAdmin();
+    }
 
-      allow delete: if isAdmin();
+    // ── inquiries ────────────────────────────────────────────────────────────
+    match /inquiries/{id} {
+      allow read: if isAuth() && (resource.data.customerId == request.auth.uid || resource.data.artistId == request.auth.uid || isAdmin());
+      allow create: if isAuth();
+      allow update, delete: if isAuth() && isAdmin();
+    }
 
-      match /savedArtists/{artistId} {
-        allow read, write: if isOwner(uid) || isAdmin();
-      }
+    // ── bookings ─────────────────────────────────────────────────────────────
+    match /bookings/{id} {
+      allow read: if isAuth() && (resource.data.customerId == request.auth.uid || resource.data.artistId == request.auth.uid || isAdmin());
+      allow create: if isAuth() && isAdmin();
+      allow update: if isAuth() && (resource.data.artistId == request.auth.uid || isAdmin());
+      allow delete: if isAuth() && isAdmin();
+    }
+
+    // ── admin_requests ───────────────────────────────────────────────────────
+    match /admin_requests/{id} {
+      allow create: if isAuth();
+      allow read: if isAuth() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow update, delete: if isAuth() && isAdmin();
     }
 
     // ── admins ───────────────────────────────────────────────────────────────
     match /admins/{uid} {
-      allow read: if isOwner(uid) || isAdmin();
-      allow write: if isAdmin();
+      allow read: if isAuth();
+      allow write: if isAuth() && isAdmin();
     }
 
-    // ── admin_requests ───────────────────────────────────────────────────────
-    match /admin_requests/{requestId} {
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status == "pending";
-      allow read: if isAdmin()
-        || (signedIn() && resource.data.uid == request.auth.uid);
-      allow update, delete: if isAdmin();
-    }
-
-    // ── artist_applications ──────────────────────────────────────────────────
-    match /artist_applications/{applicationId} {
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.role == "artist"
-        && request.resource.data.status == "pending";
-      allow read: if isAdmin()
-        || (signedIn() && resource.data.uid == request.auth.uid);
-      allow update, delete: if isAdmin();
-    }
-
-    // ── artists ──────────────────────────────────────────────────────────────
-    match /artists/{artistId} {
-      allow read: if resource.data.status == "active"
-        || isAdmin()
-        || (signedIn() && (artistId == request.auth.uid || resource.data.uid == request.auth.uid));
-
-      allow create, delete: if isAdmin();
-
-      allow update: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-          && request.resource.data.uid == resource.data.uid
-          && request.resource.data.status == resource.data.status
-          && request.resource.data.verified == resource.data.verified
-          && request.resource.data.trending == resource.data.trending
-        );
-    }
-
-    // ── pending_registrations (legacy) ───────────────────────────────────────
-    match /pending_registrations/{registrationId} {
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status == "pending";
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow update: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-          && resource.data.status == "pending"
-          && request.resource.data.uid == resource.data.uid
-          && request.resource.data.status == resource.data.status
-        );
-      allow delete: if isAdmin();
-    }
-
-    // ── categories (legacy — public read, admin write) ────────────────────────
-    match /categories/{categoryId} {
+    // ── master_data ──────────────────────────────────────────────────────────
+    match /master_data/{document=**} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAuth() && isAdmin();
     }
 
-    // ── states (legacy — public read, admin write) ────────────────────────────
-    match /states/{stateId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // ── master_data — central source of truth ─────────────────────────────────
-    //    Structure: master_data/v1/{subcollection}/{docId}
-    //    Public read for all subcollections; admin-only write.
-    match /master_data/{document} {
-      allow read: if true;
-      allow write: if isAdmin();
-
-      // Subcollections: categories, category_groups, states, districts, cities
-      match /{subcollection}/{subDocId} {
-        allow read: if true;
-        allow write: if isAdmin();
-      }
-    }
-
-    // ── events ───────────────────────────────────────────────────────────────
-    match /events/{eventId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // ── event_category_mappings ──────────────────────────────────────────────
-    match /event_category_mappings/{mappingId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // ── inquiries ────────────────────────────────────────────────────────────
-    match /inquiries/{inquiryId} {
-      allow create: if request.resource.data.status == "pending"
-        && request.resource.data.artistId is string
-        && request.resource.data.customerPhone is string;
-      allow read: if isAdmin()
-        || (signedIn() && (
-          resource.data.artistUid == request.auth.uid
-          || resource.data.artistId == request.auth.uid
-          || resource.data.customerId == request.auth.uid
-        ));
-      allow update, delete: if isAdmin();
-    }
-
-    // ── bookings ─────────────────────────────────────────────────────────────
-    match /bookings/{bookingId} {
-      allow read: if isAdmin()
-        || (signedIn() && (
-          resource.data.artistUid == request.auth.uid
-          || resource.data.artistId == request.auth.uid
-          || resource.data.customerId == request.auth.uid
-        ));
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin()
-        || (
-          signedIn()
-          && (resource.data.artistUid == request.auth.uid || resource.data.artistId == request.auth.uid)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])
-          && request.resource.data.status in ["accepted", "declined", "completed", "cancelled"]
-        );
-    }
-
-    // ── reviews ──────────────────────────────────────────────────────────────
-    match /reviews/{reviewId} {
-      allow read: if resource.data.isPublic == true || isAdmin();
-      allow create: if signedIn() && request.resource.data.customerId == request.auth.uid;
-      allow update, delete: if isAdmin() || (signedIn() && resource.data.customerId == request.auth.uid);
-    }
-
-    // ── notifications ────────────────────────────────────────────────────────
-    match /notifications/{notificationId} {
-      allow read, update, delete: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin();
-    }
-
-    // ── app_settings ─────────────────────────────────────────────────────────
-    match /app_settings/{document=**} {
-      allow read: if true;
-      allow write: if isAdmin();
+    // Default deny
+    match /{document=**} {
+      allow read, write: if isAuth() && isAdmin();
     }
   }
 }

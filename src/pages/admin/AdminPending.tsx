@@ -11,6 +11,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { approveArtist, rejectArtist, approveAdminRequest, rejectAdminRequest } from "@/lib/adminQueries";
 import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
+import { imageRegistry } from "@/services/ImageRegistryService";
 
 // ── Lazy YouTube Thumbnail ──────────────────────────────────────────────────
 function YoutubePreview({ url }: { url: string }) {
@@ -81,7 +82,7 @@ function ArtistApplicationCard({ a, onApprove, onReject }: { a: any; onApprove: 
       <CardContent className="p-5">
         <div className="flex flex-col md:flex-row gap-4 items-start">
           <img
-            src={a.media?.profilePhoto || a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
+            src={a.media?.profilePhoto || a.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
             alt={a.name}
             className="w-24 h-24 rounded-2xl object-cover border-2 border-background shadow-md flex-shrink-0"
           />

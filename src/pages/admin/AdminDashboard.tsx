@@ -13,6 +13,7 @@ import {
 import { firebaseErrorMessage } from "@/lib/firebaseSafe";
 import { migrateApprovedArtists } from "@/scripts/migrateArtistData";
 import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
+import { imageRegistry } from "@/services/ImageRegistryService";
 
 export default function AdminDashboard() {
   const [counts, setCounts] = useState({
@@ -189,7 +190,7 @@ export default function AdminDashboard() {
                 <div key={a.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
                   <div className="flex items-center gap-3">
                     <img
-                      src={a.media?.profilePhoto || a.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80"}
+                      src={a.media?.profilePhoto || a.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
                       alt={a.name}
                       className="w-10 h-10 rounded-lg object-cover"
                     />

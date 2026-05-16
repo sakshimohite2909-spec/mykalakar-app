@@ -1,183 +1,172 @@
-/**
- * EventRequirements.tsx
- *
- * Fixes applied:
- *  1. Removed `overflow-y-auto` from root div (conflicted with Lenis smooth scroll → blank screen)
- *  2. Fixed the "event not found" early-return layout (Navbar was inside flex center)
- *  3. Categories now come from useMasterData() → Firestore master_data with hardcoded fallback
- *  4. Added a solid light background so the page is never transparent-white
- */
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import { ArrowLeft, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
-import { Loader2, Sparkles, ArrowLeft } from "lucide-react";
 import { useMasterData } from "@/contexts/MasterDataContext";
 
 const EVENTS = [
-  { id: "1", name: "Marriage",            icon: "💍", description: "Complete wedding celebration with all traditional ceremonies" },
-  { id: "2", name: "Birthday Party",      icon: "🎂", description: "Memorable birthday celebrations for all ages" },
-  { id: "3", name: "Corporate Event",     icon: "🏢", description: "Professional events, conferences, and company celebrations" },
-  { id: "4", name: "Festival Celebration",icon: "🎊", description: "Traditional and cultural festival celebrations" },
-  { id: "5", name: "Engagement Ceremony", icon: "💍", description: "Beautiful engagement ceremonies with music and photography" },
+  { id: "1", name: "Wedding", icon: "💍", description: "Artists, rituals, hosts, and media teams for complete wedding celebrations" },
+  { id: "2", name: "Birthday Party", icon: "🎂", description: "Performers, hosts, music, and entertainers for memorable family events" },
+  { id: "3", name: "Corporate Event", icon: "🏢", description: "Anchors, speakers, stage artists, and production-ready event teams" },
+  { id: "4", name: "Festival Celebration", icon: "🎊", description: "Dhol, lezim, zanj, folk ensembles, and cultural performance teams" },
+  { id: "5", name: "Spiritual Event", icon: "🪔", description: "Kirtan, bhajan, pravachan, varkari groups, and devotional stage support" },
 ];
 
-const EventRequirements = () => {
+function getGroupSubcategories(group: Record<string, any>) {
+  if (Array.isArray(group.categories)) return group.categories;
+  if (Array.isArray(group.subcategories)) return group.subcategories;
+  return [];
+}
+
+export default function EventRequirements() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
-  const eventId  = searchParams.get("eventId");
-  const district = searchParams.get("district") || "";
-  const state    = searchParams.get("state")    || "";
-
   const { categoryGroups, loading: masterLoading } = useMasterData();
-
-  // Brief shimmer delay so the Lenis animation has time to settle
   const [ready, setReady] = useState(false);
+
+  const eventId = searchParams.get("eventId") || "";
+  const district = searchParams.get("district") || "";
+  const state = searchParams.get("state") || "";
+  const selectedEvent = EVENTS.find((event) => event.id === eventId);
+
   useEffect(() => {
-    const t = window.setTimeout(() => setReady(true), 150);
-    return () => window.clearTimeout(t);
+    const timeout = window.setTimeout(() => setReady(true), 150);
+    return () => window.clearTimeout(timeout);
   }, []);
 
-  const selectedEvent = EVENTS.find((e) => e.id === eventId);
-
-  const handleCategoryClick = (categoryName: string) => {
-    const params = new URLSearchParams({ category: categoryName, district, state, eventId: eventId ?? "" });
-    navigate(`/artists?${params.toString()}`);
+  const buildArtistUrl = (categoryName?: string, subCategory?: string) => {
+    const params = new URLSearchParams();
+    if (categoryName) params.set("category", categoryName);
+    if (subCategory) params.set("subcategory", subCategory);
+    if (district) params.set("district", district);
+    if (state) params.set("state", state);
+    if (eventId) params.set("eventId", eventId);
+    return `/artists?${params.toString()}`;
   };
 
-  // ── NOT FOUND ────────────────────────────────────────────────────────────────
   if (!selectedEvent) {
     return (
-      <div className="min-h-screen w-full flex flex-col relative font-sans" style={{ background: "var(--app-background)" }}>
+      <div className="event-requirements-page min-h-screen w-full font-sans" style={{ background: "var(--app-background)" }}>
         <Navbar />
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 py-32 px-4">
-          <div className="text-6xl">🎭</div>
-          <h1 className="text-2xl font-black text-[#1A1A1A] tracking-tight">Event not found</h1>
-          <p className="text-slate-500 text-sm text-center max-w-xs">
-            We couldn't find that event. Please go back and select a valid event type.
+        <main className="page-shell container-shell flex min-h-[70vh] flex-col items-center justify-center gap-4 text-center">
+          <Sparkles className="h-10 w-10 text-orange-600" />
+          <h1 className="text-2xl font-black text-stone-950">Event not found</h1>
+          <p className="max-w-sm text-sm font-semibold leading-6 text-stone-500">
+            Please go back and select a valid event type.
           </p>
           <button
             type="button"
             onClick={() => navigate("/events")}
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-full gradient-bg text-white text-sm font-bold tracking-wide shadow-md hover:opacity-90 transition-opacity"
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-orange-600 px-5 text-xs font-extrabold text-white"
           >
-            <ArrowLeft className="h-4 w-4" /> Back to Events
+            <ArrowLeft className="h-4 w-4" />
+            Back to Events
           </button>
-        </div>
+        </main>
         <Footer />
       </div>
     );
   }
 
-  // ── NORMAL RENDER ────────────────────────────────────────────────────────────
   const isLoading = !ready || masterLoading;
 
   return (
-    // KEY FIX: removed `overflow-y-auto` — Lenis controls document scroll globally.
-    // Using bg-[var(--app-background)] so the page is never a blank white screen.
-    <div className="min-h-screen w-full flex flex-col relative font-sans" style={{ background: "var(--app-background)" }}>
+    <div className="event-requirements-page min-h-screen w-full font-sans" style={{ background: "var(--app-background)" }}>
       <Navbar />
 
-      <section className="flex-1 py-28 px-4 relative z-10">
-        <div className="container mx-auto max-w-6xl">
-
-          {/* ── Header ── */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: "circOut" }}
-            className="text-center mb-14"
-          >
-            <div className="text-7xl mb-5">{selectedEvent.icon}</div>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-orange-200 bg-orange-50 text-orange-600 backdrop-blur-md shadow-sm text-xs font-black tracking-[0.2em] uppercase mb-5">
-              <Sparkles className="h-3 w-3" /> Select Artist Category
-            </div>
-            <h1 className="text-4xl md:text-5xl font-black text-[#1A1A1A] tracking-tight mb-3">
-              {selectedEvent.name}{" "}
-              <span className="gradient-text-primary">in {district || "your area"}</span>
+      <main className="page-shell container-shell pb-16">
+        <section className="page-hero grid gap-4 overflow-hidden rounded-lg border border-stone-200 bg-white p-5 shadow-sm md:grid-cols-[1fr_280px]">
+          <div>
+            <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-600">Artist Requirements</p>
+            <h1 className="mt-1 text-3xl font-extrabold leading-tight text-stone-950 md:text-[40px]">
+              {selectedEvent.name} in {district || "your area"}
             </h1>
-            <p className="text-slate-500 max-w-xl mx-auto text-base font-medium leading-relaxed">
-              {selectedEvent.description}. Choose an artist category below to discover available talent in your area.
+            <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-stone-600">
+              {selectedEvent.description}. Choose a category or a precise artist type to see correctly filtered artists.
             </p>
-          </motion.div>
+          </div>
+          <div className="hidden items-center justify-center rounded-lg bg-orange-50 text-7xl md:flex">
+            {selectedEvent.icon}
+          </div>
+        </section>
 
-          {/* ── Loading ── */}
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-4">
-              <Loader2 className="h-10 w-10 animate-spin text-orange-500" />
-              <p className="text-orange-600 text-[10px] font-black tracking-[0.2em] uppercase">
-                Curating categories…
-              </p>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="h-10 w-10 animate-spin text-orange-600" />
+            <p className="mt-3 text-[11px] font-black uppercase tracking-widest text-orange-600">Loading categories</p>
+          </div>
+        ) : (
+          <section className="app-section">
+            <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-600">Choose Artist Type</p>
+                <h2 className="mt-1 text-2xl font-extrabold text-stone-950 md:text-[32px]">Categories and subcategories</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(buildArtistUrl())}
+                className="inline-flex h-10 w-max items-center gap-2 rounded-lg border border-orange-100 bg-white px-4 text-xs font-extrabold text-stone-700 shadow-sm transition hover:border-orange-300 hover:text-orange-600"
+              >
+                Browse all nearby artists
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
-          ) : (
-            <>
-              {/* ── Section divider ── */}
-              <div className="mb-8 flex items-center gap-3">
-                <span className="h-px flex-1 bg-gradient-to-r from-transparent via-orange-200 to-transparent" />
-                <span className="text-[10px] font-black tracking-[0.25em] uppercase text-slate-400">
-                  All Categories
-                </span>
-                <span className="h-px flex-1 bg-gradient-to-l from-transparent via-rose-200 to-transparent" />
-              </div>
 
-              {/* ── Category grid ── */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
-                {categoryGroups.map((group, index) => (
-                  <motion.button
-                    type="button"
-                    key={group.id}
-                    initial={{ opacity: 0, y: 20 }}
+            <div className="event-requirements-grid grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {categoryGroups.map((group: Record<string, any>, index) => {
+                const subcategories = getGroupSubcategories(group);
+                return (
+                  <motion.div
+                    key={group.id || group.name}
+                    initial={{ opacity: 0, y: 18 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.06, ease: "circOut" }}
-                    onClick={() => handleCategoryClick(group.name)}
-                    className="group relative cursor-pointer rounded-[1.75rem] border border-white/60 bg-white/55 backdrop-blur-xl p-6 text-center shadow-[0_4px_24px_rgba(0,0,0,0.06)] hover:shadow-[0_12px_40px_rgba(255,107,0,0.18)] hover:border-orange-300 hover:bg-white/75 transition-all duration-300 overflow-hidden"
+                    transition={{ duration: 0.45, delay: index * 0.05, ease: "circOut" }}
+                    className="event-requirement-card relative flex min-h-[230px] flex-col gap-4 overflow-hidden rounded-lg border border-orange-100 bg-white p-5 shadow-sm"
                   >
-                    <div className="absolute inset-0 rounded-[1.75rem] bg-gradient-to-br from-white/60 to-transparent pointer-events-none" />
-                    <div className="absolute inset-0 rounded-[1.75rem] bg-gradient-to-br from-orange-100/0 to-amber-100/0 group-hover:from-orange-100/40 group-hover:to-amber-100/30 transition-all duration-500 pointer-events-none" />
-
-                    <div className="relative z-10">
-                      <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300 inline-block">
-                        {group.icon || "✨"}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-2xl">
+                          {group.icon || "✨"}
+                        </span>
+                        <div className="min-w-0">
+                          <h3 className="text-base font-black tracking-tight text-stone-950">{group.name}</h3>
+                          <p className="mt-1 text-xs font-bold uppercase tracking-wide text-orange-600">
+                            {subcategories.length} artist types
+                          </p>
+                        </div>
                       </div>
-                      <h3 className="text-sm font-black text-[#1A1A1A] tracking-wide uppercase leading-tight mb-2">
-                        {group.name}
-                      </h3>
-                      <p className="text-[10px] text-slate-500 font-medium mb-4 leading-relaxed">
-                        {group.categories.slice(0, 4).join(" · ")}
-                        {group.categories.length > 4 ? ` · +${group.categories.length - 4} more` : ""}
-                      </p>
-                      <div className="w-full py-2.5 rounded-xl border border-orange-200 bg-orange-50/80 text-orange-700 text-[9px] font-black uppercase tracking-widest group-hover:bg-orange-500 group-hover:text-white group-hover:border-transparent transition-all duration-300">
-                        View Artists
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate(buildArtistUrl(group.name))}
+                        className="shrink-0 rounded-lg border border-orange-100 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-orange-600 transition hover:bg-orange-50"
+                      >
+                        All
+                      </button>
                     </div>
-                  </motion.button>
-                ))}
-              </div>
 
-              {/* ── Browse all button ── */}
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate(
-                      `/artists?district=${encodeURIComponent(district)}&state=${encodeURIComponent(state)}&eventId=${eventId ?? ""}`
-                    )
-                  }
-                  className="inline-flex items-center gap-2 px-10 py-4 rounded-full border border-white/60 bg-white/50 backdrop-blur-xl text-[11px] font-black uppercase tracking-widest text-[#1A1A1A] hover:bg-white/80 hover:border-orange-200 shadow-sm hover:shadow-md transition-all"
-                >
-                  Browse All Artists in {district || "your area"}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </section>
+                    <div className="flex flex-wrap gap-2">
+                      {subcategories.slice(0, 9).map((subCategory: string) => (
+                        <button
+                          key={subCategory}
+                          type="button"
+                          onClick={() => navigate(buildArtistUrl(group.name, subCategory))}
+                          className="rounded-lg border border-orange-100 bg-[#fffaf6] px-3 py-2 text-[11px] font-extrabold text-stone-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
+                        >
+                          {subCategory}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </main>
 
       <Footer />
     </div>
   );
-};
-
-export default EventRequirements;
+}

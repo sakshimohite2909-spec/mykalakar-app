@@ -337,10 +337,14 @@ export default function AdminCategories() {
                   </div>
                 </button>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => handleEditCategory(cat)}><Edit className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(cat.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleEditCategory(cat); }}><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDelete(cat.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
               </div>
+              <div
+                className="overflow-hidden transition-all duration-300 ease-in-out"
+                style={{ maxHeight: expanded === cat.id ? '2000px' : '0', opacity: expanded === cat.id ? 1 : 0 }}
+              >
               {expanded === cat.id && (
                 <div className="mt-4 pl-10 space-y-3">
                   {(cat.subcategories || []).map((sub: string) => {
@@ -433,6 +437,7 @@ export default function AdminCategories() {
                   </div>
                 </div>
               )}
+              </div>
             </CardContent>
           </Card>
         ))}

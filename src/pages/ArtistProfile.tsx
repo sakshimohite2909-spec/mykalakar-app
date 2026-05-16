@@ -1,400 +1,666 @@
-import { useParams, Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
+import {
+  BadgeCheck,
+  Calendar,
+  ChevronLeft,
+  Clock,
+  Heart,
+  MapPin,
+  Share2,
+  Sparkles,
+  Star,
+  User,
+  Youtube,
+} from "lucide-react";
+import { deleteDoc, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Star, MapPin, BadgeCheck, Clock, Phone, Heart, Share2, Calendar, ChevronLeft, Play, Loader2, Instagram, Facebook, Globe, User, Users } from "lucide-react";
-import { useState, useEffect } from "react";
 import BookingModal from "@/components/BookingModal";
-import LazyYouTubeEmbed from "@/components/LazyYouTubeEmbed";
-import { db, storage } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
-import { ref, getDownloadURL } from "firebase/storage";
-import { useAuth } from "@/contexts/AuthContext";
+import { ArtistVideoEmbed } from "@/components/ArtistVideoEmbed";
+import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { Helmet } from "react-helmet-async";
-import { getExternalUrl, getYoutubeVideoId } from "@/lib/youtube";
-import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
+import { useAuth } from "@/contexts/AuthContext";
+import { db } from "@/lib/firebase";
+import { getYouTubeVideoId, getYoutubeThumbnailUrl } from "@/lib/youtube";
+import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, requireAuthUid, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
+import { getArtistArtForms } from "@/constants/artistSystem";
+import { ImageRegistryService, STATIC_IMAGES } from "@/services/ImageRegistryService";
+import { SmartImage } from "@/components/SmartImage";
+import { getArtistCategory, getArtistSubCategory } from "@/services/filterEngine";
+
+function compactLocation(artist: Record<string, any>) {
+  return [artist.district || artist.city, artist.state].filter(Boolean).join(", ") || artist.location || "Maharashtra";
+}
+
+function getVideoUrl(value: unknown) {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    const item = value as Record<string, unknown>;
+    return typeof item.url === "string" ? item.url : typeof item.link === "string" ? item.link : "";
+  }
+  return "";
+}
+
+function uniqueVideoLinks(values: unknown[]) {
+  const seen = new Set<string>();
+  return values
+    .map(getVideoUrl)
+    .map((link) => link.trim())
+    .filter((link) => {
+      const key = link.toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function getForcedMappedImage(...categories: unknown[]) {
+  for (const category of categories) {
+    const image = ImageRegistryService.getMappedImage(category);
+    if (image) return image;
+  }
+
+  return ImageRegistryService.getBestImage(String(categories.find(Boolean) || "Artist"), "artist");
+}
+
+function mapArtistDocument(id: string, data: Record<string, any>) {
+  const media = data.media && typeof data.media === "object" ? data.media : {};
+  return {
+    ...data,
+    id,
+    name: data.name || data.professionalName || "Premium Artist",
+    media: {
+      ...media,
+      profilePhoto: media.profilePhoto || data.profilePhoto || data.profilePicUrl || "",
+      coverPhoto: media.coverPhoto || data.coverPhoto || data.coverImage || data.coverImages?.[0] || "",
+      galleryPhotos: media.galleryPhotos || data.galleryPhotos || [],
+    },
+  };
+}
+
+function ArtistProfileSkeleton() {
+  return (
+    <div className="profile-page min-h-screen bg-[#fbfaf8] pb-24">
+      <Navbar />
+      <main className="profile-shell container-shell">
+        <div className="mb-4 h-9 w-28 animate-pulse rounded-full bg-orange-100" />
+
+        <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <div className="grid min-h-[320px] lg:grid-cols-2">
+            <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10">
+              <div className="h-5 w-28 animate-pulse rounded-full bg-orange-100" />
+              <div className="mt-5 h-12 w-4/5 animate-pulse rounded-xl bg-stone-100 md:h-16" />
+              <div className="mt-3 h-5 w-2/3 animate-pulse rounded-full bg-stone-100" />
+              <div className="mt-6 flex gap-3">
+                <div className="h-11 w-36 animate-pulse rounded-full bg-orange-100" />
+                <div className="h-11 w-24 animate-pulse rounded-full bg-stone-100" />
+              </div>
+            </div>
+            <div className="min-h-[240px] animate-pulse bg-stone-100 lg:min-h-full" />
+          </div>
+        </section>
+
+        <div className="profile-content-grid mt-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
+          <div className="space-y-5 lg:col-span-2">
+            <div className="h-36 animate-pulse rounded-2xl bg-white shadow-sm" />
+            <div className="h-[360px] animate-pulse rounded-2xl bg-white shadow-sm" />
+          </div>
+          <aside className="space-y-4 lg:col-span-1">
+            <div className="h-72 animate-pulse rounded-2xl bg-white shadow-md" />
+            <div className="h-28 animate-pulse rounded-2xl bg-white shadow-sm" />
+          </aside>
+        </div>
+      </main>
+    </div>
+  );
+}
 
 export default function ArtistProfile() {
   const { id } = useParams();
+  const { currentUser } = useAuth();
   const [artist, setArtist] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [bookingOpen, setBookingOpen] = useState(false);
-  const { currentUser } = useAuth();
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeVideoIndex, setActiveVideoIndex] = useState(0);
 
   useEffect(() => {
-    const fetchArtist = async () => {
-      if (!id) return;
+    let mounted = true;
+    if (!id) {
+      setArtist(null);
+      setLoading(false);
+      return;
+    }
+
+    if (id.startsWith("demo-")) {
+      setArtist(null);
+      setLoading(false);
+      return;
+    }
+
+    async function loadArtistProfile() {
+      setLoading(true);
       try {
-        const resolveImageUrl = async (urlStr: string) => {
-          if (!urlStr) return urlStr;
-          if (!urlStr.startsWith("http") && !urlStr.startsWith("blob:") && !urlStr.startsWith("data:")) {
-            try {
-              return await getDownloadURL(ref(storage, urlStr));
-            } catch (e) {
-              console.warn("Storage path resolve failed:", urlStr, e);
-              return urlStr;
-            }
-          }
-          return urlStr;
-        };
+        const artistSnap = await withTimeout(
+          getDoc(doc(db, "artists", id)),
+          FIREBASE_READ_TIMEOUT_MS,
+          "Artist profile is taking too long to load.",
+        );
 
-        const buildArtist = async (docId: string, data: any) => {
-          const profilePhoto = await resolveImageUrl(data.media?.profilePhoto || data.profilePhoto || data.profilePicUrl || "");
-          const coverPhoto = await resolveImageUrl(data.media?.coverPhoto || data.coverPhoto || data.coverImages?.[0] || "");
-          const rawGallery: string[] = data.media?.galleryPhotos || data.galleryPhotos || [];
-          const galleryPhotos = await Promise.all(rawGallery.map(resolveImageUrl));
-          return { id: docId, ...data, profilePhoto, coverPhoto, galleryPhotos };
-        };
+        if (!mounted) return;
 
-        // 1. Try artists/{id} first (approved artists with uid as doc ID)
-        let artistDoc = null;
-        if (!id.startsWith("demo-")) {
-          const snap = await withTimeout(getDoc(doc(db, "artists", id)), FIREBASE_READ_TIMEOUT_MS, "");
-          if (snap.exists()) {
-            artistDoc = await buildArtist(snap.id, snap.data());
-            // Increment profile views
-            updateDoc(doc(db, "artists", id), {
-              "stats.profileViews": (snap.data().stats?.profileViews || 0) + 1,
-              updatedAt: serverTimestamp(),
-            }).catch(() => {});
-          }
+        if (!artistSnap.exists()) {
+          setArtist(null);
+          setIsSaved(false);
+          return;
         }
 
-        // 2. Fallback: try artist_applications/{id}
-        if (!artistDoc && !id.startsWith("demo-")) {
-          try {
-            const appSnap = await withTimeout(getDoc(doc(db, "artist_applications", id)), FIREBASE_READ_TIMEOUT_MS, "");
-            if (appSnap.exists()) {
-              artistDoc = await buildArtist(appSnap.id, appSnap.data());
-            }
-          } catch {
-            // ignore
-          }
-        }
+        const artistRecord = mapArtistDocument(artistSnap.id, artistSnap.data() as Record<string, any>);
+        setArtist(artistRecord);
 
-        setArtist(artistDoc);
-
-        // Check if saved
-        if (artistDoc && currentUser) {
-          const savedRef = doc(db, "users", currentUser.uid, "savedArtists", artistDoc.id);
-          const savedSnap = await withTimeout(getDoc(savedRef), FIREBASE_READ_TIMEOUT_MS, "").catch(() => null);
-          if (savedSnap?.exists()) setIsSaved(true);
+        if (currentUser) {
+          const savedRef = doc(db, "users", currentUser.uid, "savedArtists", artistRecord.id);
+          const savedSnap = await withTimeout(getDoc(savedRef), FIREBASE_READ_TIMEOUT_MS, "Saved artist status is taking too long.").catch(() => null);
+          if (!mounted) return;
+          setIsSaved(Boolean(savedSnap?.exists()));
+        } else {
+          setIsSaved(false);
         }
       } catch (error) {
-        console.error("Error fetching artist:", error);
+        logFirebaseError(error);
+        if (mounted) {
+          setArtist(null);
+          setIsSaved(false);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
+    }
+
+    loadArtistProfile();
+
+    return () => {
+      mounted = false;
     };
-    fetchArtist();
-  }, [id, currentUser]);
+  }, [currentUser, id]);
+
+  useEffect(() => {
+    setActiveVideoIndex(0);
+  }, [id]);
+
+  const artForms = useMemo(() => (artist ? getArtistArtForms(artist) : []), [artist]);
+
+  useEffect(() => {
+    if (!artist) return;
+
+    const name = artist.name || artist.professionalName || "Premium Artist";
+    const title = `MyKalakar | ${name}`;
+    const description = `Book ${name} on MyKalakar for your next event!`;
+    const image = getForcedMappedImage(
+      artist.category,
+      artist.subcategory,
+      artist.artistProfile?.category,
+      artist.artistProfile?.subcategory,
+      artist.services?.[0],
+    );
+
+    const setMeta = (selector: string, attributes: Record<string, string>, content: string) => {
+      const existing = Array.from(document.head.querySelectorAll<HTMLMetaElement>(selector));
+      const targets = existing.length ? existing : [document.createElement("meta")];
+
+      targets.forEach((element) => {
+        Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
+        element.setAttribute("content", content);
+        if (!element.parentElement) document.head.appendChild(element);
+      });
+    };
+
+    document.title = title;
+    setMeta('meta[name="description"]', { name: "description" }, description);
+    setMeta('meta[property="og:title"]', { property: "og:title" }, title);
+    setMeta('meta[property="og:description"]', { property: "og:description" }, description);
+    setMeta('meta[property="og:image"]', { property: "og:image" }, image);
+    setMeta('meta[property="og:url"]', { property: "og:url" }, window.location.href);
+    setMeta('meta[name="twitter:title"]', { name: "twitter:title" }, title);
+    setMeta('meta[name="twitter:description"]', { name: "twitter:description" }, description);
+  }, [artist]);
 
   const handleSaveArtist = async () => {
     if (!currentUser) {
-      toast({ title: "Login Required", description: "Please log in to save artists." });
+      toast({ title: "Login required", description: "Please login to save artists." });
       return;
     }
     if (!artist) return;
     setIsSaving(true);
     try {
-      const savedRef = doc(db, "users", currentUser.uid, "savedArtists", artist.id);
+      const uid = requireAuthUid(currentUser);
+      const savedRef = doc(db, "users", uid, "savedArtists", artist.id);
       if (isSaved) {
-        await withTimeout(deleteDoc(savedRef), FIREBASE_WRITE_TIMEOUT_MS, "Could not remove this saved artist.");
+        await withTimeout(deleteDoc(savedRef), FIREBASE_WRITE_TIMEOUT_MS, "Could not remove this artist.");
         setIsSaved(false);
-        toast({ title: "Removed", description: `${artist.name} removed from saved.` });
+        toast({ title: "Removed", description: `${artist.name || "Artist"} was removed from saved artists.` });
       } else {
-        await withTimeout(setDoc(savedRef, {
-          artistId: artist.id,
-          name: artist.name,
-          category: artist.category || artist.subcategory || "",
-          profilePhoto: artist.profilePhoto || "",
-          savedAt: serverTimestamp()
-        }), FIREBASE_WRITE_TIMEOUT_MS, "Could not save this artist.");
+        await withTimeout(
+          setDoc(savedRef, sanitizePayload({
+            artistId: artist.id,
+            name: artist.name || artist.professionalName || "",
+            category: artist.category || artist.subcategory || "",
+            profilePhoto: artist.profilePhoto || artist.media?.profilePhoto || "",
+            savedAt: serverTimestamp(),
+          })),
+          FIREBASE_WRITE_TIMEOUT_MS,
+          "Could not save this artist.",
+        );
         setIsSaved(true);
-        toast({ title: "Saved! 🎉", description: `${artist.name} has been saved.` });
+        toast({ title: "Saved", description: `${artist.name || "Artist"} was added to your saved list.` });
       }
-    } catch (err) {
-      toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(err, "Failed to save artist.") });
+    } catch (error: any) {
+      logFirebaseError(error);
+      toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not save this artist.") });
+      throw error;
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleShare = async () => {
-    if (!artist) return;
+    const artistName = artist?.name || artist?.professionalName || "Premium Artist";
+    const url = window.location.href;
+    const sharePayload = {
+      title: `MyKalakar | ${artistName}`,
+      text: `Book ${artistName} on MyKalakar for your next event!`,
+      url,
+    };
+
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: `MyKalakar | ${artist.name}`,
-          text: artist.bio?.slice(0, 100) || `Check out ${artist.name} on MyKalakar!`,
-          url: window.location.href,
-        });
+        await navigator.share(sharePayload);
       } else {
-        await navigator.clipboard.writeText(window.location.href);
-        toast({ title: "Link Copied!", description: "Profile link copied to clipboard." });
+        await navigator.clipboard.writeText(url);
+        toast({ title: "Link copied", description: `${sharePayload.title} profile link copied to clipboard.` });
       }
-    } catch (err) {
-      console.error("Error sharing:", err);
+    } catch (error: any) {
+      if (error?.name !== "AbortError") {
+        toast({ title: "Share unavailable", description: "The profile link is ready to copy from the address bar." });
+      }
     }
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-transparent">
-        <Navbar />
-        <div className="pt-40 flex justify-center">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        </div>
-      </div>
-    );
+    return <ArtistProfileSkeleton />;
   }
 
   if (!artist) {
     return (
-      <div className="min-h-screen bg-transparent">
+      <div className="profile-page min-h-screen bg-[#FAFAFA]">
         <Navbar />
-        <div className="pt-24 text-center">
-          <h1 className="text-2xl font-display font-bold">Artist not found</h1>
-          <p className="text-muted-foreground mt-2 mb-4">This artist profile does not exist or has not been approved yet.</p>
-          <Link to="/artists" className="text-primary mt-4 inline-block">← Back to Artists</Link>
-        </div>
+        <main className="page-shell container-shell flex min-h-[70vh] flex-col items-center justify-center text-center">
+          <h1 className="text-2xl font-extrabold text-stone-950">Artist Not Found</h1>
+          <p className="mt-2 max-w-sm text-sm font-semibold leading-6 text-stone-500">The artist profile you're looking for might have been moved or deleted.</p>
+          <Link to="/artists" className="mt-5 inline-flex h-10 items-center rounded-full bg-stone-950 px-5 text-xs font-extrabold text-white">
+            Back to Artists
+          </Link>
+        </main>
       </div>
     );
   }
 
-  const socialLinks = Array.isArray(artist.socialLinks)
-    ? artist.socialLinks.filter((link: any) =>
-        String(link?.platform).toLowerCase() === "youtube"
-        && typeof link?.url === "string"
-        && link.url.trim().length > 0
-      )
-    : [];
-  const socialLinkUrls = new Set(socialLinks.map((link: any) => link.url.trim()));
-  const youtubeLinks = [
-    typeof artist.videoLink === "string" ? artist.videoLink : "",
-    ...(Array.isArray(artist.youtubeLinks) ? artist.youtubeLinks : []),
-  ].filter((link: string) => typeof link === "string" && link.trim().length > 0 && !socialLinkUrls.has(link.trim()));
-  const hasPerformanceLinks = socialLinks.length > 0 || youtubeLinks.length > 0 || Boolean(artist.videoLink);
+  const artistName = artist.name || artist.professionalName || "Premium Artist";
+  const category = getArtistCategory(artist) || "Artist";
+  const artType = getArtistSubCategory(artist) || artForms[0] || category;
+  const location = compactLocation(artist);
+  const artistImage = getForcedMappedImage(
+    artist.category,
+    artist.subcategory,
+    artType,
+    category,
+    artForms[0],
+    artist.services?.[0],
+  );
+  const uploadedGallery =
+    Array.isArray(artist.galleryPhotos) && artist.galleryPhotos.length
+      ? artist.galleryPhotos
+      : Array.isArray(artist.media?.galleryPhotos)
+        ? artist.media.galleryPhotos
+        : [];
+  const galleryPhotos = uploadedGallery.map((photo: unknown) => String(photo || "").trim()).filter(Boolean);
+  const youtubeLinks = uniqueVideoLinks([
+    artist.portfolioUrl,
+    artist.videoLink,
+    ...(Array.isArray(artist.youtubeLinks) ? artist.youtubeLinks.map(getVideoUrl) : []),
+    ...(Array.isArray(artist.videos) ? artist.videos.map(getVideoUrl) : []),
+    ...(Array.isArray(artist.socialLinks) ? artist.socialLinks.map(getVideoUrl) : []),
+    ...(Array.isArray(artist.artistProfile?.youtubeLinks) ? artist.artistProfile.youtubeLinks.map(getVideoUrl) : []),
+  ]);
+  const portfolioVideos = youtubeLinks
+    .map((link, index) => {
+      const videoId = getYouTubeVideoId(link);
+      const thumbnailUrl = getYoutubeThumbnailUrl(link);
+      return videoId && thumbnailUrl
+        ? { link, index, videoId, thumbnailUrl }
+        : null;
+    })
+    .filter(Boolean) as Array<{ link: string; index: number; videoId: string; thumbnailUrl: string }>;
+  const activeVideo = portfolioVideos[Math.min(activeVideoIndex, Math.max(portfolioVideos.length - 1, 0))];
+  const services = Array.from(new Set([...(Array.isArray(artist.services) ? artist.services : []), ...artForms])).slice(0, 10);
+  const experience = artist.experience || artist.artistProfile?.experience || 5;
+  const rating = Number(artist.stats?.rating || artist.rating || 5).toFixed(1);
+  const bio = artist.bio || artist.artistProfile?.bio || `Professional ${artType} from ${location}, available for curated events and cultural celebrations.`;
+  const pageTitle = `MyKalakar | ${artistName}`;
 
   return (
-    <div className="min-h-screen bg-transparent">
+    <div className="profile-page min-h-screen bg-[#F7F8F4] pb-24">
       <Helmet>
-        <title>MyKalakar | {artist.name} - {artist.category || artist.subcategory || "Artist"}</title>
-        <meta property="og:title" content={`MyKalakar | ${artist.name} - ${artist.category || "Artist"}`} />
-        <meta property="og:description" content={artist.bio?.slice(0, 160) || `Check out ${artist.name}'s profile on MyKalakar!`} />
-        {artist.profilePhoto && <meta property="og:image" content={artist.profilePhoto} />}
-        <meta property="og:url" content={window.location.href} />
-        <meta name="twitter:card" content="summary_large_image" />
+        <title>{pageTitle}</title>
       </Helmet>
+
       <Navbar />
 
-      {/* Cover */}
-      <div className="relative h-64 md:h-80 lg:h-96">
-        <img
-          src={artist.coverPhoto || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1200"}
-          alt={artist.name}
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent" />
-        <Link to="/artists" className="absolute top-20 left-4 z-10">
-          <Button variant="secondary" size="sm" className="glass-card"><ChevronLeft className="h-4 w-4 mr-1" /> Back</Button>
+      <main className="profile-shell container-shell">
+        {/* Back link */}
+        <Link
+          to="/artists"
+          className="mb-4 inline-flex h-9 items-center gap-1.5 rounded-full border border-stone-200 bg-white/90 px-3 text-xs font-extrabold text-stone-600 shadow-sm backdrop-blur-sm transition hover:border-orange-200 hover:text-orange-600"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Artists
         </Link>
-      </div>
 
-      <div className="container mx-auto px-4 -mt-20 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Info */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="lg:col-span-2">
-            <div className="glass-card rounded-2xl p-6 md:p-8 mb-6">
-              <div className="flex flex-col md:flex-row gap-6 items-start">
-                <img
-                  src={artist.profilePhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"}
-                  alt={artist.name}
-                  className="w-24 h-24 md:w-32 md:h-32 rounded-2xl object-cover border-4 border-background shadow-lg"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-4 mb-2">
-                    <div className="flex items-center gap-2">
-                      <h1 className="font-display text-2xl md:text-3xl font-bold">{artist.name}</h1>
-                      {artist.verified && <BadgeCheck className="h-6 w-6 text-primary" />}
-                    </div>
-                    {artist.liveLink && (
-                      <a href={artist.liveLink} target="_blank" rel="noopener noreferrer" className="animate-pulse bg-red-600 text-white font-bold text-xs uppercase px-3 py-1 rounded-full flex items-center shadow-md">
-                        <span className="w-2 h-2 bg-white rounded-full mr-2 animate-ping" />
-                        🔴 LIVE NOW
-                      </a>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 mb-3">
-                    {artist.category && <Badge variant="secondary">{artist.category}</Badge>}
-                    {artist.subcategory && <Badge variant="outline">{artist.subcategory}</Badge>}
-                    {artist.district && <span className="flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-3.5 w-3.5" /> {artist.district}</span>}
-                    {artist.state && <span className="flex items-center gap-1 text-sm text-muted-foreground">{artist.state}</span>}
-                    {artist.experience != null && <span className="flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-3.5 w-3.5" /> {artist.experience} yrs exp</span>}
-                  </div>
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="flex items-center gap-1">
-                      <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
-                      <span className="font-semibold">{artist.stats?.rating || artist.rating || 0}</span>
-                      <span className="text-sm text-muted-foreground">({artist.stats?.reviews || artist.reviews || 0} reviews)</span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">{artist.stats?.followers || artist.followers || 0} followers</span>
-                  </div>
-                  <span className={`inline-flex items-center gap-1 text-sm font-medium px-3 py-1 rounded-full ${artist.availability === "available" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                    ● {artist.availability === "available" ? "Available for Booking" : "Currently Busy"}
+        {/* Compact banner hero */}
+        <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md">
+          <div className="grid min-h-[330px] lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-orange-700">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {artType}
+                </span>
+                {artist.verified ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700">
+                    <BadgeCheck className="h-3.5 w-3.5" />
+                    Verified
                   </span>
-                </div>
+                ) : null}
               </div>
-            </div>
 
-            {/* Bio */}
-            {artist.bio && (
-              <div className="glass-card rounded-2xl p-6 mb-6">
-                <h2 className="font-display text-lg font-semibold mb-3">About</h2>
-                <p className="text-muted-foreground leading-relaxed">{artist.bio}</p>
+              <h1 className="mt-4 max-w-3xl text-4xl font-extrabold leading-[1.02] text-stone-950 sm:text-5xl lg:text-[56px]">
+                {artistName}
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-stone-600 sm:text-base">
+                {artType} based in {location}
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3 text-sm font-semibold text-stone-500">
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="h-4 w-4 text-orange-500" />
+                  {location}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-orange-500" />
+                  {experience}+ years
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Star className="h-4 w-4 fill-orange-500 text-orange-500" />
+                  {rating}
+                </span>
               </div>
-            )}
 
-            {/* Services */}
-            {artist.services && artist.services.length > 0 && (
-              <div className="glass-card rounded-2xl p-6 mb-6">
-                <h2 className="font-display text-lg font-semibold mb-3">Services</h2>
-                <div className="flex flex-wrap gap-2">
-                  {artist.services.map((s: string) => <Badge key={s} variant="outline" className="px-3 py-1">{s}</Badge>)}
-                </div>
-              </div>
-            )}
-
-            {/* Gallery */}
-            {artist.galleryPhotos && artist.galleryPhotos.length > 0 && (
-              <div className="glass-card rounded-2xl p-6 mb-6">
-                <h2 className="font-display text-lg font-semibold mb-4">Gallery</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {artist.galleryPhotos.map((p: string, i: number) => (
-                    <motion.img key={i} src={p} alt="Gallery" className="rounded-xl h-40 w-full object-cover hover:scale-105 transition-transform cursor-pointer" loading="lazy" />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Videos & Social Links */}
-            {hasPerformanceLinks && (
-              <div className="glass-card rounded-2xl p-6 mb-6">
-                <h2 className="font-display text-lg font-semibold mb-4">Performance & Links</h2>
-                <div className="grid gap-6">
-                  {youtubeLinks.map((link: string, i: number) => (
-                    <div key={`yt-${i}`}>
-                      {getYoutubeVideoId(link) ? (
-                        <LazyYouTubeEmbed url={link} title={`Performance ${i + 1}`} />
-                      ) : (
-                        <a href={getExternalUrl(link)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary">
-                          <Play className="h-5 w-5" /> Video Link {i + 1}
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                  {socialLinks.map((link: any, i: number) => (
-                    <div key={`social-${i}`}>
-                      {getYoutubeVideoId(link.url) ? (
-                        <div className="space-y-2">
-                          <span className="text-sm font-medium text-muted-foreground flex items-center gap-2"><Play className="h-4 w-4" /> YouTube Performance</span>
-                          <LazyYouTubeEmbed url={link.url} title={`${artist.name} YouTube performance`} />
-                        </div>
-                      ) : (
-                        <a href={getExternalUrl(link.url)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors border border-border/50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg gradient-bg flex items-center justify-center text-primary-foreground">
-                              {String(link.platform).toLowerCase() === "instagram" ? <Instagram className="h-5 w-5" /> :
-                                String(link.platform).toLowerCase() === "facebook" ? <Facebook className="h-5 w-5" /> :
-                                  <Globe className="h-5 w-5" />}
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold capitalize">{link.platform}</p>
-                              <p className="text-xs text-muted-foreground truncate max-w-[200px]">{link.url}</p>
-                            </div>
-                          </div>
-                          <span className="text-xs font-medium text-primary">View Profile →</span>
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </motion.div>
-
-          {/* Sidebar */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <div className="glass-card rounded-2xl p-6 sticky top-24">
-              <h3 className="font-display text-lg font-semibold mb-4">Inquiry for Artist</h3>
-
-              {/* Pricing */}
-              {(artist.pricing?.soloPrice || artist.pricing?.teamPrice || artist.pricing?.duoPrice) && (
-                <div className="mb-4 p-3 rounded-xl bg-secondary/50 border border-border/50 space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pricing</p>
-                  {artist.pricing?.soloPrice > 0 && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1"><User className="h-3.5 w-3.5" /> Solo</span>
-                      <span className="font-semibold">₹{Number(artist.pricing.soloPrice).toLocaleString("en-IN")}</span>
-                    </div>
-                  )}
-                  {artist.pricing?.duoPrice > 0 && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Duo</span>
-                      <span className="font-semibold">₹{Number(artist.pricing.duoPrice).toLocaleString("en-IN")}</span>
-                    </div>
-                  )}
-                  {artist.pricing?.teamPrice > 0 && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Team</span>
-                      <span className="font-semibold text-primary">₹{Number(artist.pricing.teamPrice).toLocaleString("en-IN")}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <Button onClick={() => setBookingOpen(true)} className="w-full gradient-bg border-0 h-14 text-primary-foreground font-bold text-lg mb-3 shadow-lg hover:scale-105 transition-transform">
-                <Calendar className="h-5 w-5 mr-2" /> Inquiry Now
-              </Button>
-              <Button variant="outline" className="w-full h-12 mb-3">
-                <Phone className="h-4 w-4 mr-2" /> Contact Artist
-              </Button>
-              <div className="flex gap-2">
+              <div className="mt-7 flex flex-wrap gap-3">
                 <Button
-                  variant={isSaved ? "default" : "secondary"}
-                  className="flex-1 transition-all"
-                  onClick={handleSaveArtist}
-                  disabled={isSaving}
+                  onClick={() => setBookingOpen(true)}
+                  className="h-11 rounded-full bg-orange-600 px-5 text-xs font-extrabold uppercase tracking-widest text-white shadow-sm transition hover:bg-orange-700 hover:shadow-md"
                 >
-                  <Heart className={`h-4 w-4 mr-2 ${isSaved ? "fill-current text-white" : ""}`} />
+                  Send Inquiry
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleShare}
+                  className="h-11 rounded-full border-gray-200 bg-white px-4 text-xs font-extrabold uppercase tracking-widest text-stone-700 shadow-sm transition hover:border-orange-200 hover:text-orange-600"
+                >
+                  <Share2 className="mr-1.5 h-4 w-4" />
+                  Share
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={isSaving}
+                  onClick={handleSaveArtist}
+                  className="h-11 rounded-full border-gray-200 bg-white px-4 text-xs font-extrabold uppercase tracking-widest text-stone-700 shadow-sm transition hover:border-orange-200 hover:text-orange-600"
+                >
+                  <Heart className={`mr-1.5 h-4 w-4 ${isSaved ? "fill-orange-600 text-orange-600" : ""}`} />
                   {isSaved ? "Saved" : "Save"}
                 </Button>
-                <Button variant="secondary" className="flex-1 transition-all hover:bg-orange-100/50" onClick={handleShare}>
-                  <Share2 className="h-4 w-4 mr-2 text-primary" /> Share
-                </Button>
               </div>
-
-              {/* Assistant info */}
-              {artist.assistant?.hasAssistant && artist.assistant?.name && artist.assistant?.contact && (
-                <div className="mt-4 p-4 rounded-xl border border-primary/20 bg-primary/5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-primary mb-2">Contact Assistant/Manager</p>
-                  <p className="text-sm font-semibold">{artist.assistant.name}</p>
-                  <p className="text-sm text-muted-foreground">{artist.assistant.contact}</p>
-                </div>
-              )}
             </div>
-          </motion.div>
-        </div>
-      </div>
 
-      <div className="mt-12" />
+            <div className="min-h-[260px] bg-stone-100 lg:min-h-full">
+              <SmartImage
+                src={artistImage || STATIC_IMAGES.profileCover}
+                alt={`${artistName} profile image`}
+                usageId={`profile-banner:${artist.id}`}
+                category={artType}
+                orientation="landscape"
+                priority
+                aspectRatio="aspect-auto"
+                sizes="(max-width: 1024px) 100vw, 48vw"
+                containerClassName="h-full w-full rounded-none"
+                imageClassName="object-cover object-center"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Main content + sticky sidebar */}
+        <div className="profile-content-grid mt-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
+          {/* Left Column */}
+          <div className="space-y-5 lg:col-span-2">
+
+            {/* Bio */}
+            <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+              <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
+                <User className="h-4 w-4 text-orange-500" />
+                About
+              </h2>
+              <p className="mt-3 text-sm font-medium leading-7 text-stone-600">{bio}</p>
+            </section>
+
+            {/* YouTube Videos */}
+            {portfolioVideos.length > 0 && activeVideo ? (
+              <section className="profile-panel profile-media-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+                <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
+                  <Youtube className="h-4 w-4 text-red-500" />
+                  Portfolio Videos
+                </h2>
+                <p className="mt-1 text-xs font-semibold text-stone-400">Watch live performances and stage highlights</p>
+
+                <ArtistVideoEmbed
+                  key={activeVideo.videoId}
+                  videoUrl={activeVideo.link}
+                  title={`${artistName} performance ${activeVideo.index + 1}`}
+                  className="mt-4"
+                />
+
+                {portfolioVideos.length > 1 ? (
+                  <div className="profile-video-thumbs mt-4">
+                    {portfolioVideos.slice(0, 6).map((video, index) => (
+                      <button
+                        key={video.videoId}
+                        type="button"
+                        data-active={video.videoId === activeVideo.videoId}
+                        onClick={() => setActiveVideoIndex(index)}
+                        className="profile-video-thumb group text-left"
+                        aria-label={`Play ${artistName} performance ${video.index + 1}`}
+                      >
+                        <SmartImage
+                          src={video.thumbnailUrl}
+                          alt={`${artistName} video ${video.index + 1}`}
+                          usageId={`profile-video-thumb:${artist.id}:${video.videoId}`}
+                          category={artType}
+                          orientation="landscape"
+                          aspectRatio="aspect-video"
+                          containerClassName="h-full w-full transition duration-300 group-hover:scale-[1.03]"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            {/* Gallery */}
+            {galleryPhotos.length > 0 ? (
+              <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+                <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
+                  <Sparkles className="h-4 w-4 text-orange-500" />
+                  Gallery
+                </h2>
+                <div className="profile-gallery mt-4 grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                  {galleryPhotos.slice(0, 9).map((photo: string, index: number) => (
+                    <div
+                      key={`${photo}-${index}`}
+                      className="gallery-tile group aspect-[4/3] overflow-hidden rounded-xl bg-stone-100"
+                    >
+                      <SmartImage
+                        src={photo}
+                        alt={`${artistName} gallery ${index + 1}`}
+                        usageId={`profile-gallery:${artist.id}:${index}`}
+                        category={artType}
+                        orientation="landscape"
+                        aspectRatio="aspect-auto"
+                        containerClassName="h-full w-full transition duration-500 group-hover:scale-[1.06]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {/* Availability */}
+            <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+              <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
+                <Calendar className="h-4 w-4 text-orange-500" />
+                Availability
+              </h2>
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-3 rounded-xl bg-stone-50 p-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50">
+                    <Calendar className="h-4 w-4 text-orange-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-extrabold text-stone-950">Event bookings</p>
+                    <p className="text-xs font-semibold text-stone-500">Open to verified inquiries</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl bg-stone-50 p-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
+                    <BadgeCheck className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-extrabold text-stone-950">Platform verified</p>
+                    <p className="text-xs font-semibold text-stone-500">Profile synced & approved</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+          </div>
+
+          {/* Booking sidebar */}
+          <aside className="space-y-4 lg:col-span-1 lg:sticky lg:top-24 lg:self-start">
+
+            {/* Invite card */}
+            <div className="booking-card overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md">
+              {/* Orange accent bar */}
+              <div className="h-1 w-full bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500" />
+              <div className="p-5">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.25em] text-orange-500">Booking</p>
+                <h2 className="profile-section-title mt-1 text-xl font-extrabold text-gray-900">Invite this Artist</h2>
+                <p className="mt-1.5 text-xs font-medium leading-5 text-stone-500">
+                  Send a concise event inquiry and keep the conversation organized.
+                </p>
+
+                {/* Stats row */}
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  {[
+                    { label: "Rating", value: rating },
+                    { label: "Exp.", value: `${experience}yr` },
+                    { label: "Events", value: "50+" },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-xl border border-stone-100 bg-stone-50 p-2.5 text-center shadow-sm">
+                      <p className="text-base font-extrabold text-orange-600">{value}</p>
+                      <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wide">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* CTA */}
+                <button
+                  onClick={() => setBookingOpen(true)}
+                  className="mt-4 w-full rounded-xl bg-orange-600 py-3 text-sm font-extrabold uppercase tracking-widest text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-orange-700 hover:shadow-md active:scale-[0.98]"
+                >
+                  Send Inquiry
+                </button>
+
+                {/* Secondary actions */}
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    disabled={isSaving}
+                    onClick={handleSaveArtist}
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white text-xs font-extrabold text-stone-600 transition hover:border-orange-200 hover:text-orange-600 disabled:opacity-50 shadow-sm"
+                  >
+                    <Heart className={`h-3.5 w-3.5 ${isSaved ? "fill-orange-500 text-orange-500" : ""}`} />
+                    {isSaved ? "Saved" : "Save"}
+                  </button>
+                  <button
+                    onClick={handleShare}
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white text-xs font-extrabold text-stone-600 transition hover:border-orange-200 hover:text-orange-600 shadow-sm"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    Share
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Services Card */}
+            {services.length > 0 && (
+              <div className="profile-side-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+                <h2 className="profile-section-title text-sm font-extrabold text-gray-900">Services & Specialities</h2>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {services.map((service) => (
+                    <span
+                      key={String(service)}
+                      className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-[11px] font-extrabold text-stone-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+                    >
+                      {String(service)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Location card */}
+            <div className="profile-side-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+              <h2 className="profile-section-title text-sm font-extrabold text-gray-900">Location</h2>
+              <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-stone-50 p-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50">
+                  <MapPin className="h-4 w-4 text-orange-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-extrabold text-stone-950">{location}</p>
+                  <p className="text-xs font-semibold text-stone-500">Available across Maharashtra</p>
+                </div>
+              </div>
+            </div>
+
+          </aside>
+        </div>
+      </main>
+
       <Footer />
-      <BookingModal open={bookingOpen} onOpenChange={setBookingOpen} artistName={artist.name} artistId={artist.id} />
+      <BookingModal open={bookingOpen} onOpenChange={setBookingOpen} artistName={artistName} artistId={artist.id} />
     </div>
   );
 }

@@ -113,6 +113,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (userProfile) {
       const role = userProfile.role as string;
+      if (!role && appProfile) {
+        const appStatus = (appProfile.status ?? "pending") as ApplicationStatus;
+        setApplicationStatus(appStatus);
+        setArtistData({ id: appProfile.id as string, ...appProfile, status: appStatus } as ArtistData);
+        setUserRole("artist");
+        setUserProfile(userProfile);
+        return;
+      }
+
+      if (!role && artistProfile && (artistProfile.status === "active" || artistProfile.status === "approved")) {
+        setArtistData({ id: artistProfile.id as string, ...artistProfile } as ArtistData);
+        setUserRole("artist");
+        setUserProfile(userProfile);
+        setApplicationStatus("approved");
+        return;
+      }
+
       if (role === "artist" && (userProfile.status === "active" || userProfile.status === "approved")) {
         // Artist is approved — use artistProfile or fallback to userProfile
         const merged = artistProfile

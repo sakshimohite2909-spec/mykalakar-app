@@ -15,7 +15,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      "flex h-10 w-full items-center justify-between rounded-lg border border-orange-100/80 bg-white/85 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-2xl focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-400/70 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
       className,
     )}
     {...props}
@@ -45,7 +45,7 @@ const SelectContent = React.forwardRef<
       ref={ref}
       className={cn(
         // Keep overflow-hidden on the outer shell so rounded corners clip correctly
-        "relative z-[100] min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md pointer-events-auto",
+        "relative z-[100] min-w-[8rem] overflow-hidden rounded-lg border border-orange-100/80 bg-white/95 text-popover-foreground shadow-[0_20px_60px_rgba(255,106,0,0.12)] backdrop-blur-2xl pointer-events-auto",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
@@ -103,7 +103,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground",
+      "relative flex w-full cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-orange-50 focus:text-orange-700",
       className,
     )}
     {...props}
