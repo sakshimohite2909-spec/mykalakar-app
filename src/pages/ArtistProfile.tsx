@@ -170,8 +170,8 @@ function ArtistProfileSkeleton() {
         <div className="mb-4 h-9 w-28 animate-pulse rounded-full bg-orange-100" />
 
         <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <div className="grid min-h-[320px] lg:grid-cols-2">
-            <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] items-stretch lg:h-[380px]">
+            <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10 order-2 lg:order-1">
               <div className="h-5 w-28 animate-pulse rounded-full bg-orange-100" />
               <div className="mt-5 h-12 w-4/5 animate-pulse rounded-xl bg-stone-100 md:h-16" />
               <div className="mt-3 h-5 w-2/3 animate-pulse rounded-full bg-stone-100" />
@@ -180,7 +180,7 @@ function ArtistProfileSkeleton() {
                 <div className="h-11 w-24 animate-pulse rounded-full bg-stone-100" />
               </div>
             </div>
-            <div className="min-h-[240px] animate-pulse bg-stone-100 lg:min-h-full" />
+            <div className="order-1 lg:order-2 w-full aspect-video lg:aspect-auto lg:h-full animate-pulse bg-stone-100 rounded-t-2xl lg:rounded-r-2xl lg:rounded-l-none" />
           </div>
         </section>
 
@@ -480,8 +480,8 @@ export default function ArtistProfile() {
 
         {/* Compact banner hero */}
         <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md">
-          <div className="grid min-h-[330px] lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] items-stretch lg:h-[380px]">
+            <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10 order-2 lg:order-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-orange-700">
                   <Sparkles className="h-3.5 w-3.5" />
@@ -544,7 +544,7 @@ export default function ArtistProfile() {
               </div>
             </div>
 
-            <div className="min-h-[260px] bg-stone-100 lg:min-h-full">
+            <div className="relative order-1 lg:order-2 w-full aspect-video lg:aspect-auto lg:h-full overflow-hidden bg-stone-100 rounded-t-2xl lg:rounded-r-2xl lg:rounded-l-none">
               <SmartImage
                 src={artistImage || STATIC_IMAGES.profileCover}
                 alt={`${artistName} profile image`}
@@ -554,8 +554,8 @@ export default function ArtistProfile() {
                 priority
                 aspectRatio="aspect-auto"
                 sizes="(max-width: 1024px) 100vw, 48vw"
-                containerClassName="h-full w-full rounded-none"
-                imageClassName="object-cover object-center"
+                containerClassName="h-full w-full overflow-hidden rounded-none"
+                imageClassName="w-full h-full object-cover object-center"
               />
             </div>
           </div>
