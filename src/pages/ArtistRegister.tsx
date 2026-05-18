@@ -64,6 +64,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 type AuthRole = "artist" | "user";
 type PortfolioPlatform = "youtube";
 type PortfolioLink = { platform: PortfolioPlatform; url: string };
+type ExtraArtMediaField = "profile" | "performance";
 type ExtraArtEntry = {
   id: string;
   mainCategory: string;
@@ -71,6 +72,11 @@ type ExtraArtEntry = {
   soloPrice: string;
   duoPrice: string;
   teamPrice: string;
+  profileFile: File | null;
+  profilePreview: string;
+  performanceFile: File | null;
+  performancePreview: string;
+  youtubeLink: string;
 };
 
 const roleTabs: Array<{ id: AuthRole; label: string; icon: ComponentType<{ className?: string }>; color: string }> = [
@@ -79,6 +85,7 @@ const roleTabs: Array<{ id: AuthRole; label: string; icon: ComponentType<{ class
 ];
 
 const artCategoryOptions = [...ARTIST_TYPES];
+const languageOptions = ["English", "Hindi", "Marathi", "Spanish", "French", "Other"];
 
 const fullNameRule = z
   .string()
@@ -512,6 +519,7 @@ function ArtCategoryCard({
   removable = false,
   error,
   onUpdate,
+  onMediaFileChange,
   onRemove,
 }: {
   art: ExtraArtEntry;
@@ -519,9 +527,10 @@ function ArtCategoryCard({
   removable?: boolean;
   error?: string;
   onUpdate: (next: ExtraArtEntry) => void;
+  onMediaFileChange: (field: ExtraArtMediaField, file: File | null) => void;
   onRemove?: () => void;
 }) {
-  const update = (field: keyof ExtraArtEntry, value: string) => {
+  const update = (field: "mainCategory" | "category" | "soloPrice" | "duoPrice" | "teamPrice" | "youtubeLink", value: string) => {
     onUpdate({ ...art, [field]: value });
   };
 
@@ -601,6 +610,45 @@ function ArtCategoryCard({
             className={inputClass}
           />
         </div>
+      </div>
+
+      <div className="my-5 h-px bg-white/80" />
+
+      <div className="mb-4 flex items-center gap-2">
+        <Upload className="h-4 w-4 text-orange-500" />
+        <h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Media</h3>
+      </div>
+      <div className="grid gap-5 md:grid-cols-2">
+        <FileDrop
+          label="Profile Photo"
+          description="Upload Profile Photo"
+          file={art.profileFile}
+          preview={art.profilePreview}
+          onChange={(file) => onMediaFileChange("profile", file)}
+        />
+        <FileDrop
+          label="Performance Photo"
+          description="Upload Performance Photo"
+          file={art.performanceFile}
+          preview={art.performancePreview}
+          tone="blue"
+          onChange={(file) => onMediaFileChange("performance", file)}
+        />
+      </div>
+
+      <div className="mt-5">
+        <label className="mb-1.5 flex items-center gap-2 text-sm font-bold text-slate-700">
+          <Youtube className="h-4 w-4 text-red-500" />
+          YouTube Link
+        </label>
+        <input
+          type="url"
+          inputMode="url"
+          value={art.youtubeLink}
+          onChange={(event) => update("youtubeLink", event.target.value)}
+          placeholder="youtube.com/watch?v=..."
+          className={inputClass}
+        />
       </div>
     </div>
   );
@@ -822,6 +870,11 @@ function createExtraArtEntry(): ExtraArtEntry {
     soloPrice: "",
     duoPrice: "",
     teamPrice: "",
+    profileFile: null,
+    profilePreview: "",
+    performanceFile: null,
+    performancePreview: "",
+    youtubeLink: "",
   };
 }
 
@@ -839,6 +892,10 @@ export default function ArtistRegister() {
   const [galleryFiles, setGalleryFiles] = useState<Array<{ file: File; preview: string }>>([]);
   const [portfolioLinks, setPortfolioLinks] = useState<PortfolioLink[]>([{ platform: "youtube", url: "" }]);
   const [extraArtEntries, setExtraArtEntries] = useState<ExtraArtEntry[]>([]);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [primaryArtYoutubeLink, setPrimaryArtYoutubeLink] = useState("");
+  const [priceAmount, setPriceAmount] = useState("");
+  const [showPriceOnProfile, setShowPriceOnProfile] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
   const { register: authRegister, logout } = useAuth();
   const navigate = useNavigate();
@@ -921,6 +978,12 @@ export default function ArtistRegister() {
     });
   };
 
+  const toggleLanguage = (language: string) => {
+    setSelectedLanguages((current) =>
+      current.includes(language) ? current.filter((item) => item !== language) : [...current, language]
+    );
+  };
+
   const addArtEntry = () => {
     setExtraArtEntries((current) => [...current, createExtraArtEntry()]);
   };
@@ -929,8 +992,30 @@ export default function ArtistRegister() {
     setExtraArtEntries((current) => current.map((entry) => (entry.id === id ? nextEntry : entry)));
   };
 
+  const updateExtraArtMediaFile = (id: string, field: ExtraArtMediaField, file: File | null) => {
+    const fileKey = field === "profile" ? "profileFile" : "performanceFile";
+    const previewKey = field === "profile" ? "profilePreview" : "performancePreview";
+
+    setExtraArtEntries((current) =>
+      current.map((entry) => {
+        if (entry.id !== id) return entry;
+        if (entry[previewKey]) URL.revokeObjectURL(entry[previewKey]);
+        return {
+          ...entry,
+          [fileKey]: file,
+          [previewKey]: file ? URL.createObjectURL(file) : "",
+        };
+      })
+    );
+  };
+
   const removeExtraArtEntry = (id: string) => {
-    setExtraArtEntries((current) => current.filter((entry) => entry.id !== id));
+    setExtraArtEntries((current) => {
+      const removedEntry = current.find((entry) => entry.id === id);
+      if (removedEntry?.profilePreview) URL.revokeObjectURL(removedEntry.profilePreview);
+      if (removedEntry?.performancePreview) URL.revokeObjectURL(removedEntry.performancePreview);
+      return current.filter((entry) => entry.id !== id);
+    });
   };
 
   const addPortfolioLink = useCallback(() => {
@@ -989,8 +1074,18 @@ export default function ArtistRegister() {
         soloPrice: entry.soloPrice.trim(),
         duoPrice: entry.duoPrice.trim(),
         teamPrice: entry.teamPrice.trim(),
+        youtubeLink: entry.youtubeLink.trim(),
       }))
-      .filter((entry) => entry.category || entry.soloPrice || entry.duoPrice || entry.teamPrice);
+      .filter(
+        (entry) =>
+          entry.category ||
+          entry.soloPrice ||
+          entry.duoPrice ||
+          entry.teamPrice ||
+          entry.youtubeLink ||
+          entry.profileFile ||
+          entry.performanceFile
+      );
     if (preparedExtraArts.some((entry) => !entry.category || !entry.mainCategory)) {
       toast({ variant: "destructive", title: "Category missing", description: "Please select both Main Category and Art Form for every entry." });
       return;
@@ -1010,6 +1105,19 @@ export default function ArtistRegister() {
 
       const uid = authResult.uid;
       const { profilePhoto, coverPhoto, aadharPhoto, galleryPhotos } = await uploadRegistrationMedia(uid, values.fullName);
+      const uploadedExtraArtMedia = await Promise.all(
+        preparedExtraArts.map(async (entry) => {
+          const [entryProfilePhoto, entryPerformancePhoto] = await Promise.all([
+            entry.profileFile ? uploadImageFile(entry.profileFile, `art-media/${uid}/${entry.id}/profile`) : Promise.resolve(""),
+            entry.performanceFile ? uploadImageFile(entry.performanceFile, `art-media/${uid}/${entry.id}/performance`) : Promise.resolve(""),
+          ]);
+
+          return {
+            profilePhotos: entryProfilePhoto ? [entryProfilePhoto] : [],
+            performancePhotos: entryPerformancePhoto ? [entryPerformancePhoto] : [],
+          };
+        })
+      );
       const socialLinks = portfolioLinks
         .map((link) => ({ platform: link.platform, url: link.url.trim() }))
         .filter((link) => link.url.length > 0);
@@ -1031,6 +1139,23 @@ export default function ArtistRegister() {
           soloPrice: Number(entry.soloPrice) || 0,
           duoPrice: Number(entry.duoPrice) || 0,
           teamPrice: Number(entry.teamPrice) || 0,
+        })),
+      ];
+      const primaryArtYoutubeLinks = primaryArtYoutubeLink.trim() ? [primaryArtYoutubeLink.trim()] : [];
+      const categoryMedia = [
+        {
+          mainCategory: values.mainCategory,
+          category: artEntries[0]?.category || values.artCategory,
+          profilePhotos: profilePhoto ? [profilePhoto] : [],
+          performancePhotos: galleryPhotos,
+          youtubeLinks: primaryArtYoutubeLinks,
+        },
+        ...preparedExtraArts.map((entry, index) => ({
+          mainCategory: entry.mainCategory,
+          category: normalizeSubmittedCategory(entry.category),
+          profilePhotos: uploadedExtraArtMedia[index]?.profilePhotos || [],
+          performancePhotos: uploadedExtraArtMedia[index]?.performancePhotos || [],
+          youtubeLinks: entry.youtubeLink ? [entry.youtubeLink] : [],
         })),
       ];
       const artForms = Array.from(new Set(artEntries.map((entry) => entry.category).filter(Boolean)));
@@ -1057,6 +1182,7 @@ export default function ArtistRegister() {
         age: Number.parseInt(getAgeLabel(values.dob), 10) || 0,
         gender: values.gender,
         travelWillingness: values.travelWillingness,
+        languages: selectedLanguages,
         category: artEntries[0]?.category || values.artCategory,
         subcategory: "",
         types: [],
@@ -1066,6 +1192,8 @@ export default function ArtistRegister() {
         soloPrice: artEntries[0]?.soloPrice || 0,
         duoPrice: artEntries[0]?.duoPrice || 0,
         teamPrice: artEntries[0]?.teamPrice || 0,
+        priceAmount: Number(priceAmount) || 0,
+        showPriceOnProfile,
         state: values.state,
         district: values.district,
         experience: Number(values.experience),
@@ -1088,6 +1216,7 @@ export default function ArtistRegister() {
           coverPhoto,
           galleryPhotos,
           aadharPhoto,
+          categoryMedia,
         },
         profilePhoto,
         coverPhoto,
@@ -1413,6 +1542,29 @@ export default function ArtistRegister() {
                       <option value="all">All India</option>
                     </select>
                   </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-sm font-bold text-slate-700">Languages Spoken</label>
+                    <div className="flex flex-wrap gap-2">
+                      {languageOptions.map((language) => {
+                        const active = selectedLanguages.includes(language);
+                        return (
+                          <button
+                            key={language}
+                            type="button"
+                            onClick={() => toggleLanguage(language)}
+                            className={`rounded-full border px-4 py-2 text-xs font-black uppercase tracking-wider transition ${
+                              active
+                                ? "border-orange-400 bg-orange-500 text-white shadow-md shadow-orange-100"
+                                : "border-orange-100 bg-white/70 text-slate-600 hover:border-orange-200 hover:bg-orange-50"
+                            }`}
+                            aria-pressed={active}
+                          >
+                            {language}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-3 border-b border-orange-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1482,6 +1634,29 @@ export default function ArtistRegister() {
                     <TextField label="Duo Performance" name="duoPrice" register={artistForm.register} placeholder="e.g. 15000" />
                     <TextField label="Team Performance" name="teamPrice" register={artistForm.register} placeholder="e.g. 25000" />
                   </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-end">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-bold text-slate-700">Price or Fee</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        value={priceAmount}
+                        onChange={(event) => setPriceAmount(digitsOnly(event.target.value, 8))}
+                        placeholder="e.g. 20000"
+                        className={inputClass}
+                      />
+                    </div>
+                    <label className="flex h-[50px] items-center gap-3 rounded-xl border border-orange-100 bg-white/70 px-4 text-sm font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={showPriceOnProfile}
+                        onChange={(event) => setShowPriceOnProfile(event.target.checked)}
+                        className="h-4 w-4 rounded border-orange-200 text-orange-500 focus:ring-orange-200"
+                      />
+                      Show on profile
+                    </label>
+                  </div>
 
                   <div className="my-5 h-px bg-white/80" />
 
@@ -1508,7 +1683,7 @@ export default function ArtistRegister() {
                   </div>
 
                   <div className="mt-5">
-                    <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">Gallery Photos</label>
+                    <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">Performance Photos</label>
                     <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
                       {galleryFiles.map((item, index) => (
                         <div key={item.preview} className="relative aspect-square overflow-hidden rounded-xl border border-white/70">
@@ -1532,6 +1707,21 @@ export default function ArtistRegister() {
                     </div>
                     <p className="mt-2 text-xs font-semibold text-slate-500">Upload photos of your best work</p>
                   </div>
+
+                  <div className="mt-5">
+                    <label className="mb-1.5 flex items-center gap-2 text-sm font-bold text-slate-700">
+                      <Youtube className="h-4 w-4 text-red-500" />
+                      YouTube Link
+                    </label>
+                    <input
+                      type="url"
+                      inputMode="url"
+                      value={primaryArtYoutubeLink}
+                      onChange={(event) => setPrimaryArtYoutubeLink(event.target.value)}
+                      placeholder="youtube.com/watch?v=..."
+                      className={inputClass}
+                    />
+                  </div>
                 </div>
 
                 <AnimatePresence mode="popLayout">
@@ -1549,6 +1739,7 @@ export default function ArtistRegister() {
                         index={index + 1}
                         removable
                         onUpdate={(nextEntry) => updateExtraArtEntry(entry.id, nextEntry)}
+                        onMediaFileChange={(field, file) => updateExtraArtMediaFile(entry.id, field, file)}
                         onRemove={() => removeExtraArtEntry(entry.id)}
                       />
                     </motion.div>
