@@ -82,6 +82,7 @@
   html {
     scroll-behavior: smooth;
     overflow-y: auto;
+    max-width: 100%;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -89,10 +90,26 @@
     @apply font-sans antialiased;
     min-height: 100vh;
     overflow-x: hidden;
+    max-width: 100%;
     background: #050507;
     color: hsl(var(--foreground));
     font-family: "Montserrat", "Noto Sans Devanagari", system-ui, sans-serif;
     text-rendering: optimizeLegibility;
+  }
+
+  #root {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  :where(h1, h2, h3, h4, h5, h6, p, a, button, label, span, li, small, figcaption, blockquote, td, th) {
+    overflow-wrap: break-word; /* ADDED FOR i18n */
+    word-break: normal; /* ADDED FOR i18n */
+  }
+
+  html[lang="mr-IN"] :where(h1, h2, h3, h4, h5, h6, p, a, button, label, span, li, small),
+  html[lang="hi-IN"] :where(h1, h2, h3, h4, h5, h6, p, a, button, label, span, li, small) {
+    line-height: 1.32; /* ADDED FOR i18n */
   }
 
   h1, h2, h3, h4, h5, h6 {

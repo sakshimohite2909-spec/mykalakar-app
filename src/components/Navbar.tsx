@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
-import { type Language, useI18n } from "@/i18n/I18nProvider";
+import { languageToLocale, type Language, useI18n } from "@/i18n/I18nProvider";
 import { SmartImage } from "@/components/SmartImage";
 import { STATIC_IMAGES } from "@/services/ImageRegistryService";
 import { getInitials } from "@/services/dataNormalizer";
@@ -106,19 +106,22 @@ export default function Navbar() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className={`nav-icon-button ${compact ? "w-11 px-0" : "px-3"}`}
-          aria-label={t("nav.language")}
+          className={`nav-icon-button language-switcher-trigger ${compact ? "w-11 px-0" : "px-3"}`} // ADDED FOR i18n
+          aria-label={t("nav.languageWithCurrent", { language: currentLanguage })} // ADDED FOR i18n
+          title={t("nav.languageWithCurrent", { language: currentLanguage })} // ADDED FOR i18n
         >
           <Globe2 className="h-4 w-4" />
           {!compact && <span>{currentLanguage}</span>}
           {!compact && <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="rounded-2xl border-orange-100/80 bg-[#fffaf2]/95 p-2 shadow-xl backdrop-blur-xl">
+      <DropdownMenuContent align="end" aria-label={t("nav.changeLanguage")} className="language-switcher-menu rounded-2xl border-orange-100/80 bg-[#fffaf2]/95 p-2 shadow-xl backdrop-blur-xl"> {/* ADDED FOR i18n */}
         {languages.map((item) => (
           <DropdownMenuItem
             key={item.code}
             onClick={() => setLanguage(item.code as Language)}
+            aria-current={item.code === language ? "true" : undefined} // ADDED FOR i18n
+            lang={languageToLocale(item.code)} // ADDED FOR i18n
             className={`cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold ${
               item.code === language ? "bg-orange-100 text-orange-700" : "text-stone-700"
             }`}
@@ -259,15 +262,15 @@ export default function Navbar() {
             <div className="flex items-center gap-2">
               <LanguageSwitcher compact />
               {currentUser ? (
-                <Link to="/profile" className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-bold text-white">
+              <Link to="/profile" className="mobile-menu-action flex min-h-11 flex-1 items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-bold text-white"> {/* ADDED FOR i18n */}
                   {t("nav.myProfile")}
                 </Link>
               ) : (
                 <>
-                  <Link to="/login" className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-white px-4 text-sm font-bold text-stone-700">
+                  <Link to="/login" className="mobile-menu-action flex min-h-11 flex-1 items-center justify-center rounded-xl bg-white px-4 text-sm font-bold text-stone-700"> {/* ADDED FOR i18n */}
                     {t("nav.login")}
                   </Link>
-                  <Link to="/register?role=artist" className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-bold text-white">
+                  <Link to="/register?role=artist" className="mobile-menu-action flex min-h-11 flex-1 items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-bold text-white"> {/* ADDED FOR i18n */}
                     {t("nav.joinArtist")}
                   </Link>
                 </>

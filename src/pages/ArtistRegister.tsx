@@ -58,6 +58,8 @@ import {
   sanitizePhoneNumber,
   validatePhoneNumber,
 } from "@/lib/phoneUtils";
+import { useI18n } from "@/i18n/I18nProvider";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 type AuthRole = "artist" | "user";
 type PortfolioPlatform = "youtube";
@@ -769,6 +771,7 @@ function RoleTabs({
   activeRole: AuthRole;
   onChange: (role: AuthRole) => void;
 }) {
+  const { t } = useI18n(); // ADDED FOR i18n
   return (
     <div className="role-tabs grid grid-cols-2 gap-1.5 rounded-2xl border border-orange-100 bg-orange-50/60 p-1.5 shadow-sm backdrop-blur-md">
       {roleTabs.map((tab) => {
@@ -785,7 +788,7 @@ function RoleTabs({
             }`}
           >
             <Icon className="h-3.5 w-3.5" />
-            {tab.label}
+            {t(`auth.role.${tab.id}`)} {/* ADDED FOR i18n */}
           </button>
         );
       })}
@@ -823,6 +826,7 @@ function createExtraArtEntry(): ExtraArtEntry {
 }
 
 export default function ArtistRegister() {
+  const { t } = useI18n(); // ADDED FOR i18n
   const [activeRole, setActiveRole] = useRoleFromQuery("artist");
   const [showPassword, setShowPassword] = useState(false);
   const [loadingRole, setLoadingRole] = useState<AuthRole | null>(null);
@@ -1200,14 +1204,14 @@ export default function ArtistRegister() {
         <aside className="registration-visual-panel hidden min-h-[720px] overflow-hidden rounded-lg border border-white/10 bg-white/[0.055] p-8 shadow-2xl backdrop-blur-2xl lg:flex lg:flex-col lg:justify-between">
           <div>
             <span className="inline-flex rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-100">
-              Creator Onboarding
+              {t("register.creatorOnboarding")} {/* ADDED FOR i18n */}
             </span>
             <h2 className="mt-6 text-5xl font-black leading-[0.98] text-white">
-              Build a profile that feels stage-ready.
+              {t("register.visualTitle")} {/* ADDED FOR i18n */}
             </h2>
           </div>
           <div className="grid gap-3">
-            {["Identity", "Art forms", "Pricing", "Portfolio"].map((item) => (
+            {[t("register.identity"), t("register.artForms"), t("register.pricing"), t("register.portfolio")].map((item) => ( // ADDED FOR i18n
               <div key={item} className="rounded-lg border border-white/10 bg-white/[0.07] p-4 text-sm font-extrabold text-white/82 backdrop-blur-2xl">
                 {item}
               </div>
@@ -1215,20 +1219,23 @@ export default function ArtistRegister() {
           </div>
         </aside>
         <div className="registration-panel glass-panel min-h-[720px] overflow-visible rounded-[2rem] border border-white/60 bg-white/70 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-3xl sm:p-10 md:p-12">
-          <div className="mb-8 flex items-center justify-between gap-3">
+          <div className="mb-8 flex items-center justify-between gap-3"> {/* ADDED FOR i18n */}
             <Link
               to="/"
               className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-white/70 px-4 py-2 text-sm font-bold text-slate-500 shadow-sm transition hover:text-orange-600"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Home
+              {t("auth.backHome")} {/* ADDED FOR i18n */}
             </Link>
-            <Link
-              to={`/login?role=${activeRole}`}
-              className="text-sm font-black text-orange-500 transition hover:text-orange-600"
-            >
-              Login -&gt;
-            </Link>
+            <div className="flex items-center gap-2"> {/* ADDED FOR i18n */}
+              <Link
+                to={`/login?role=${activeRole}`}
+                className="text-sm font-black text-orange-500 transition hover:text-orange-600"
+              >
+                {t("auth.loginArrow")} {/* ADDED FOR i18n */}
+              </Link>
+              <LanguageSwitcher compact /> {/* ADDED FOR i18n */}
+            </div>
           </div>
 
           <div className="mb-8 text-center">
@@ -1236,11 +1243,11 @@ export default function ArtistRegister() {
               <Music className="h-7 w-7 text-white" />
             </div>
             <h1 className="font-display text-4xl font-black tracking-tight text-[#1A1A1A] md:text-5xl">
-              Join <span className="gradient-text-primary">MyKalakar</span>
-              {activeRole === "artist" ? " as an Artist" : " as a User"}
+              {t("register.join")} <span className="gradient-text-primary">{t("brand.name")}</span>
+              {activeRole === "artist" ? t("register.asArtist") : t("register.asUser")} {/* ADDED FOR i18n */}
             </h1>
             <p className="mt-2 text-sm font-semibold text-slate-500">
-              India's premier platform for Artists, Performers & Entertainers.
+              {t("register.subtitle")} {/* ADDED FOR i18n */}
             </p>
           </div>
 

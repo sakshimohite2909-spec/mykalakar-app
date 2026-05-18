@@ -29,6 +29,8 @@ import { getArtistArtForms } from "@/constants/artistSystem";
 import { ImageRegistryService, STATIC_IMAGES } from "@/services/ImageRegistryService";
 import { SmartImage } from "@/components/SmartImage";
 import { getArtistCategory, getArtistSubCategory } from "@/services/filterEngine";
+import { useI18n } from "@/i18n/I18nProvider";
+import { getArtLabel } from "@/lib/artLabels";
 
 function compactLocation(artist: Record<string, any>) {
   return [artist.district || artist.city, artist.state].filter(Boolean).join(", ") || artist.location || "Maharashtra";
@@ -118,6 +120,7 @@ function ArtistProfileSkeleton() {
 }
 
 export default function ArtistProfile() {
+  const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const { id } = useParams();
   const { currentUser } = useAuth();
   const [artist, setArtist] = useState<any>(null);
@@ -196,9 +199,9 @@ export default function ArtistProfile() {
   useEffect(() => {
     if (!artist) return;
 
-    const name = artist.name || artist.professionalName || "Premium Artist";
+    const name = artist.name || artist.professionalName || t("artist.premiumArtist"); // ADDED FOR i18n
     const title = `MyKalakar | ${name}`;
-    const description = `Book ${name} on MyKalakar for your next event!`;
+    const description = t("artist.metaDescription", { name }); // ADDED FOR i18n
     const image = getForcedMappedImage(
       artist.category,
       artist.subcategory,
@@ -226,11 +229,11 @@ export default function ArtistProfile() {
     setMeta('meta[property="og:url"]', { property: "og:url" }, window.location.href);
     setMeta('meta[name="twitter:title"]', { name: "twitter:title" }, title);
     setMeta('meta[name="twitter:description"]', { name: "twitter:description" }, description);
-  }, [artist]);
+  }, [artist, t]); // ADDED FOR i18n
 
   const handleSaveArtist = async () => {
     if (!currentUser) {
-      toast({ title: "Login required", description: "Please login to save artists." });
+      toast({ title: t("artist.loginRequiredTitle"), description: t("artist.loginRequiredText") }); // ADDED FOR i18n
       return;
     }
     if (!artist) return;
@@ -239,9 +242,9 @@ export default function ArtistProfile() {
       const uid = requireAuthUid(currentUser);
       const savedRef = doc(db, "users", uid, "savedArtists", artist.id);
       if (isSaved) {
-        await withTimeout(deleteDoc(savedRef), FIREBASE_WRITE_TIMEOUT_MS, "Could not remove this artist.");
+        await withTimeout(deleteDoc(savedRef), FIREBASE_WRITE_TIMEOUT_MS, t("artist.saveRemoveFailed")); // ADDED FOR i18n
         setIsSaved(false);
-        toast({ title: "Removed", description: `${artist.name || "Artist"} was removed from saved artists.` });
+        toast({ title: t("artist.removedTitle"), description: t("artist.removedText", { name: artist.name || t("artist.fallbackName") }) }); // ADDED FOR i18n
       } else {
         await withTimeout(
           setDoc(savedRef, sanitizePayload({
@@ -252,14 +255,14 @@ export default function ArtistProfile() {
             savedAt: serverTimestamp(),
           })),
           FIREBASE_WRITE_TIMEOUT_MS,
-          "Could not save this artist.",
+          t("artist.saveFailed"), // ADDED FOR i18n
         );
         setIsSaved(true);
-        toast({ title: "Saved", description: `${artist.name || "Artist"} was added to your saved list.` });
+        toast({ title: t("artist.savedTitle"), description: t("artist.savedText", { name: artist.name || t("artist.fallbackName") }) }); // ADDED FOR i18n
       }
     } catch (error: any) {
       logFirebaseError(error);
-      toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not save this artist.") });
+      toast({ variant: "destructive", title: t("common.error"), description: firebaseErrorMessage(error, t("artist.saveFailed")) }); // ADDED FOR i18n
       throw error;
     } finally {
       setIsSaving(false);
@@ -267,11 +270,11 @@ export default function ArtistProfile() {
   };
 
   const handleShare = async () => {
-    const artistName = artist?.name || artist?.professionalName || "Premium Artist";
+    const artistName = artist?.name || artist?.professionalName || t("artist.premiumArtist"); // ADDED FOR i18n
     const url = window.location.href;
     const sharePayload = {
       title: `MyKalakar | ${artistName}`,
-      text: `Book ${artistName} on MyKalakar for your next event!`,
+      text: t("artist.metaDescription", { name: artistName }), // ADDED FOR i18n
       url,
     };
 
@@ -280,11 +283,11 @@ export default function ArtistProfile() {
         await navigator.share(sharePayload);
       } else {
         await navigator.clipboard.writeText(url);
-        toast({ title: "Link copied", description: `${sharePayload.title} profile link copied to clipboard.` });
+        toast({ title: t("artist.linkCopiedTitle"), description: t("artist.linkCopiedText") }); // ADDED FOR i18n
       }
     } catch (error: any) {
       if (error?.name !== "AbortError") {
-        toast({ title: "Share unavailable", description: "The profile link is ready to copy from the address bar." });
+        toast({ title: t("artist.shareUnavailableTitle"), description: t("artist.shareUnavailableText") }); // ADDED FOR i18n
       }
     }
   };
@@ -298,19 +301,20 @@ export default function ArtistProfile() {
       <div className="profile-page min-h-screen bg-[#FAFAFA]">
         <Navbar />
         <main className="page-shell container-shell flex min-h-[70vh] flex-col items-center justify-center text-center">
-          <h1 className="text-2xl font-extrabold text-stone-950">Artist Not Found</h1>
-          <p className="mt-2 max-w-sm text-sm font-semibold leading-6 text-stone-500">The artist profile you're looking for might have been moved or deleted.</p>
+          <h1 className="text-2xl font-extrabold text-stone-950">{t("artist.notFoundTitle")}</h1> {/* ADDED FOR i18n */}
+          <p className="mt-2 max-w-sm text-sm font-semibold leading-6 text-stone-500">{t("artist.notFoundText")}</p> {/* ADDED FOR i18n */}
           <Link to="/artists" className="mt-5 inline-flex h-10 items-center rounded-full bg-stone-950 px-5 text-xs font-extrabold text-white">
-            Back to Artists
+            {t("artist.backToArtists")} {/* ADDED FOR i18n */}
           </Link>
         </main>
       </div>
     );
   }
 
-  const artistName = artist.name || artist.professionalName || "Premium Artist";
+  const artistName = artist.name || artist.professionalName || t("artist.premiumArtist"); // ADDED FOR i18n
   const category = getArtistCategory(artist) || "Artist";
   const artType = getArtistSubCategory(artist) || artForms[0] || category;
+  const artTypeLabel = getArtLabel(t, artType); // ADDED FOR i18n
   const location = compactLocation(artist);
   const artistImage = getForcedMappedImage(
     artist.category,
@@ -348,7 +352,7 @@ export default function ArtistProfile() {
   const services = Array.from(new Set([...(Array.isArray(artist.services) ? artist.services : []), ...artForms])).slice(0, 10);
   const experience = artist.experience || artist.artistProfile?.experience || 5;
   const rating = Number(artist.stats?.rating || artist.rating || 5).toFixed(1);
-  const bio = artist.bio || artist.artistProfile?.bio || `Professional ${artType} from ${location}, available for curated events and cultural celebrations.`;
+  const bio = artist.bio || artist.artistProfile?.bio || t("artist.defaultBioWithLocation", { artType: artTypeLabel, location }); // ADDED FOR i18n
   const pageTitle = `MyKalakar | ${artistName}`;
 
   return (
@@ -366,7 +370,7 @@ export default function ArtistProfile() {
           className="mb-4 inline-flex h-9 items-center gap-1.5 rounded-full border border-stone-200 bg-white/90 px-3 text-xs font-extrabold text-stone-600 shadow-sm backdrop-blur-sm transition hover:border-orange-200 hover:text-orange-600"
         >
           <ChevronLeft className="h-4 w-4" />
-          Artists
+          {t("nav.artists")} {/* ADDED FOR i18n */}
         </Link>
 
         {/* Compact banner hero */}
@@ -376,12 +380,12 @@ export default function ArtistProfile() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-orange-700">
                   <Sparkles className="h-3.5 w-3.5" />
-                  {artType}
+                  {artTypeLabel} {/* ADDED FOR i18n */}
                 </span>
                 {artist.verified ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700">
                     <BadgeCheck className="h-3.5 w-3.5" />
-                    Verified
+                    {t("artist.verified")} {/* ADDED FOR i18n */}
                   </span>
                 ) : null}
               </div>
@@ -390,7 +394,7 @@ export default function ArtistProfile() {
                 {artistName}
               </h1>
               <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-stone-600 sm:text-base">
-                {artType} based in {location}
+                {t("artist.basedIn", { artType: artTypeLabel, location })} {/* ADDED FOR i18n */}
               </p>
 
               <div className="mt-5 flex flex-wrap gap-3 text-sm font-semibold text-stone-500">
@@ -400,7 +404,7 @@ export default function ArtistProfile() {
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <Clock className="h-4 w-4 text-orange-500" />
-                  {experience}+ years
+                  {t("artist.experiencePlus", { years: formatNumber(Number(experience) || 0) })} {/* ADDED FOR i18n */}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <Star className="h-4 w-4 fill-orange-500 text-orange-500" />
@@ -413,7 +417,7 @@ export default function ArtistProfile() {
                   onClick={() => setBookingOpen(true)}
                   className="h-11 rounded-full bg-orange-600 px-5 text-xs font-extrabold uppercase tracking-widest text-white shadow-sm transition hover:bg-orange-700 hover:shadow-md"
                 >
-                  Send Inquiry
+                  {t("artist.sendInquiry")} {/* ADDED FOR i18n */}
                 </Button>
                 <Button
                   variant="outline"
@@ -421,7 +425,7 @@ export default function ArtistProfile() {
                   className="h-11 rounded-full border-gray-200 bg-white px-4 text-xs font-extrabold uppercase tracking-widest text-stone-700 shadow-sm transition hover:border-orange-200 hover:text-orange-600"
                 >
                   <Share2 className="mr-1.5 h-4 w-4" />
-                  Share
+                  {t("artist.share")} {/* ADDED FOR i18n */}
                 </Button>
                 <Button
                   variant="outline"
@@ -430,7 +434,7 @@ export default function ArtistProfile() {
                   className="h-11 rounded-full border-gray-200 bg-white px-4 text-xs font-extrabold uppercase tracking-widest text-stone-700 shadow-sm transition hover:border-orange-200 hover:text-orange-600"
                 >
                   <Heart className={`mr-1.5 h-4 w-4 ${isSaved ? "fill-orange-600 text-orange-600" : ""}`} />
-                  {isSaved ? "Saved" : "Save"}
+                  {isSaved ? t("artist.saved") : t("artist.save")} {/* ADDED FOR i18n */}
                 </Button>
               </div>
             </div>
@@ -461,7 +465,7 @@ export default function ArtistProfile() {
             <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
                 <User className="h-4 w-4 text-orange-500" />
-                About
+                {t("artist.about")} {/* ADDED FOR i18n */}
               </h2>
               <p className="mt-3 text-sm font-medium leading-7 text-stone-600">{bio}</p>
             </section>
@@ -471,9 +475,9 @@ export default function ArtistProfile() {
               <section className="profile-panel profile-media-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
                 <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
                   <Youtube className="h-4 w-4 text-red-500" />
-                  Portfolio Videos
+                  {t("artist.portfolioVideos")} {/* ADDED FOR i18n */}
                 </h2>
-                <p className="mt-1 text-xs font-semibold text-stone-400">Watch live performances and stage highlights</p>
+                <p className="mt-1 text-xs font-semibold text-stone-400">{t("artist.portfolioText")}</p> {/* ADDED FOR i18n */}
 
                 <ArtistVideoEmbed
                   key={activeVideo.videoId}
@@ -491,7 +495,7 @@ export default function ArtistProfile() {
                         data-active={video.videoId === activeVideo.videoId}
                         onClick={() => setActiveVideoIndex(index)}
                         className="profile-video-thumb group text-left"
-                        aria-label={`Play ${artistName} performance ${video.index + 1}`}
+                        aria-label={t("artist.playPerformance", { name: artistName, number: formatNumber(video.index + 1) })}
                       >
                         <SmartImage
                           src={video.thumbnailUrl}
@@ -514,7 +518,7 @@ export default function ArtistProfile() {
               <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
                 <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
                   <Sparkles className="h-4 w-4 text-orange-500" />
-                  Gallery
+                  {t("artist.gallery")} {/* ADDED FOR i18n */}
                 </h2>
                 <div className="profile-gallery mt-4 grid grid-cols-2 gap-2.5 md:grid-cols-3">
                   {galleryPhotos.slice(0, 9).map((photo: string, index: number) => (
@@ -524,7 +528,7 @@ export default function ArtistProfile() {
                     >
                       <SmartImage
                         src={photo}
-                        alt={`${artistName} gallery ${index + 1}`}
+                        alt={t("artist.galleryAlt", { name: artistName, number: formatNumber(index + 1) })}
                         usageId={`profile-gallery:${artist.id}:${index}`}
                         category={artType}
                         orientation="landscape"
@@ -541,7 +545,7 @@ export default function ArtistProfile() {
             <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
                 <Calendar className="h-4 w-4 text-orange-500" />
-                Availability
+                {t("artist.availability")} {/* ADDED FOR i18n */}
               </h2>
               <div className="mt-3 space-y-2">
                 <div className="flex items-center gap-3 rounded-xl bg-stone-50 p-3">
@@ -549,8 +553,8 @@ export default function ArtistProfile() {
                     <Calendar className="h-4 w-4 text-orange-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-extrabold text-stone-950">Event bookings</p>
-                    <p className="text-xs font-semibold text-stone-500">Open to verified inquiries</p>
+                    <p className="text-sm font-extrabold text-stone-950">{t("artist.eventBookings")}</p> {/* ADDED FOR i18n */}
+                    <p className="text-xs font-semibold text-stone-500">{t("artist.openInquiries")}</p> {/* ADDED FOR i18n */}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 rounded-xl bg-stone-50 p-3">
@@ -558,8 +562,8 @@ export default function ArtistProfile() {
                     <BadgeCheck className="h-4 w-4 text-emerald-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-extrabold text-stone-950">Platform verified</p>
-                    <p className="text-xs font-semibold text-stone-500">Profile synced & approved</p>
+                    <p className="text-sm font-extrabold text-stone-950">{t("artist.platformVerified")}</p> {/* ADDED FOR i18n */}
+                    <p className="text-xs font-semibold text-stone-500">{t("artist.profileApproved")}</p> {/* ADDED FOR i18n */}
                   </div>
                 </div>
               </div>
@@ -575,18 +579,18 @@ export default function ArtistProfile() {
               {/* Orange accent bar */}
               <div className="h-1 w-full bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500" />
               <div className="p-5">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.25em] text-orange-500">Booking</p>
-                <h2 className="profile-section-title mt-1 text-xl font-extrabold text-gray-900">Invite this Artist</h2>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.25em] text-orange-500">{t("artist.booking")}</p> {/* ADDED FOR i18n */}
+                <h2 className="profile-section-title mt-1 text-xl font-extrabold text-gray-900">{t("artist.inviteArtist")}</h2> {/* ADDED FOR i18n */}
                 <p className="mt-1.5 text-xs font-medium leading-5 text-stone-500">
-                  Send a concise event inquiry and keep the conversation organized.
+                  {t("artist.inquiryText")} {/* ADDED FOR i18n */}
                 </p>
 
                 {/* Stats row */}
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   {[
-                    { label: "Rating", value: rating },
-                    { label: "Exp.", value: `${experience}yr` },
-                    { label: "Events", value: "50+" },
+                    { label: t("artist.rating"), value: rating }, // ADDED FOR i18n
+                    { label: t("artist.expShort"), value: t("artist.yearsShort", { years: formatNumber(Number(experience) || 0) }) }, // ADDED FOR i18n
+                    { label: t("nav.events"), value: "50+" }, // ADDED FOR i18n
                   ].map(({ label, value }) => (
                     <div key={label} className="rounded-xl border border-stone-100 bg-stone-50 p-2.5 text-center shadow-sm">
                       <p className="text-base font-extrabold text-orange-600">{value}</p>
@@ -600,7 +604,7 @@ export default function ArtistProfile() {
                   onClick={() => setBookingOpen(true)}
                   className="mt-4 w-full rounded-xl bg-orange-600 py-3 text-sm font-extrabold uppercase tracking-widest text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-orange-700 hover:shadow-md active:scale-[0.98]"
                 >
-                  Send Inquiry
+                  {t("artist.sendInquiry")} {/* ADDED FOR i18n */}
                 </button>
 
                 {/* Secondary actions */}
@@ -611,14 +615,14 @@ export default function ArtistProfile() {
                     className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white text-xs font-extrabold text-stone-600 transition hover:border-orange-200 hover:text-orange-600 disabled:opacity-50 shadow-sm"
                   >
                     <Heart className={`h-3.5 w-3.5 ${isSaved ? "fill-orange-500 text-orange-500" : ""}`} />
-                    {isSaved ? "Saved" : "Save"}
+                    {isSaved ? t("artist.saved") : t("artist.save")} {/* ADDED FOR i18n */}
                   </button>
                   <button
                     onClick={handleShare}
                     className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white text-xs font-extrabold text-stone-600 transition hover:border-orange-200 hover:text-orange-600 shadow-sm"
                   >
                     <Share2 className="h-3.5 w-3.5" />
-                    Share
+                    {t("artist.share")} {/* ADDED FOR i18n */}
                   </button>
                 </div>
               </div>
@@ -627,14 +631,14 @@ export default function ArtistProfile() {
             {/* Services Card */}
             {services.length > 0 && (
               <div className="profile-side-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-                <h2 className="profile-section-title text-sm font-extrabold text-gray-900">Services & Specialities</h2>
+                <h2 className="profile-section-title text-sm font-extrabold text-gray-900">{t("artist.servicesSpecialities")}</h2> {/* ADDED FOR i18n */}
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {services.map((service) => (
                     <span
                       key={String(service)}
                       className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-[11px] font-extrabold text-stone-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
                     >
-                      {String(service)}
+                      {getArtLabel(t, service)} {/* ADDED FOR i18n */}
                     </span>
                   ))}
                 </div>
@@ -643,14 +647,14 @@ export default function ArtistProfile() {
 
             {/* Location card */}
             <div className="profile-side-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-              <h2 className="profile-section-title text-sm font-extrabold text-gray-900">Location</h2>
+              <h2 className="profile-section-title text-sm font-extrabold text-gray-900">{t("event.location")}</h2> {/* ADDED FOR i18n */}
               <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-stone-50 p-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50">
                   <MapPin className="h-4 w-4 text-orange-600" />
                 </div>
                 <div>
                   <p className="text-sm font-extrabold text-stone-950">{location}</p>
-                  <p className="text-xs font-semibold text-stone-500">Available across Maharashtra</p>
+                  <p className="text-xs font-semibold text-stone-500">{t("artist.availableAcrossMaharashtra")}</p> {/* ADDED FOR i18n */}
                 </div>
               </div>
             </div>

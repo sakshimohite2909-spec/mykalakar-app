@@ -1,26 +1,6 @@
 import { Link } from "react-router-dom";
 import { Facebook, Instagram, Mail, Sparkles, Twitter, Youtube } from "lucide-react";
-
-const footerGroups = [
-  {
-    title: "Platform",
-    links: [
-      { label: "Explore All", path: "/explore" },
-      { label: "Find Artists", path: "/artists" },
-      { label: "Browse Events", path: "/events" },
-      { label: "Register as Artist", path: "/artist-register" },
-    ],
-  },
-  {
-    title: "Support",
-    links: [
-      { label: "My Profile", path: "/profile" },
-      { label: "Artist Login", path: "/artist-login" },
-      { label: "Admin Login", path: "/admin-login" },
-      { label: "Search", path: "/search" },
-    ],
-  },
-];
+import { useI18n } from "@/i18n/I18nProvider";
 
 const socialLinks = [
   { Icon: Facebook, href: "https://facebook.com", label: "Facebook" },
@@ -30,6 +10,28 @@ const socialLinks = [
 ] as const;
 
 export default function Footer() {
+  const { t } = useI18n(); // ADDED FOR i18n
+  const footerGroups = [ // ADDED FOR i18n
+    {
+      title: t("footer.platform"),
+      links: [
+        { label: t("footer.exploreAll"), path: "/explore" },
+        { label: t("footer.findArtists"), path: "/artists" },
+        { label: t("footer.browseEvents"), path: "/events" },
+        { label: t("footer.registerArtist"), path: "/artist-register" },
+      ],
+    },
+    {
+      title: t("footer.support"),
+      links: [
+        { label: t("nav.myProfile"), path: "/profile" },
+        { label: t("footer.artistLogin"), path: "/artist-login" },
+        { label: t("footer.adminLogin"), path: "/admin-login" },
+        { label: t("nav.search"), path: "/search" },
+      ],
+    },
+  ];
+
   return (
     <footer className="site-footer">
       <div>
@@ -40,10 +42,10 @@ export default function Footer() {
                 <span>
                   <Sparkles className="h-5 w-5" />
                 </span>
-                MyKalakar
+                {t("brand.name")} {/* ADDED FOR i18n */}
               </Link>
               <p>
-                Premium artist discovery and event booking for cultural teams, performers, and organizers across India.
+                {t("footer.description")} {/* ADDED FOR i18n */}
               </p>
               <div className="footer-social-row">
                 {socialLinks.map(({ Icon, href, label }) => (
@@ -66,24 +68,24 @@ export default function Footer() {
             ))}
 
             <div className="footer-newsletter">
-              <h4>Stay Connected</h4>
-              <p>Receive curated artist showcases, new event briefs, and product updates.</p>
+              <h4>{t("footer.stayConnected")}</h4> {/* ADDED FOR i18n */}
+              <p>{t("footer.newsletterText")}</p> {/* ADDED FOR i18n */}
               <form onSubmit={(event) => event.preventDefault()}>
                 <label>
                   <Mail className="h-4 w-4" />
-                  <input type="email" placeholder="Email address" required />
+                  <input type="email" placeholder={t("footer.emailPlaceholder")} required /> {/* ADDED FOR i18n */}
                 </label>
-                <button type="submit">Join MyKalakar</button>
+                <button type="submit">{t("footer.join")}</button> {/* ADDED FOR i18n */}
               </form>
             </div>
           </div>
 
           <div className="footer-bottom-bar">
-            <p>Copyright {new Date().getFullYear()} MyKalakar India. All rights reserved.</p>
+            <p>{t("footer.copyright", { year: new Date().getFullYear() })}</p> {/* ADDED FOR i18n */}
             <div>
-              <Link to="/">Privacy</Link>
-              <Link to="/">Terms</Link>
-              <Link to="/">Accessibility</Link>
+              <Link to="/">{t("footer.privacy")}</Link> {/* ADDED FOR i18n */}
+              <Link to="/">{t("footer.terms")}</Link> {/* ADDED FOR i18n */}
+              <Link to="/">{t("footer.accessibility")}</Link> {/* ADDED FOR i18n */}
             </div>
           </div>
         </div>

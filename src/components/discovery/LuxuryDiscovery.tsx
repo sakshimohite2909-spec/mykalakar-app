@@ -28,6 +28,8 @@ import {
 } from "@/services/filterEngine";
 import { formatDate, formatRating, safeString } from "@/services/dataNormalizer";
 import type { ArtistCardViewModel } from "@/services/marketplaceCards";
+import { useI18n } from "@/i18n/I18nProvider";
+import { getArtLabel } from "@/lib/artLabels";
 
 type FilterPatch = Partial<SmartFilters>;
 type EventCardRecord = Record<string, unknown>;
@@ -92,10 +94,11 @@ function FilterPill({
 }
 
 function ActiveChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  const { t } = useI18n(); // ADDED FOR i18n
   return (
     <motion.span layout {...chipMotion} className="luxury-active-chip">
       {label}
-      <button type="button" onClick={onRemove} aria-label={`Remove ${label}`}>
+      <button type="button" onClick={onRemove} aria-label={t("filters.removeFilter", { label })}> {/* ADDED FOR i18n */}
         <X className="h-3.5 w-3.5" />
       </button>
     </motion.span>
@@ -108,10 +111,12 @@ export function LuxuryFilterBar({
   onReset,
   resultCount,
   loading,
-  placeholder = "Search artists, art forms, location",
+  placeholder,
   tagOptions = [],
   eventTypeOptions = [],
 }: LuxuryFilterBarProps) {
+  const { formatNumber, t } = useI18n(); // ADDED FOR i18n
+  const searchPlaceholder = placeholder || t("filters.searchPlaceholder"); // ADDED FOR i18n
   const activeCategories = getActiveCategories(filters);
   const activeSubCategories = getActiveSubCategories(filters);
   const activeTags = getActiveTags(filters);
@@ -156,39 +161,39 @@ export function LuxuryFilterBar({
           <input
             value={filters.query}
             onChange={(event) => onChange({ query: event.target.value })}
-            placeholder={placeholder}
-            aria-label={placeholder}
+            placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder}
           />
           {filters.query ? (
-            <button type="button" onClick={() => onChange({ query: "" })} aria-label="Clear search">
+            <button type="button" onClick={() => onChange({ query: "" })} aria-label={t("filters.clearSearch")}> {/* ADDED FOR i18n */}
               <X className="h-4 w-4" />
             </button>
           ) : null}
         </div>
         <div className="luxury-filter-count">
           <SlidersHorizontal className="h-4 w-4" />
-          {loading ? "Curating" : `${resultCount} result${resultCount === 1 ? "" : "s"}`}
+          {loading ? t("filters.curating") : t("filters.resultCount", { count: formatNumber(resultCount) })} {/* ADDED FOR i18n */}
         </div>
       </div>
 
-      <div className="luxury-chip-row" aria-label="Parent categories">
+      <div className="luxury-chip-row" aria-label={t("filters.parentCategories")}> {/* ADDED FOR i18n */}
         <FilterPill active={!activeCategories.length && !activeSubCategories.length} onClick={onReset}>
-          All
+          {t("filters.all")} {/* ADDED FOR i18n */}
         </FilterPill>
         {CATEGORY_GROUP_OPTIONS.map((group) => (
           <FilterPill key={group.id} active={activeCategories.includes(group.name)} onClick={() => toggleCategory(group.name)}>
-            <span>{group.name}</span>
-            <em>{group.subcategories.length}</em>
+            <span>{getArtLabel(t, group.name)}</span> {/* ADDED FOR i18n */}
+            <em>{formatNumber(group.subcategories.length)}</em> {/* ADDED FOR i18n */}
           </FilterPill>
         ))}
       </div>
 
       <AnimatePresence initial={false}>
         {subcategories.length ? (
-          <motion.div layout className="luxury-chip-row secondary" aria-label="Injected subcategories" {...chipMotion}>
+          <motion.div layout className="luxury-chip-row secondary" aria-label={t("filters.subcategories")} {...chipMotion}> {/* ADDED FOR i18n */}
             {subcategories.map((subCategory) => (
               <FilterPill key={subCategory} active={activeSubCategories.includes(subCategory)} onClick={() => toggleSubCategory(subCategory)}>
-                {subCategory}
+                {getArtLabel(t, subCategory)} {/* ADDED FOR i18n */}
               </FilterPill>
             ))}
           </motion.div>
@@ -196,7 +201,7 @@ export function LuxuryFilterBar({
       </AnimatePresence>
 
       {tagOptions.length || eventTypeOptions.length ? (
-        <div className="luxury-chip-row tertiary" aria-label="Tags and event types">
+        <div className="luxury-chip-row tertiary" aria-label={t("filters.tagsAndEvents")}> {/* ADDED FOR i18n */}
           {compact(tagOptions).slice(0, 8).map((tag) => (
             <FilterPill key={`tag:${tag}`} active={activeTags.includes(tag)} onClick={() => toggleTag(tag)}>
               #{tag}
@@ -204,7 +209,7 @@ export function LuxuryFilterBar({
           ))}
           {compact(eventTypeOptions).slice(0, 8).map((eventType) => (
             <FilterPill key={`event:${eventType}`} active={activeEventTypes.includes(eventType)} onClick={() => toggleEventType(eventType)}>
-              {eventType}
+              {getArtLabel(t, eventType)} {/* ADDED FOR i18n */}
             </FilterPill>
           ))}
         </div>
@@ -213,30 +218,30 @@ export function LuxuryFilterBar({
       <AnimatePresence initial={false}>
         {filters.query || activeCategories.length || activeSubCategories.length || activeTags.length || activeEventTypes.length ? (
           <motion.div layout className="luxury-active-row" {...chipMotion}>
-            {filters.query ? <ActiveChip label={`Search: ${filters.query}`} onRemove={() => onChange({ query: "" })} /> : null}
+            {filters.query ? <ActiveChip label={t("filters.searchChip", { query: filters.query })} onRemove={() => onChange({ query: "" })} /> : null} {/* ADDED FOR i18n */}
             {activeCategories.map((category) => (
               <ActiveChip
                 key={`active-cat:${category}`}
-                label={category}
+                label={getArtLabel(t, category)}
                 onRemove={() => toggleCategory(category)}
               />
             ))}
             {activeSubCategories.map((subCategory) => (
               <ActiveChip
                 key={`active-sub:${subCategory}`}
-                label={subCategory}
+                label={getArtLabel(t, subCategory)}
                 onRemove={() => toggleSubCategory(subCategory)}
               />
             ))}
             {activeTags.map((tag) => (
-              <ActiveChip key={`active-tag:${tag}`} label={`Tag: ${tag}`} onRemove={() => toggleTag(tag)} />
+              <ActiveChip key={`active-tag:${tag}`} label={t("filters.tagChip", { tag })} onRemove={() => toggleTag(tag)} />
             ))}
             {activeEventTypes.map((eventType) => (
-              <ActiveChip key={`active-event:${eventType}`} label={eventType} onRemove={() => toggleEventType(eventType)} />
+              <ActiveChip key={`active-event:${eventType}`} label={getArtLabel(t, eventType)} onRemove={() => toggleEventType(eventType)} />
             ))}
             <button type="button" className="luxury-clear-link" onClick={onReset}>
               <RefreshCw className="h-3.5 w-3.5" />
-              Clear all
+              {t("filters.clearAll")} {/* ADDED FOR i18n */}
             </button>
           </motion.div>
         ) : null}
@@ -246,6 +251,9 @@ export function LuxuryFilterBar({
 }
 
 export function LuxuryArtistCard({ artist, index }: { artist: ArtistCardViewModel; index: number }) {
+  const { t } = useI18n(); // ADDED FOR i18n
+  const categoryLabel = getArtLabel(t, artist.category); // ADDED FOR i18n
+  const subCategoryLabel = getArtLabel(t, artist.subCategory); // ADDED FOR i18n
   return (
     <motion.article
       layout
@@ -255,7 +263,7 @@ export function LuxuryArtistCard({ artist, index }: { artist: ArtistCardViewMode
       transition={{ duration: 0.45, delay: Math.min(index * 0.035, 0.2), ease: [0.16, 1, 0.3, 1] }}
       className="luxury-card luxury-artist-card group"
     >
-      <Link to={`/artist/${artist.artistId}`} aria-label={`View ${artist.name}`}>
+      <Link to={`/artist/${artist.artistId}`} aria-label={t("artist.viewAria", { name: artist.name })}> {/* ADDED FOR i18n */}
         <div className="luxury-card-media">
           <SmartImage
             src={artist.image}
@@ -276,14 +284,14 @@ export function LuxuryArtistCard({ artist, index }: { artist: ArtistCardViewMode
         </div>
         <div className="luxury-card-body">
           <div className="luxury-card-kicker">
-            <span>{artist.category}</span>
+            <span>{categoryLabel}</span> {/* ADDED FOR i18n */}
             {artist.verified ? <BadgeCheck className="h-4 w-4" /> : null}
           </div>
           <div className="luxury-card-title-row">
-            <h3>{artist.name || "Premium Artist"}</h3>
+            <h3>{artist.name || t("artist.premiumArtist")}</h3> {/* ADDED FOR i18n */}
             <ArrowUpRight className="h-5 w-5" />
           </div>
-          <p className="luxury-card-subtitle">{artist.subCategory}</p>
+          <p className="luxury-card-subtitle">{subCategoryLabel}</p> {/* ADDED FOR i18n */}
           <p className="luxury-card-description">{artist.bio}</p>
           <div className="luxury-card-meta">
             <span>
@@ -299,11 +307,14 @@ export function LuxuryArtistCard({ artist, index }: { artist: ArtistCardViewMode
 }
 
 export function LuxuryEventCard({ event, index }: { event: EventCardRecord; index: number }) {
-  const artType = safeString(event.artType || event.subCategory || event.subcategory || event.category, "Event");
-  const category = getEventCategory(event) || "Event";
+  const { t } = useI18n(); // ADDED FOR i18n
+  const artType = safeString(event.artType || event.subCategory || event.subcategory || event.category, t("event.defaultArtType")); // ADDED FOR i18n
+  const category = getEventCategory(event) || t("event.defaultArtType"); // ADDED FOR i18n
   const image = safeString(event.image || event.imageUrl || event.coverImage);
-  const title = safeString(event.title || event.name, "Curated Event Brief");
-  const description = safeString(event.description || event.requirements || artType, "A verified event brief looking for the right creative team.");
+  const title = safeString(event.title || event.name, t("event.curatedBrief")); // ADDED FOR i18n
+  const description = safeString(event.description || event.requirements || artType, t("event.verifiedBrief")); // ADDED FOR i18n
+  const artTypeLabel = getArtLabel(t, artType); // ADDED FOR i18n
+  const categoryLabel = getArtLabel(t, category); // ADDED FOR i18n
 
   return (
     <motion.article
@@ -314,7 +325,7 @@ export function LuxuryEventCard({ event, index }: { event: EventCardRecord; inde
       transition={{ duration: 0.45, delay: Math.min(index * 0.035, 0.2), ease: [0.16, 1, 0.3, 1] }}
       className="luxury-card luxury-event-card group"
     >
-      <Link to={`/event/${String(event.id || "")}`} aria-label={`View ${title}`}>
+      <Link to={`/event/${String(event.id || "")}`} aria-label={t("event.viewAria", { title })}> {/* ADDED FOR i18n */}
         <div className="luxury-card-media">
           <SmartImage
             src={image}
@@ -335,22 +346,22 @@ export function LuxuryEventCard({ event, index }: { event: EventCardRecord; inde
         </div>
         <div className="luxury-card-body">
           <div className="luxury-card-kicker">
-            <span>{category}</span>
+            <span>{categoryLabel}</span> {/* ADDED FOR i18n */}
             <Sparkles className="h-4 w-4" />
           </div>
           <div className="luxury-card-title-row">
             <h3>{title}</h3>
             <ArrowUpRight className="h-5 w-5" />
           </div>
-          <p className="luxury-card-subtitle">{artType}</p>
+          <p className="luxury-card-subtitle">{artTypeLabel}</p> {/* ADDED FOR i18n */}
           <p className="luxury-card-description">{description}</p>
           <div className="luxury-card-meta">
             <span>
               <MapPin className="h-3.5 w-3.5" />
-              {safeString(event.location || event.district || event.state, "Maharashtra")}
+              {safeString(event.location || event.district || event.state, t("location.maharashtra"))} {/* ADDED FOR i18n */}
             </span>
             <strong>
-              Open brief
+              {t("event.openBrief")} {/* ADDED FOR i18n */}
               <ArrowRight className="h-3.5 w-3.5" />
             </strong>
           </div>
@@ -361,6 +372,7 @@ export function LuxuryEventCard({ event, index }: { event: EventCardRecord; inde
 }
 
 export function LuxuryEmptyState({ label, onReset }: { label: string; onReset: () => void }) {
+  const { t } = useI18n(); // ADDED FOR i18n
   return (
     <motion.div
       initial={{ opacity: 0, y: 18 }}
@@ -368,10 +380,10 @@ export function LuxuryEmptyState({ label, onReset }: { label: string; onReset: (
       className="luxury-empty-state"
     >
       <Sparkles className="h-8 w-8" />
-      <h2>No {label} matched this curation.</h2>
-      <p>Clear one layer or widen the parent category to bring the full collection back into view.</p>
+      <h2>{t("empty.discoveryTitle", { label: t(`explore.tabs.${label}`) })}</h2> {/* ADDED FOR i18n */}
+      <p>{t("empty.discoveryText")}</p> {/* ADDED FOR i18n */}
       <button type="button" onClick={onReset}>
-        Reset Filters
+        {t("filters.reset")} {/* ADDED FOR i18n */}
         <RefreshCw className="h-4 w-4" />
       </button>
     </motion.div>

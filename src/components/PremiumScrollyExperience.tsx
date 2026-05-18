@@ -22,6 +22,8 @@ import { getActiveArtists, getApprovedEvents } from "@/services/dataService";
 import { buildArtistCards } from "@/services/marketplaceCards";
 import { SpotlightSearch } from "@/components/search/SpotlightSearch";
 import { AnimatePresence, LuxuryArtistCard, LuxuryEventCard } from "@/components/discovery/LuxuryDiscovery";
+import { useI18n } from "@/i18n/I18nProvider";
+import { getArtLabel } from "@/lib/artLabels";
 
 type ShowcaseArtist = Record<string, unknown>;
 type CulturalEvent = Record<string, unknown>;
@@ -51,10 +53,12 @@ function SectionHeading({ eyebrow, title, action, to }: { eyebrow: string; title
 }
 
 function Hero() {
+  const { t } = useI18n(); // ADDED FOR i18n
   const heroImages = useMemo(
     () => [STATIC_IMAGES.heroDhol, STATIC_IMAGES.heroKirtan, STATIC_IMAGES.heroTabla, STATIC_IMAGES.heroZanj],
     []
   );
+  const tileLabels = [t("home.hero.tile.liveBriefs"), t("home.hero.tile.verifiedArtists"), t("home.hero.tile.culturalDepth")]; // ADDED FOR i18n
 
   return (
     <section className="luxury-home-hero">
@@ -79,20 +83,20 @@ function Hero() {
         >
           <span className="luxury-eyebrow">
             <Zap className="h-4 w-4" />
-            Maharashtra artist network
+            {t("brand.tagline")} {/* ADDED FOR i18n */}
           </span>
-          <h1>MyKalakar</h1>
+          <h1>{t("brand.name")}</h1> {/* ADDED FOR i18n */}
           <p>
-            A premium discovery platform for verified artists, cultural mandals, and event-ready creative teams across Maharashtra.
+            {t("home.hero.subtitle")} {/* ADDED FOR i18n */}
           </p>
           <SpotlightSearch className="luxury-spotlight-search" />
           <div className="luxury-hero-actions">
             <Link to="/artists">
-              Discover Artists
+              {t("home.hero.discoverArtists")} {/* ADDED FOR i18n */}
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link to="/events">
-              Post an Event
+              {t("events.postEvent")} {/* ADDED FOR i18n */}
               <CalendarDays className="h-4 w-4" />
             </Link>
           </div>
@@ -108,7 +112,7 @@ function Hero() {
             <Link key={image} to={index === 0 ? "/events" : "/artists"} className="luxury-showcase-tile">
               <SmartImage
                 src={image}
-                alt={index === 0 ? "Kirtan performance" : "Artist performance"}
+                alt={index === 0 ? t("home.hero.altKirtan") : t("home.hero.altArtist")} // ADDED FOR i18n
                 usageId={`home:luxury-hero:tile:${index}`}
                 category={index === 0 ? "kirtan" : "performer"}
                 orientation="portrait"
@@ -116,7 +120,7 @@ function Hero() {
                 aspectRatio="aspect-auto"
                 containerClassName="h-full w-full transition duration-700"
               />
-              <span>{index === 0 ? "Live briefs" : index === 1 ? "Verified artists" : "Cultural depth"}</span>
+              <span>{tileLabels[index]}</span> {/* ADDED FOR i18n */}
             </Link>
           ))}
         </motion.div>
@@ -126,13 +130,15 @@ function Hero() {
 }
 
 function CategoryGrid() {
+  const { t } = useI18n(); // ADDED FOR i18n
   return (
     <section className="container-shell app-section content-section rhythm-right">
-      <SectionHeading eyebrow="Categories" title="A mosaic of event-ready specialties" action="View all" to="/explore" />
+      <SectionHeading eyebrow={t("home.categories.eyebrow")} title={t("home.categories.title")} action={t("common.viewAll")} to="/explore" /> {/* ADDED FOR i18n */}
       <div className="category-mosaic">
         {CATEGORY_GROUP_OPTIONS.map((group, index) => {
           const Icon = categoryIcons[group.name] || Sparkles;
           const tileClass = index === 0 ? "mosaic-large" : index < 3 ? "mosaic-medium" : "mosaic-small";
+          const groupLabel = getArtLabel(t, group.name); // ADDED FOR i18n
           return (
             <Link
               key={group.id}
@@ -155,8 +161,8 @@ function CategoryGrid() {
                 </div>
               </div>
               <div className="card-content">
-                <h3 className="line-clamp-1 text-lg font-extrabold text-stone-950">{group.name}</h3>
-                <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-stone-500">{group.subcategories.slice(0, 4).join(" / ")}</p>
+                <h3 className="line-clamp-1 text-lg font-extrabold text-stone-950">{groupLabel}</h3> {/* ADDED FOR i18n */}
+                <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-stone-500">{group.subcategories.slice(0, 4).map((item) => getArtLabel(t, item)).join(" / ")}</p> {/* ADDED FOR i18n */}
               </div>
             </Link>
           );
@@ -167,11 +173,12 @@ function CategoryGrid() {
 }
 
 function FeaturedArtistsSection({ artists, loading }: { artists: ShowcaseArtist[]; loading: boolean }) {
+  const { t } = useI18n(); // ADDED FOR i18n
   const cards = useMemo(() => buildArtistCards(artists, 8), [artists]);
 
   return (
     <section className="container-shell app-section content-section rhythm-left luxury-section">
-      <SectionHeading eyebrow="Featured Artists" title="Verified talent, ready to book" action="Explore artists" to="/artists" />
+      <SectionHeading eyebrow={t("home.featured.eyebrow")} title={t("home.featured.title")} action={t("home.featured.action")} to="/artists" /> {/* ADDED FOR i18n */}
       {loading ? (
         <div className="luxury-results-grid">
           {Array.from({ length: 4 }).map((_, index) => (
@@ -193,9 +200,9 @@ function FeaturedArtistsSection({ artists, loading }: { artists: ShowcaseArtist[
         </div>
       ) : (
         <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-bold text-stone-600">Featured artists are refreshing. Browse the full collection while the spotlight updates.</p>
+          <p className="text-sm font-bold text-stone-600">{t("home.featured.empty")}</p> {/* ADDED FOR i18n */}
           <Link to="/artists" className="mt-4 inline-flex h-10 items-center rounded-full bg-stone-950 px-5 text-xs font-extrabold text-white">
-            Browse Artists
+            {t("home.featured.browse")} {/* ADDED FOR i18n */}
           </Link>
         </div>
       )}
@@ -204,9 +211,10 @@ function FeaturedArtistsSection({ artists, loading }: { artists: ShowcaseArtist[
 }
 
 function UpcomingEventsSection({ events, loading }: { events: CulturalEvent[]; loading: boolean }) {
+  const { t } = useI18n(); // ADDED FOR i18n
   return (
     <section className="container-shell app-section content-section rhythm-right luxury-section">
-      <SectionHeading eyebrow="Events" title="Live event briefs ready for artists" action="See events" to="/events" />
+      <SectionHeading eyebrow={t("events.availableEyebrow")} title={t("home.events.title")} action={t("home.events.action")} to="/events" /> {/* ADDED FOR i18n */}
       {loading ? (
         <div className="luxury-results-grid event-grid">
           {Array.from({ length: 3 }).map((_, index) => (
@@ -228,9 +236,9 @@ function UpcomingEventsSection({ events, loading }: { events: CulturalEvent[]; l
         </div>
       ) : (
         <div className="rounded-lg border border-stone-200 bg-white p-5 text-center shadow-sm">
-          <p className="text-sm font-bold text-stone-600">No public briefs are active right now.</p>
+          <p className="text-sm font-bold text-stone-600">{t("home.events.empty")}</p> {/* ADDED FOR i18n */}
           <Link to="/events" className="mt-4 inline-flex h-10 items-center rounded-full bg-orange-600 px-5 text-xs font-extrabold text-white">
-            Create an Event
+            {t("home.events.create")} {/* ADDED FOR i18n */}
           </Link>
         </div>
       )}
@@ -239,33 +247,35 @@ function UpcomingEventsSection({ events, loading }: { events: CulturalEvent[]; l
 }
 
 function CTASection() {
+  const { t } = useI18n(); // ADDED FOR i18n
   return (
     <section className="home-cta-section container-shell app-section rhythm-full pb-24">
       <div className="home-cta-panel grid gap-4 overflow-hidden rounded-lg bg-stone-950 p-5 text-white shadow-sm md:grid-cols-[1fr_340px]">
         <div className="py-3">
-          <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-300">For artists and organizers</p>
-          <h2 className="mt-2 max-w-2xl text-3xl font-extrabold leading-tight text-white md:text-[36px]">One polished profile. Faster event discovery.</h2>
+          <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-300">{t("home.cta.eyebrow")}</p> {/* ADDED FOR i18n */}
+          <h2 className="mt-2 max-w-2xl text-3xl font-extrabold leading-tight text-white md:text-[36px]">{t("home.cta.title")}</h2> {/* ADDED FOR i18n */}
           <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-white/72">
-            Build a credible artist presence or publish an event brief and let the platform connect the flow.
+            {t("home.cta.text")} {/* ADDED FOR i18n */}
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link to="/register?role=artist" className="inline-flex h-11 items-center gap-2 rounded-full bg-orange-600 px-5 text-sm font-extrabold text-white transition hover:bg-orange-500">
               <Users className="h-4 w-4" />
-              Join as Artist
+              {t("nav.joinArtist")} {/* ADDED FOR i18n */}
             </Link>
             <Link to="/events" className="inline-flex h-11 items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 text-sm font-extrabold text-white transition hover:bg-white/15">
-              Post Event
+              {t("events.postEvent")} {/* ADDED FOR i18n */}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
-        <SmartImage src={STATIC_IMAGES.profileCover} alt="Artist performance" usageId="home:cta" category="hero" orientation="landscape" aspectRatio="aspect-video" containerClassName="self-center rounded-lg" />
+        <SmartImage src={STATIC_IMAGES.profileCover} alt={t("home.hero.altArtist")} usageId="home:cta" category="hero" orientation="landscape" aspectRatio="aspect-video" containerClassName="self-center rounded-lg" /> {/* ADDED FOR i18n */}
       </div>
     </section>
   );
 }
 
 export default function PremiumScrollyExperience() {
+  const { t } = useI18n(); // ADDED FOR i18n
   const [artists, setArtists] = useState<ShowcaseArtist[]>([]);
   const [events, setEvents] = useState<CulturalEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -296,7 +306,7 @@ export default function PremiumScrollyExperience() {
   return (
     <div className="luxury-page home-page min-h-screen font-sans antialiased">
       <Helmet>
-        <title>MyKalakar | Premium Artist Marketplace</title>
+        <title>{t("home.meta.title")}</title> {/* ADDED FOR i18n */}
         <link rel="preload" as="image" href={STATIC_IMAGES.heroDhol} />
         <link rel="preload" as="image" href={STATIC_IMAGES.heroKirtan} />
       </Helmet>

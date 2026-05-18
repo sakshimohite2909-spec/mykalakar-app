@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export type Language = "en" | "mr" | "hi";
+export type Locale = "en-IN" | "mr-IN" | "hi-IN"; // ADDED FOR i18n
 
 type Messages = Record<string, string>;
 
@@ -35,27 +36,48 @@ const localeLoaders: Record<Language, () => Promise<{ default: Messages }>> = {
   hi: () => import("@/locales/hi/common.json"),
 };
 
+export function languageToLocale(language: Language): Locale { // ADDED FOR i18n
+  return language === "mr" ? "mr-IN" : language === "hi" ? "hi-IN" : "en-IN";
+}
+
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 function isLanguage(value: string | null | undefined): value is Language {
   return value === "en" || value === "mr" || value === "hi";
 }
 
+function readStoredLanguage(): Language | null { // ADDED FOR i18n
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") return null;
+
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    return isLanguage(saved) ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistLanguage(language: Language) { // ADDED FOR i18n
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, language);
+  } catch {
+    // Browser storage can be blocked in private or embedded contexts.
+  }
+}
+
 function detectLanguage(): Language {
   if (typeof window === "undefined") return "en";
 
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-  if (isLanguage(saved)) return saved;
+  const saved = readStoredLanguage(); // ADDED FOR i18n
+  if (saved) return saved;
 
   const browserLanguages = navigator.languages?.length ? navigator.languages : [navigator.language];
   const normalized = browserLanguages.map((lang) => lang.toLowerCase());
 
   if (normalized.some((lang) => lang.startsWith("mr"))) return "mr";
   if (normalized.some((lang) => lang.startsWith("hi"))) return "hi";
-  if (normalized.some((lang) => lang === "en-in")) return "mr";
-
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  if (timeZone === "Asia/Kolkata" || timeZone === "Asia/Calcutta") return "mr";
 
   return "en";
 }
@@ -70,6 +92,13 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<Messages>({});
   const [fallbackMessages, setFallbackMessages] = useState<Messages>({});
   const [isLoading, setIsLoading] = useState(true);
+  const locale = languageToLocale(language); // ADDED FOR i18n
+
+  useEffect(() => { // ADDED FOR i18n
+    document.documentElement.lang = locale;
+    document.documentElement.dir = "ltr";
+    document.documentElement.dataset.language = language;
+  }, [language, locale]);
 
   useEffect(() => {
     let mounted = true;
@@ -91,7 +120,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   }, [language]);
 
   const setLanguage = useCallback((nextLanguage: Language) => {
-    window.localStorage.setItem(STORAGE_KEY, nextLanguage);
+    persistLanguage(nextLanguage); // ADDED FOR i18n
     setLanguageState(nextLanguage);
   }, []);
 
@@ -102,8 +131,6 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     },
     [fallbackMessages, messages],
   );
-
-  const locale = language === "mr" ? "mr-IN" : language === "hi" ? "hi-IN" : "en-IN";
 
   const formatNumber = useCallback(
     (value: number) => new Intl.NumberFormat(locale).format(value),

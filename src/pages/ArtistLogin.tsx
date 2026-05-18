@@ -18,6 +18,8 @@ import { doc, getDoc } from "firebase/firestore";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { auth, db } from "@/lib/firebase";
+import { useI18n } from "@/i18n/I18nProvider";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 type LoginRole = "artist" | "user";
 
@@ -63,6 +65,7 @@ async function resolvePostLoginPath(uid: string, fallbackPath: string) {
 }
 
 export default function ArtistLogin() {
+  const { t } = useI18n(); // ADDED FOR i18n
   const [activeRole, setActiveRole] = useState<LoginRole>("user");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -91,14 +94,14 @@ export default function ArtistLogin() {
       const result = await login(syntheticEmail(values.username), values.password);
 
       if (!result.success) {
-        toast({ variant: "destructive", title: "Login failed", description: result.message });
+        toast({ variant: "destructive", title: t("auth.loginFailed"), description: result.message }); // ADDED FOR i18n
         return;
       }
 
       const uid = auth.currentUser?.uid;
       const path = uid ? await resolvePostLoginPath(uid, destination) : destination;
 
-      toast({ title: "Welcome back", description: "Redirecting you now." });
+      toast({ title: t("auth.welcomeBack"), description: t("auth.redirecting") }); // ADDED FOR i18n
       navigate(path, { replace: true });
     } finally {
       setSubmitting(false);
@@ -109,34 +112,35 @@ export default function ArtistLogin() {
 
   return (
     <div className="auth-page relative z-10 flex min-h-screen w-full flex-col justify-center px-4 pt-4 pb-8">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between">
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2"> {/* ADDED FOR i18n */}
         <Link
           to="/"
           className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-white/70 px-4 py-2 text-sm font-bold text-slate-500 shadow-sm transition hover:text-orange-600"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Home
+          {t("auth.backHome")} {/* ADDED FOR i18n */}
         </Link>
         <Link
           to={`/register?role=${activeRole}`}
           className="text-sm font-black text-orange-500 transition hover:text-orange-600"
         >
-          Register -&gt;
+          {t("auth.registerArrow")} {/* ADDED FOR i18n */}
         </Link>
+        <LanguageSwitcher compact /> {/* ADDED FOR i18n */}
       </div>
 
       <div className="auth-stage mx-auto grid w-full max-w-6xl items-center gap-6 py-8 lg:grid-cols-[0.95fr_1fr]">
         <div className="auth-visual-panel hidden min-h-[620px] overflow-hidden rounded-lg border border-white/10 bg-white/[0.055] p-8 shadow-2xl backdrop-blur-2xl lg:flex lg:flex-col lg:justify-between">
           <div>
             <span className="inline-flex rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-100">
-              MyKalakar Access
+              {t("auth.accessEyebrow")} {/* ADDED FOR i18n */}
             </span>
             <h2 className="mt-6 max-w-sm text-5xl font-black leading-[0.98] text-white">
-              Enter the artist network.
+              {t("auth.visualTitle")} {/* ADDED FOR i18n */}
             </h2>
           </div>
           <div className="auth-visual-stack grid gap-3">
-            {["Verified talent graph", "Event-ready profiles", "Admin-grade governance"].map((item) => (
+            {[t("auth.visualPoint1"), t("auth.visualPoint2"), t("auth.visualPoint3")].map((item) => ( // ADDED FOR i18n
               <div key={item} className="rounded-lg border border-white/10 bg-white/[0.07] p-4 text-sm font-extrabold text-white/82 backdrop-blur-2xl">
                 {item}
               </div>
@@ -155,9 +159,9 @@ export default function ArtistLogin() {
               <Music className="h-7 w-7 text-white" />
             </div>
             <h1 className="font-display text-4xl font-black tracking-tight text-[#1A1A1A]">
-              Step Back Into The Collective.
+              {t("auth.loginTitle")} {/* ADDED FOR i18n */}
             </h1>
-            <p className="mt-2 text-sm font-semibold text-slate-500">Sign in to your MyKalakar account</p>
+            <p className="mt-2 text-sm font-semibold text-slate-500">{t("auth.loginSubtitle")}</p> {/* ADDED FOR i18n */}
           </div>
 
           <div className="glass-card mb-6 grid grid-cols-2 gap-1.5 rounded-2xl p-1.5">
@@ -172,7 +176,7 @@ export default function ArtistLogin() {
                     : "text-slate-500 hover:bg-white/70 hover:text-slate-700"
                 }`}
               >
-                {tab.label}
+                {t(`auth.role.${tab.id}`)} {/* ADDED FOR i18n */}
               </button>
             ))}
           </div>
@@ -187,8 +191,8 @@ export default function ArtistLogin() {
                 <LogIn className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="font-display text-xl font-bold text-[#2E3A47]">Account Login</h2>
-                <p className="text-xs font-semibold text-slate-500">Use your username and password.</p>
+                <h2 className="font-display text-xl font-bold text-[#2E3A47]">{t("auth.accountLogin")}</h2> {/* ADDED FOR i18n */}
+                <p className="text-xs font-semibold text-slate-500">{t("auth.useCredentials")}</p> {/* ADDED FOR i18n */}
               </div>
             </div>
 
@@ -196,12 +200,12 @@ export default function ArtistLogin() {
               <div>
                 <label className="mb-1.5 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
                   <AtSign className="h-4 w-4 text-orange-500" />
-                  Username
+                  {t("auth.username")} {/* ADDED FOR i18n */}
                 </label>
                 <input
                   type="text"
                   {...register("username")}
-                  placeholder="your_username"
+                  placeholder={t("auth.usernamePlaceholder")}
                   className={`input-glass w-full px-4 py-3 pl-4 text-sm ${errors.username ? "border-red-400 focus:border-red-500" : ""}`}
                 />
                 <FieldError message={errors.username?.message} />
@@ -213,8 +217,8 @@ export default function ArtistLogin() {
                 render={({ field }) => (
                   <div>
                     <label className="mb-1.5 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
-                      <Lock className="h-4 w-4 text-orange-500" />
-                      Password
+                  <Lock className="h-4 w-4 text-orange-500" />
+                      {t("auth.password")} {/* ADDED FOR i18n */}
                     </label>
                     <div className="relative">
                       <input
@@ -222,14 +226,14 @@ export default function ArtistLogin() {
                         value={field.value}
                         onBlur={field.onBlur}
                         onChange={field.onChange}
-                        placeholder="Enter password"
+                        placeholder={t("auth.passwordPlaceholder")}
                         className={`input-glass w-full px-4 py-3 pr-11 text-sm ${errors.password ? "border-red-400 focus:border-red-500" : ""}`}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword((current) => !current)}
                         className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -247,14 +251,14 @@ export default function ArtistLogin() {
                 }`}
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-                Sign In
+                {t("auth.signIn")} {/* ADDED FOR i18n */}
               </button>
             </div>
 
             <p className="mt-6 text-center text-xs font-semibold text-slate-500">
-              Do not have an account?{" "}
+              {t("auth.noAccount")}{" "} {/* ADDED FOR i18n */}
               <Link to={`/register?role=${activeRole}`} className="font-black text-orange-500 transition hover:text-orange-600">
-                Register here -&gt;
+                {t("auth.registerHere")} {/* ADDED FOR i18n */}
               </Link>
             </p>
           </form>

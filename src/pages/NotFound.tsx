@@ -2,8 +2,10 @@ import { Link, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { ArrowLeft, Search } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { useI18n } from "@/i18n/I18nProvider";
 
 const NotFound = () => {
+  const { t } = useI18n(); // ADDED FOR i18n
   const location = useLocation();
 
   useEffect(() => {
@@ -19,13 +21,13 @@ const NotFound = () => {
             <Search className="h-6 w-6" />
           </span>
           <p className="mt-5 text-[11px] font-extrabold uppercase tracking-widest text-orange-600">404</p>
-          <h1 className="mt-2 text-3xl font-extrabold text-stone-950">Page not found</h1>
+          <h1 className="mt-2 text-3xl font-extrabold text-stone-950">{t("notFound.title")}</h1> {/* ADDED FOR i18n */}
           <p className="mx-auto mt-3 max-w-md text-base font-medium leading-7 text-stone-600">
-            This route does not exist on MyKalakar. Head back to the marketplace and keep exploring verified artists.
+            {t("notFound.text")} {/* ADDED FOR i18n */}
           </p>
           <Link to="/" className="mt-6 inline-flex h-11 items-center gap-2 rounded-full bg-stone-950 px-5 text-sm font-bold text-white transition hover:bg-orange-600 active:scale-[0.98]">
             <ArrowLeft className="h-4 w-4" />
-            Back Home
+            {t("notFound.backHome")} {/* ADDED FOR i18n */}
           </Link>
         </section>
       </main>

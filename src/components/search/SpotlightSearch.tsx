@@ -6,6 +6,8 @@ import { getActiveArtists } from "@/services/dataService";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { SuggestionList } from "@/components/search/SuggestionList";
 import type { SpotlightSuggestion } from "@/components/search/SuggestionItem";
+import { useI18n } from "@/i18n/I18nProvider";
+import { getArtLabel } from "@/lib/artLabels";
 
 const TOP_LOCATIONS = ["Mumbai", "Pune", "Kolhapur", "Nashik", "Nagpur", "Satara"];
 
@@ -24,6 +26,7 @@ function rankSuggestion(label: string, type: SpotlightSuggestion["type"], query:
 }
 
 export function SpotlightSearch({ className = "" }: { className?: string }) {
+  const { t } = useI18n(); // ADDED FOR i18n
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
@@ -45,8 +48,8 @@ export function SpotlightSearch({ className = "" }: { className?: string }) {
 
   const suggestions = useMemo<SpotlightSuggestion[]>(() => {
     const categorySuggestions = CATEGORY_GROUP_OPTIONS.flatMap((group) => [
-      { id: `cat:${group.name}`, label: group.name, type: "category" as const, value: group.name },
-      ...group.subcategories.slice(0, 8).map((sub) => ({ id: `cat:${sub}`, label: sub, type: "category" as const, value: sub })),
+      { id: `cat:${group.name}`, label: getArtLabel(t, group.name), type: "category" as const, value: group.name }, // ADDED FOR i18n
+      ...group.subcategories.slice(0, 8).map((sub) => ({ id: `cat:${sub}`, label: getArtLabel(t, sub), type: "category" as const, value: sub })), // ADDED FOR i18n
     ]);
     const locationSuggestions = TOP_LOCATIONS.map((location) => ({ id: `loc:${location}`, label: location, type: "location" as const, value: location }));
     const artistSuggestions = topArtists.map((artist) => ({
@@ -57,7 +60,7 @@ export function SpotlightSearch({ className = "" }: { className?: string }) {
     }));
 
     const ranked = [...categorySuggestions, ...locationSuggestions, ...artistSuggestions]
-      .map((suggestion) => ({ ...suggestion, score: rankSuggestion(suggestion.label, suggestion.type, debouncedQuery) }))
+      .map((suggestion) => ({ ...suggestion, score: Math.max(rankSuggestion(suggestion.label, suggestion.type, debouncedQuery), rankSuggestion(suggestion.value, suggestion.type, debouncedQuery)) })) // ADDED FOR i18n
       .filter((suggestion) => suggestion.score > 0)
       .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label))
       .slice(0, 6);
@@ -67,7 +70,7 @@ export function SpotlightSearch({ className = "" }: { className?: string }) {
     }
 
     return ranked.slice(0, 6);
-  }, [debouncedQuery, topArtists]);
+  }, [debouncedQuery, t, topArtists]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -111,7 +114,7 @@ export function SpotlightSearch({ className = "" }: { className?: string }) {
             else search();
           }
         }}
-        placeholder="Search singer, dhol, city"
+        placeholder={t("spotlight.placeholder")} // ADDED FOR i18n
         className="h-14 w-full rounded-2xl border border-stone-200 bg-stone-50 pl-11 pr-4 text-sm font-extrabold text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
       />
       {focused ? (

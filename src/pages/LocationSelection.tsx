@@ -22,11 +22,13 @@ import {
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { useMasterData } from "@/contexts/MasterDataContext";
+import { useI18n } from "@/i18n/I18nProvider";
 
 // NOTE: No manual wheel-scroll handler needed. CommandList has overflow-y: auto
 // from cmdk internals — native mouse-wheel / trackpad / touch scroll works automatically.
 
 const LocationSelection = () => {
+  const { t } = useI18n(); // ADDED FOR i18n
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { states, getDistrictsByState } = useMasterData();
@@ -100,20 +102,20 @@ const LocationSelection = () => {
         <div className="container mx-auto max-w-6xl">
           <div className="mb-8">
             <Button variant="ghost" onClick={handleBack} className="text-muted-foreground">
-              <ChevronLeft className="mr-2 h-4 w-4" /> Back
+              <ChevronLeft className="mr-2 h-4 w-4" /> {t("common.back")} {/* ADDED FOR i18n */}
             </Button>
           </div>
 
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
               {step === "state"
-                ? "Where is your event located?"
-                : `Select City / District in ${selectedState}`}
+                ? t("location.whereLocated")
+                : t("location.selectDistrictIn", { state: selectedState })} {/* ADDED FOR i18n */}
             </h1>
             <p className="text-xl text-muted-foreground">
               {step === "state"
-                ? "Select your state to find artists in your area"
-                : "Choose the city or district to find local talent"}
+                ? t("location.selectStateText")
+                : t("location.selectDistrictText")} {/* ADDED FOR i18n */}
             </p>
           </div>
 
@@ -130,7 +132,7 @@ const LocationSelection = () => {
                       className="w-full h-14 justify-between bg-white/85 border-white/70 !text-[#1A1A1A] rounded-2xl text-sm font-bold tracking-wide shadow-sm hover:bg-white hover:!text-[#1A1A1A] focus:!text-[#1A1A1A] data-[state=open]:!text-[#1A1A1A]"
                     >
                       <span className="truncate !text-[#1A1A1A]">
-                        {selectedState || "Select your State…"}
+                        {selectedState || t("location.selectStatePlaceholder")} {/* ADDED FOR i18n */}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-[#1A1A1A] opacity-60" />
                     </Button>
@@ -138,13 +140,13 @@ const LocationSelection = () => {
                   <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 bg-white/95 backdrop-blur-3xl border border-white/50 rounded-2xl shadow-xl z-[100]">
                     <Command className="bg-transparent">
                       <CommandInput
-                        placeholder="Search state…"
+                        placeholder={t("location.searchState")}
                         className="h-12 text-sm text-[#1A1A1A] placeholder:text-slate-500"
                       />
                       {/* Native scroll — no onWheelCapture needed */}
                       <CommandList className="max-h-[300px] overflow-y-auto no-scrollbar">
                         <CommandEmpty className="py-6 text-center text-sm text-slate-500">
-                          No state found.
+                          {t("location.noState")} {/* ADDED FOR i18n */}
                         </CommandEmpty>
                         <CommandGroup>
                           {sortedStates.map((s) => (
@@ -184,7 +186,7 @@ const LocationSelection = () => {
                       className="w-full h-14 justify-between bg-white/85 border-white/70 !text-[#1A1A1A] rounded-2xl text-sm font-bold tracking-wide shadow-sm hover:bg-white hover:!text-[#1A1A1A] focus:!text-[#1A1A1A] data-[state=open]:!text-[#1A1A1A]"
                     >
                       <span className="truncate !text-[#1A1A1A]">
-                        {selectedDistrict || `Select City / District in ${selectedState}…`}
+                        {selectedDistrict || t("location.selectDistrictPlaceholder", { state: selectedState })} {/* ADDED FOR i18n */}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-[#1A1A1A] opacity-60" />
                     </Button>
@@ -192,13 +194,13 @@ const LocationSelection = () => {
                   <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 bg-white/95 backdrop-blur-3xl border border-white/50 rounded-2xl shadow-xl z-[100]">
                     <Command className="bg-transparent">
                       <CommandInput
-                        placeholder="Search city or district…"
+                        placeholder={t("location.searchDistrict")}
                         className="h-12 text-sm text-[#1A1A1A] placeholder:text-slate-500"
                       />
                       {/* Native scroll — overflow-y:auto + max-height */}
                       <CommandList className="max-h-[300px] overflow-y-auto no-scrollbar">
                         <CommandEmpty className="py-6 text-center text-sm text-slate-500">
-                          No city found.
+                          {t("location.noDistrict")} {/* ADDED FOR i18n */}
                         </CommandEmpty>
                         <CommandGroup>
                           {districtOptions.map((d) => (
@@ -237,7 +239,7 @@ const LocationSelection = () => {
                 onClick={handleContinue}
                 className="px-12 rounded-full gradient-bg border-0 text-foreground font-bold h-12"
               >
-                {searchType === "artist" ? "Find Artists" : "See Event Requirements"}
+                {searchType === "artist" ? t("location.findArtists") : t("location.seeRequirements")} {/* ADDED FOR i18n */}
               </Button>
             </div>
           )}

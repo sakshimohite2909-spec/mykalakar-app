@@ -5,6 +5,8 @@ import { ArrowLeft, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useMasterData } from "@/contexts/MasterDataContext";
+import { useI18n } from "@/i18n/I18nProvider";
+import { getArtLabel } from "@/lib/artLabels";
 
 const EVENTS = [
   { id: "1", name: "Wedding", icon: "💍", description: "Artists, rituals, hosts, and media teams for complete wedding celebrations" },
@@ -21,6 +23,7 @@ function getGroupSubcategories(group: Record<string, any>) {
 }
 
 export default function EventRequirements() {
+  const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { categoryGroups, loading: masterLoading } = useMasterData();
@@ -52,9 +55,9 @@ export default function EventRequirements() {
         <Navbar />
         <main className="page-shell container-shell flex min-h-[70vh] flex-col items-center justify-center gap-4 text-center">
           <Sparkles className="h-10 w-10 text-orange-600" />
-          <h1 className="text-2xl font-black text-stone-950">Event not found</h1>
+          <h1 className="text-2xl font-black text-stone-950">{t("event.notFoundTitle")}</h1> {/* ADDED FOR i18n */}
           <p className="max-w-sm text-sm font-semibold leading-6 text-stone-500">
-            Please go back and select a valid event type.
+            {t("requirements.invalidEventText")} {/* ADDED FOR i18n */}
           </p>
           <button
             type="button"
@@ -62,7 +65,7 @@ export default function EventRequirements() {
             className="inline-flex h-11 items-center gap-2 rounded-full bg-orange-600 px-5 text-xs font-extrabold text-white"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Events
+            {t("event.backToEvents")} {/* ADDED FOR i18n */}
           </button>
         </main>
         <Footer />
@@ -79,12 +82,12 @@ export default function EventRequirements() {
       <main className="page-shell container-shell pb-16">
         <section className="page-hero grid gap-4 overflow-hidden rounded-lg border border-stone-200 bg-white p-5 shadow-sm md:grid-cols-[1fr_280px]">
           <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-600">Artist Requirements</p>
+            <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-600">{t("requirements.eyebrow")}</p> {/* ADDED FOR i18n */}
             <h1 className="mt-1 text-3xl font-extrabold leading-tight text-stone-950 md:text-[40px]">
-              {selectedEvent.name} in {district || "your area"}
+              {t("requirements.title", { event: getArtLabel(t, selectedEvent.name), location: district || t("location.yourArea") })} {/* ADDED FOR i18n */}
             </h1>
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-stone-600">
-              {selectedEvent.description}. Choose a category or a precise artist type to see correctly filtered artists.
+              {t(`requirements.event.${selectedEvent.id}.description`)} {t("requirements.subtitle")} {/* ADDED FOR i18n */}
             </p>
           </div>
           <div className="hidden items-center justify-center rounded-lg bg-orange-50 text-7xl md:flex">
@@ -95,21 +98,21 @@ export default function EventRequirements() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="h-10 w-10 animate-spin text-orange-600" />
-            <p className="mt-3 text-[11px] font-black uppercase tracking-widest text-orange-600">Loading categories</p>
+            <p className="mt-3 text-[11px] font-black uppercase tracking-widest text-orange-600">{t("requirements.loadingCategories")}</p> {/* ADDED FOR i18n */}
           </div>
         ) : (
           <section className="app-section">
             <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-600">Choose Artist Type</p>
-                <h2 className="mt-1 text-2xl font-extrabold text-stone-950 md:text-[32px]">Categories and subcategories</h2>
+                <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-600">{t("requirements.chooseType")}</p> {/* ADDED FOR i18n */}
+                <h2 className="mt-1 text-2xl font-extrabold text-stone-950 md:text-[32px]">{t("requirements.categoriesTitle")}</h2> {/* ADDED FOR i18n */}
               </div>
               <button
                 type="button"
                 onClick={() => navigate(buildArtistUrl())}
                 className="inline-flex h-10 w-max items-center gap-2 rounded-lg border border-orange-100 bg-white px-4 text-xs font-extrabold text-stone-700 shadow-sm transition hover:border-orange-300 hover:text-orange-600"
               >
-                Browse all nearby artists
+                {t("requirements.browseNearby")} {/* ADDED FOR i18n */}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
@@ -131,9 +134,9 @@ export default function EventRequirements() {
                           {group.icon || "✨"}
                         </span>
                         <div className="min-w-0">
-                          <h3 className="text-base font-black tracking-tight text-stone-950">{group.name}</h3>
+                          <h3 className="text-base font-black tracking-tight text-stone-950">{getArtLabel(t, group.name)}</h3> {/* ADDED FOR i18n */}
                           <p className="mt-1 text-xs font-bold uppercase tracking-wide text-orange-600">
-                            {subcategories.length} artist types
+                            {t("requirements.artistTypeCount", { count: formatNumber(subcategories.length) })} {/* ADDED FOR i18n */}
                           </p>
                         </div>
                       </div>
@@ -142,7 +145,7 @@ export default function EventRequirements() {
                         onClick={() => navigate(buildArtistUrl(group.name))}
                         className="shrink-0 rounded-lg border border-orange-100 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-orange-600 transition hover:bg-orange-50"
                       >
-                        All
+                        {t("filters.all")} {/* ADDED FOR i18n */}
                       </button>
                     </div>
 
@@ -154,7 +157,7 @@ export default function EventRequirements() {
                           onClick={() => navigate(buildArtistUrl(group.name, subCategory))}
                           className="rounded-lg border border-orange-100 bg-[#fffaf6] px-3 py-2 text-[11px] font-extrabold text-stone-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
                         >
-                          {subCategory}
+                          {getArtLabel(t, subCategory)} {/* ADDED FOR i18n */}
                         </button>
                       ))}
                     </div>

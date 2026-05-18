@@ -1,4 +1,5 @@
 import { MapPin, Music2, Search, UserRound } from "lucide-react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export type SpotlightSuggestion = {
   id: string;
@@ -40,6 +41,7 @@ export function SuggestionItem({
   active: boolean;
   onSelect: (suggestion: SpotlightSuggestion) => void;
 }) {
+  const { t } = useI18n(); // ADDED FOR i18n
   const Icon = icons[suggestion.type];
   return (
     <button
@@ -58,7 +60,7 @@ export function SuggestionItem({
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-extrabold">{highlight(suggestion.label, query)}</span>
         <span className={`block text-[10px] font-black uppercase tracking-widest ${active ? "text-white/55" : "text-stone-400"}`}>
-          {suggestion.type}
+          {t(`spotlight.type.${suggestion.type}`)} {/* ADDED FOR i18n */}
         </span>
       </span>
     </button>

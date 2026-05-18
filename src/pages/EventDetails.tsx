@@ -13,6 +13,8 @@ import { submitEventApplication } from "@/lib/eventMatching";
 import { SmartImage } from "@/components/SmartImage";
 import { subscribeEventById } from "@/services/dataService";
 import { getEventCategory } from "@/services/filterEngine";
+import { languageToLocale, useI18n } from "@/i18n/I18nProvider";
+import { getArtLabel } from "@/lib/artLabels";
 
 type EventRecord = Record<string, any>;
 
@@ -23,16 +25,17 @@ function imageForEvent(event?: EventRecord) {
   return "";
 }
 
-function formatDate(value: unknown, fallback = "Flexible") {
+function formatDate(value: unknown, fallback: string, locale: string) { // ADDED FOR i18n
   if (typeof value === "string" && value.trim()) return value;
   const timestamp = value as { toDate?: () => Date };
   if (value && typeof value === "object" && typeof timestamp.toDate === "function") {
-    return timestamp.toDate().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return timestamp.toDate().toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }); // ADDED FOR i18n
   }
   return fallback;
 }
 
 export default function EventDetails() {
+  const { formatCurrency, formatNumber, language, t } = useI18n(); // ADDED FOR i18n
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser, artistData, isArtist } = useAuth();
@@ -58,10 +61,12 @@ export default function EventDetails() {
     return unsub;
   }, [id]);
 
-  const title = event?.title || event?.name || "Cultural Event";
-  const category = event ? getEventCategory(event) || event.category || "Event" : "Event";
+  const title = event?.title || event?.name || t("event.defaultTitle"); // ADDED FOR i18n
+  const category = event ? getEventCategory(event) || event.category || t("event.defaultArtType") : t("event.defaultArtType"); // ADDED FOR i18n
   const artType = event?.artType || event?.performanceType || event?.subCategory || event?.subcategory || category;
-  const description = event?.description || event?.requirements || "A verified event brief looking for trusted artists.";
+  const categoryLabel = getArtLabel(t, category); // ADDED FOR i18n
+  const artTypeLabel = getArtLabel(t, artType); // ADDED FOR i18n
+  const description = event?.description || event?.requirements || t("event.verifiedBrief"); // ADDED FOR i18n
   const image = useMemo(() => imageForEvent(event || undefined), [event]);
 
   const handleApply = async () => {
@@ -71,7 +76,7 @@ export default function EventDetails() {
       return;
     }
     if (!isArtist || !artistData?.id) {
-      toast({ variant: "destructive", title: "Artist account required", description: "Only registered artists can apply to event briefs." });
+      toast({ variant: "destructive", title: t("event.applyArtistOnlyTitle"), description: t("event.applyArtistOnlyText") }); // ADDED FOR i18n
       return;
     }
 
@@ -79,11 +84,11 @@ export default function EventDetails() {
     try {
       const uid = requireAuthUid(currentUser);
       await submitEventApplication({ eventId: id, artistId: artistData.id || uid, message: message.trim() });
-      toast({ title: "Application sent", description: "Your event application has been submitted." });
+      toast({ title: t("event.applySuccessTitle"), description: t("event.applySuccessText") }); // ADDED FOR i18n
       navigate("/artist/dashboard/bookings");
     } catch (error: any) {
       logFirebaseError(error);
-      toast({ variant: "destructive", title: "Application failed", description: firebaseErrorMessage(error, "Could not submit application.") });
+      toast({ variant: "destructive", title: t("event.applyFailedTitle"), description: firebaseErrorMessage(error, t("event.applyFailedText")) }); // ADDED FOR i18n
       throw error;
     } finally {
       setApplying(false);
@@ -106,10 +111,10 @@ export default function EventDetails() {
       <div className="min-h-screen bg-[#FAFAFA]">
         <Navbar />
         <main className="container-shell flex min-h-[70vh] flex-col items-center justify-center text-center" style={{ paddingTop: 'calc(var(--navbar-h, 72px) + 8px)' }}>
-          <h1 className="text-2xl font-extrabold text-stone-950">Event Not Found</h1>
-          <p className="mt-2 max-w-md text-sm font-semibold leading-6 text-stone-500">This event brief may have been closed or removed.</p>
+          <h1 className="text-2xl font-extrabold text-stone-950">{t("event.notFoundTitle")}</h1> {/* ADDED FOR i18n */}
+          <p className="mt-2 max-w-md text-sm font-semibold leading-6 text-stone-500">{t("event.notFoundText")}</p> {/* ADDED FOR i18n */}
           <Link to="/explore?tab=events" className="mt-5 inline-flex h-10 items-center rounded-full bg-stone-950 px-5 text-xs font-extrabold text-white">
-            View Events
+            {t("common.viewAllEvents")} {/* ADDED FOR i18n */}
           </Link>
         </main>
       </div>
@@ -129,22 +134,22 @@ export default function EventDetails() {
       <main className="event-details-shell container-shell" style={{ paddingTop: 'calc(var(--navbar-h, 72px) + 8px)', paddingBottom: '80px' }}>
         <Link to="/explore?tab=events" className="mb-3 inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-xs font-extrabold text-stone-700 shadow-sm hover:text-orange-600">
           <ChevronLeft className="h-4 w-4" />
-          Events
+          {t("nav.events")} {/* ADDED FOR i18n */}
         </Link>
 
         <section className="grid gap-5 overflow-hidden rounded-2xl border border-stone-200 bg-white p-4 shadow-sm md:grid-cols-[420px_1fr] md:p-5">
           <SmartImage src={image} alt={title} usageId={`event-detail:${event.id}`} category={artType || category} orientation="landscape" priority aspectRatio="aspect-[4/3]" containerClassName="rounded-2xl" />
           <div className="flex flex-col justify-center">
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex rounded-full border border-orange-100 bg-orange-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-orange-700">{category}</span>
-              <span className="inline-flex rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-[11px] font-extrabold text-stone-600">{artType}</span>
+              <span className="inline-flex rounded-full border border-orange-100 bg-orange-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-orange-700">{categoryLabel}</span> {/* ADDED FOR i18n */}
+              <span className="inline-flex rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-[11px] font-extrabold text-stone-600">{artTypeLabel}</span> {/* ADDED FOR i18n */}
             </div>
             <h1 className="mt-3 text-3xl font-extrabold leading-tight text-stone-950 md:text-[44px]">{title}</h1>
             <p className="mt-3 max-w-2xl text-sm font-semibold leading-7 text-stone-600">{description}</p>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <Info icon={CalendarDays} label="Date" value={formatDate(event.eventDate)} />
-              <Info icon={MapPin} label="Location" value={event.location || "Maharashtra"} />
-              <Info icon={Tag} label="Category" value={category} />
+              <Info icon={CalendarDays} label={t("event.date")} value={formatDate(event.eventDate, t("event.dateFlexible"), languageToLocale(language))} /> {/* ADDED FOR i18n */}
+              <Info icon={MapPin} label={t("event.location")} value={event.location || t("location.maharashtra")} /> {/* ADDED FOR i18n */}
+              <Info icon={Tag} label={t("event.performanceType")} value={categoryLabel} /> {/* ADDED FOR i18n */}
             </div>
           </div>
         </section>
@@ -152,30 +157,30 @@ export default function EventDetails() {
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
           <section className="space-y-6">
             <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-              <h2 className="text-xl font-extrabold text-stone-950">Event Requirements</h2>
+              <h2 className="text-xl font-extrabold text-stone-950">{t("event.requirements")}</h2> {/* ADDED FOR i18n */}
               <p className="mt-3 whitespace-pre-wrap text-sm font-semibold leading-7 text-stone-600">{event.requirements || description}</p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              {event.budget ? <Info icon={Wallet} label="Budget" value={`Rs ${Number(event.budget).toLocaleString("en-IN")}`} /> : null}
-              {event.performanceType ? <Info icon={Users} label="Performance Type" value={event.performanceType} /> : null}
-              {event.applicationsCount !== undefined ? <Info icon={Users} label="Applications" value={`${event.applicationsCount}`} /> : null}
+              {event.budget ? <Info icon={Wallet} label={t("event.budget")} value={formatCurrency(Number(event.budget))} /> : null} {/* ADDED FOR i18n */}
+              {event.performanceType ? <Info icon={Users} label={t("event.performanceType")} value={getArtLabel(t, event.performanceType)} /> : null} {/* ADDED FOR i18n */}
+              {event.applicationsCount !== undefined ? <Info icon={Users} label={t("event.applications")} value={formatNumber(Number(event.applicationsCount))} /> : null} {/* ADDED FOR i18n */}
             </div>
           </section>
 
           <aside className="lg:sticky lg:top-24 lg:self-start">
             <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-extrabold text-stone-950">Apply to Event</h2>
-              <p className="mt-1 text-xs font-semibold leading-5 text-stone-500">Send a short note about fit, availability, and requirements.</p>
+              <h2 className="text-lg font-extrabold text-stone-950">{t("event.applyTitle")}</h2> {/* ADDED FOR i18n */}
+              <p className="mt-1 text-xs font-semibold leading-5 text-stone-500">{t("event.applyText")}</p> {/* ADDED FOR i18n */}
               <Textarea
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
-                placeholder="Write a short application message"
+                placeholder={t("event.applyMessagePlaceholder")}
                 className="mt-4 min-h-28 rounded-2xl border-stone-200 bg-stone-50 text-sm font-semibold"
               />
               <Button onClick={handleApply} disabled={applying} className="mt-4 h-11 w-full rounded-full bg-orange-600 text-xs font-extrabold uppercase tracking-widest text-white hover:bg-orange-500">
                 {applying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                Apply Now
+                {t("event.applyNow")} {/* ADDED FOR i18n */}
               </Button>
             </div>
           </aside>
@@ -185,7 +190,7 @@ export default function EventDetails() {
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/95 p-3 shadow-[0_-10px_28px_rgba(28,25,23,0.10)] backdrop-blur-xl md:hidden">
         <Button onClick={handleApply} disabled={applying} className="h-11 w-full rounded-full bg-orange-600 text-xs font-extrabold uppercase tracking-widest text-white hover:bg-orange-500">
           {applying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-          Apply Now
+          {t("event.applyNow")} {/* ADDED FOR i18n */}
         </Button>
       </div>
 

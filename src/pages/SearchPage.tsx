@@ -19,6 +19,7 @@ import {
   LuxuryEventCard,
   LuxuryFilterBar,
 } from "@/components/discovery/LuxuryDiscovery";
+import { useI18n } from "@/i18n/I18nProvider";
 
 type ExploreTab = "artists" | "events";
 type EventRecord = Record<string, unknown>;
@@ -102,6 +103,7 @@ function ResultSkeleton({ type }: { type: ExploreTab }) {
 }
 
 export default function SearchPage() {
+  const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const [params, setParams] = useSearchParams();
   const routeState = params.get("state") || "";
   const routeDistrict = params.get("district") || "";
@@ -158,7 +160,7 @@ export default function SearchPage() {
       })
       .catch((err) => {
         console.warn("Explore data unavailable.", err);
-        if (mounted) setError("Discovery data is unavailable right now.");
+        if (mounted) setError(t("explore.dataUnavailable")); // ADDED FOR i18n
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -167,7 +169,7 @@ export default function SearchPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [t]); // ADDED FOR i18n
 
   const loadMoreArtists = async () => {
     if (!hasMoreArtists || loadingMore) return;
@@ -179,7 +181,7 @@ export default function SearchPage() {
       setHasMoreArtists(artistPage.hasMore);
     } catch (err) {
       console.warn("More artists unavailable.", err);
-      setError("More artists are unavailable right now.");
+      setError(t("explore.moreArtistsUnavailable")); // ADDED FOR i18n
     } finally {
       setLoadingMore(false);
     }
@@ -228,7 +230,7 @@ export default function SearchPage() {
               className="inline-flex w-max items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-orange-700"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Artists
+              {t("explore.tabs.artists")} {/* ADDED FOR i18n */}
             </motion.span>
             <motion.h1
               initial={{ opacity: 0, y: 14 }}
@@ -236,7 +238,7 @@ export default function SearchPage() {
               transition={{ duration: 0.5, delay: 0.04, ease: [0.16, 1, 0.3, 1] }}
               className="mt-2 max-w-3xl text-3xl font-extrabold leading-[1.08] text-stone-950 md:text-[40px]"
             >
-              Connect with precise artists for every occasion.
+              {t("explore.heroTitle")} {/* ADDED FOR i18n */}
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 14 }}
@@ -244,23 +246,23 @@ export default function SearchPage() {
               transition={{ duration: 0.5, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
               className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-stone-600"
             >
-              Browse native art forms, locations, tags, and occasions in one clean discovery flow.
+              {t("explore.heroSubtitle")} {/* ADDED FOR i18n */}
             </motion.p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link to="/events" className="inline-flex h-10 items-center gap-2 rounded-full bg-orange-600 px-4 text-xs font-extrabold uppercase tracking-widest text-white shadow-sm transition hover:bg-orange-700 hover:shadow-md">
                 <CalendarDays className="h-4 w-4" />
-                Post an Event
+                {t("events.postEvent")} {/* ADDED FOR i18n */}
               </Link>
               <Link to="/register?role=artist" className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-xs font-extrabold uppercase tracking-widest text-stone-700 shadow-sm transition hover:border-orange-200 hover:text-orange-600">
                 <UsersRound className="h-4 w-4" />
-                Join as Artist
+                {t("nav.joinArtist")} {/* ADDED FOR i18n */}
               </Link>
             </div>
           </div>
           <div className="relative min-h-[210px] overflow-hidden rounded-xl bg-stone-100 md:min-h-0">
             <SmartImage
               src={getHeroImage(activeTab)}
-              alt="Curated artist discovery"
+              alt={t("explore.heroAlt")} // ADDED FOR i18n
               priority
               usageId="artists:compact-hero"
               category={activeTab === "events" ? "Marriage" : "Kirtankar"}
@@ -272,7 +274,7 @@ export default function SearchPage() {
             />
             <div className="absolute inset-x-3 bottom-3 flex items-center gap-2 rounded-full bg-white/95 px-3 py-2 text-xs font-extrabold text-stone-900 shadow-sm backdrop-blur">
               <Search className="h-4 w-4 text-orange-600" />
-              <span>{loading ? "Building the collection" : `${resultCount} refined matches`}</span>
+              <span>{loading ? t("explore.buildingCollection") : t("explore.refinedMatches", { count: formatNumber(resultCount) })}</span> {/* ADDED FOR i18n */}
             </div>
           </div>
         </section>
@@ -291,17 +293,17 @@ export default function SearchPage() {
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ExploreTab)}>
             <div className="luxury-results-toolbar">
               <TabsList className="luxury-tabs">
-                <TabsTrigger value="artists">Artists</TabsTrigger>
-                <TabsTrigger value="events">Events</TabsTrigger>
+                <TabsTrigger value="artists">{t("explore.tabs.artists")}</TabsTrigger> {/* ADDED FOR i18n */}
+                <TabsTrigger value="events">{t("explore.tabs.events")}</TabsTrigger> {/* ADDED FOR i18n */}
               </TabsList>
               <p>
-                {loading ? "Loading the collection" : error ? "Discovery paused" : resultCount === 0 ? "No matches" : `${resultCount} curated match${resultCount === 1 ? "" : "es"}`}
+                {loading ? t("explore.loadingCollection") : error ? t("explore.paused") : resultCount === 0 ? t("explore.noMatches") : t("explore.curatedMatches", { count: formatNumber(resultCount) })} {/* ADDED FOR i18n */}
               </p>
             </div>
 
             {activeTab === "artists" && isLocationFallback ? (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="luxury-notice">
-                No exact match was found in {routeDistrict || routeState}. Showing artists that match the selected art form.
+                {t("explore.locationFallback", { location: routeDistrict || routeState })} {/* ADDED FOR i18n */}
               </motion.div>
             ) : null}
 
@@ -322,7 +324,7 @@ export default function SearchPage() {
                   {hasMoreArtists ? (
                     <div className="luxury-load-more">
                       <button type="button" onClick={loadMoreArtists} disabled={loadingMore}>
-                        {loadingMore ? "Loading..." : "Load More Artists"}
+                        {loadingMore ? t("common.loading") : t("explore.loadMoreArtists")} {/* ADDED FOR i18n */}
                         <ArrowRight className="h-4 w-4" />
                       </button>
                     </div>

@@ -5,6 +5,8 @@ html, body {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  max-width: 100%;
+  overflow-wrap: break-word; /* ADDED FOR i18n */
 }
 
 @media (max-width: 768px) {
@@ -53,6 +55,24 @@ html, body {
     margin: 1rem;
     max-height: calc(100vh - 2rem);
     overflow-y: auto;
+  }
+
+  .language-switcher-menu {
+    max-width: min(92vw, 18rem); /* ADDED FOR i18n */
+  }
+
+  .mobile-menu-action {
+    min-width: 0; /* ADDED FOR i18n */
+    white-space: normal; /* ADDED FOR i18n */
+    text-align: center; /* ADDED FOR i18n */
+    line-height: 1.2; /* ADDED FOR i18n */
+  }
+
+  .bottom-nav-item span,
+  .bottom-nav-scan span {
+    max-width: 100%; /* ADDED FOR i18n */
+    line-height: 1.1; /* ADDED FOR i18n */
+    overflow-wrap: break-word; /* ADDED FOR i18n */
   }
 }
 
