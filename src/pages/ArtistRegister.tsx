@@ -47,10 +47,8 @@ import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, sani
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getExternalUrl, getYoutubeThumbnailUrl } from "@/lib/youtube";
-import { uploadImageFile } from "@/lib/uploadService";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
 import { ARTIST_TYPES, CATEGORY_STRUCTURE, MAIN_CATEGORIES, normalizeArtistType } from "@/constants/artistSystem";
-import { imageRegistry } from "@/services/ImageRegistryService";
 import {
   PHONE_MAX_LENGTH,
   PHONE_PLACEHOLDER,
@@ -71,6 +69,7 @@ type ExtraArtEntry = {
   soloPrice: string;
   duoPrice: string;
   teamPrice: string;
+  showPricingOnProfile: boolean;
   profileFile: File | null;
   profilePreview: string;
   performanceFile: File | null;
@@ -540,6 +539,9 @@ function ArtCategoryCard({
   const update = (field: "mainCategory" | "category" | "soloPrice" | "duoPrice" | "teamPrice", value: string) => {
     onUpdate({ ...art, [field]: value });
   };
+  const updateShowPricing = (showPricingOnProfile: boolean) => {
+    onUpdate({ ...art, showPricingOnProfile });
+  };
   const addYoutubeLink = () => {
     onUpdate({ ...art, youtubeLinks: [...art.youtubeLinks, createYoutubeLink()] });
   };
@@ -595,9 +597,20 @@ function ArtCategoryCard({
 
       <div className="my-5 h-px bg-white/80" />
 
-      <div className="mb-4 flex items-center gap-2">
-        <IndianRupee className="h-4 w-4 text-orange-500" />
-        <h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Performance Pricing</h3>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <IndianRupee className="h-4 w-4 text-orange-500" />
+          <h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Performance Pricing</h3>
+        </div>
+        <label className="flex h-10 items-center gap-3 rounded-xl border border-orange-100 bg-white/70 px-4 text-sm font-bold text-slate-700">
+          <input
+            type="checkbox"
+            checked={art.showPricingOnProfile}
+            onChange={(event) => updateShowPricing(event.target.checked)}
+            className="h-4 w-4 rounded border-orange-200 text-orange-500 focus:ring-orange-200"
+          />
+          Show on profile
+        </label>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <div>
@@ -647,8 +660,8 @@ function ArtCategoryCard({
           onChange={(file) => onMediaFileChange("profile", file)}
         />
         <FileDrop
-          label="Performance Photo"
-          description="Upload Performance Photo"
+          label="Cover / Background Photo"
+          description="Upload Background Photo"
           file={art.performanceFile}
           preview={art.performancePreview}
           tone="blue"
@@ -885,6 +898,7 @@ function createExtraArtEntry(): ExtraArtEntry {
     soloPrice: "",
     duoPrice: "",
     teamPrice: "",
+    showPricingOnProfile: false,
     profileFile: null,
     profilePreview: "",
     performanceFile: null,
@@ -908,8 +922,8 @@ export default function ArtistRegister() {
   const [extraArtEntries, setExtraArtEntries] = useState<ExtraArtEntry[]>([]);
   const [primaryArtYoutubeLinks, setPrimaryArtYoutubeLinks] = useState<PortfolioLink[]>([createYoutubeLink()]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
-  const [priceAmount, setPriceAmount] = useState("");
-  const [showPriceOnProfile, setShowPriceOnProfile] = useState(false);
+  const [showAgeOnProfile, setShowAgeOnProfile] = useState(true);
+  const [showPrimaryPricingOnProfile, setShowPrimaryPricingOnProfile] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
   const { register: authRegister, logout } = useAuth();
   const navigate = useNavigate();
@@ -1047,28 +1061,12 @@ export default function ArtistRegister() {
     });
   }, []);
 
-  const fallbackProfilePhoto = (name = "Artist") =>
-    imageRegistry.getStableImage(`registration-profile:${name || "Artist"}`, {
-      category: "Performers",
-      type: "artist",
-      tags: ["artist", "stage", "performance", "portrait"],
-    });
-
-  const uploadRegistrationMedia = async (uid: string, fullName: string) => {
-    const [uploadedProfilePhoto, coverPhoto, aadharPhoto, galleryPhotos] = await Promise.all([
-      profileFile ? uploadImageFile(profileFile, `avatars/${uid}`) : Promise.resolve(fallbackProfilePhoto(fullName)),
-      coverFile ? uploadImageFile(coverFile, `covers/${uid}`) : Promise.resolve(""),
-      aadharFile ? uploadImageFile(aadharFile, `identity/${uid}`) : Promise.resolve(""),
-      Promise.all(galleryFiles.map((item) => uploadImageFile(item.file, `galleries/${uid}`))),
-    ]);
-
-    return {
-      profilePhoto: uploadedProfilePhoto,
-      coverPhoto,
-      aadharPhoto,
-      galleryPhotos,
-    };
-  };
+  const getSkippedRegistrationMedia = () => ({
+    profilePhoto: "",
+    coverPhoto: "",
+    aadharPhoto: "",
+    galleryPhotos: [] as string[],
+  });
 
   const scrollToError = () => {
     errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1083,6 +1081,7 @@ export default function ArtistRegister() {
         soloPrice: entry.soloPrice.trim(),
         duoPrice: entry.duoPrice.trim(),
         teamPrice: entry.teamPrice.trim(),
+        showPricingOnProfile: entry.showPricingOnProfile,
         youtubeLinks: getSubmittedYoutubeLinks(entry.youtubeLinks),
       }))
       .filter(
@@ -1113,61 +1112,79 @@ export default function ArtistRegister() {
       }
 
       const uid = authResult.uid;
-      const { profilePhoto, coverPhoto, aadharPhoto, galleryPhotos } = await uploadRegistrationMedia(uid, values.fullName);
-      const uploadedExtraArtMedia = await Promise.all(
-        preparedExtraArts.map(async (entry) => {
-          const [entryProfilePhoto, entryPerformancePhoto] = await Promise.all([
-            entry.profileFile ? uploadImageFile(entry.profileFile, `art-media/${uid}/${entry.id}/profile`) : Promise.resolve(""),
-            entry.performanceFile ? uploadImageFile(entry.performanceFile, `art-media/${uid}/${entry.id}/performance`) : Promise.resolve(""),
-          ]);
-
-          return {
-            profilePhotos: entryProfilePhoto ? [entryProfilePhoto] : [],
-            performancePhotos: entryPerformancePhoto ? [entryPerformancePhoto] : [],
-          };
-        })
-      );
+      const { profilePhoto, coverPhoto, aadharPhoto, galleryPhotos } = getSkippedRegistrationMedia();
       const primaryCategoryYoutubeLinks = getSubmittedYoutubeLinks(primaryArtYoutubeLinks);
       const normalizeSubmittedCategory = (value: string) => normalizeArtistType(value) ?? value.trim();
+      const buildCategoryEntry = ({
+        mainCategory,
+        category,
+        soloPrice,
+        duoPrice,
+        teamPrice,
+        showPricingOnProfile,
+        youtubeLinks,
+      }: {
+        mainCategory: string;
+        category: string;
+        soloPrice: string | number;
+        duoPrice: string | number;
+        teamPrice: string | number;
+        showPricingOnProfile: boolean;
+        youtubeLinks: string[];
+      }) => {
+        const artForm = normalizeSubmittedCategory(category);
+        const soloPerformancePrice = Number(soloPrice) || 0;
+        const duoPerformancePrice = Number(duoPrice) || 0;
+        const teamPerformancePrice = Number(teamPrice) || 0;
+
+        return {
+          mainCategory,
+          artForm,
+          category: artForm,
+          subcategory: artForm,
+          types: [],
+          soloPerformancePrice,
+          duoPerformancePrice,
+          teamPerformancePrice,
+          soloPrice: soloPerformancePrice,
+          duoPrice: duoPerformancePrice,
+          teamPrice: teamPerformancePrice,
+          showPricingOnProfile,
+          youtubeLinks,
+        };
+      };
       const artEntries = [
-        {
-          category: normalizeSubmittedCategory(values.artCategory),
-          subcategory: "",
-          types: [],
-          soloPrice: Number(values.soloPrice) || 0,
-          duoPrice: Number(values.duoPrice) || 0,
-          teamPrice: Number(values.teamPrice) || 0,
+        buildCategoryEntry({
+          mainCategory: values.mainCategory,
+          category: values.artCategory,
+          soloPrice: values.soloPrice || "",
+          duoPrice: values.duoPrice || "",
+          teamPrice: values.teamPrice || "",
+          showPricingOnProfile: showPrimaryPricingOnProfile,
           youtubeLinks: primaryCategoryYoutubeLinks,
-        },
-        ...preparedExtraArts.map((entry) => ({
-          category: normalizeSubmittedCategory(entry.category),
-          subcategory: "",
-          types: [],
-          soloPrice: Number(entry.soloPrice) || 0,
-          duoPrice: Number(entry.duoPrice) || 0,
-          teamPrice: Number(entry.teamPrice) || 0,
+        }),
+        ...preparedExtraArts.map((entry) => buildCategoryEntry({
+          mainCategory: entry.mainCategory,
+          category: entry.category,
+          soloPrice: entry.soloPrice,
+          duoPrice: entry.duoPrice,
+          teamPrice: entry.teamPrice,
+          showPricingOnProfile: entry.showPricingOnProfile,
           youtubeLinks: entry.youtubeLinks,
         })),
       ];
       const youtubeLinks = Array.from(new Set(artEntries.flatMap((entry) => entry.youtubeLinks)));
       const socialLinks = youtubeLinks.map((url) => ({ platform: "youtube" as const, url }));
-      const categoryMedia = [
-        {
-          mainCategory: values.mainCategory,
-          category: artEntries[0]?.category || values.artCategory,
-          profilePhotos: profilePhoto ? [profilePhoto] : [],
-          performancePhotos: galleryPhotos,
-          youtubeLinks: primaryCategoryYoutubeLinks,
-        },
-        ...preparedExtraArts.map((entry, index) => ({
-          mainCategory: entry.mainCategory,
-          category: normalizeSubmittedCategory(entry.category),
-          profilePhotos: uploadedExtraArtMedia[index]?.profilePhotos || [],
-          performancePhotos: uploadedExtraArtMedia[index]?.performancePhotos || [],
-          youtubeLinks: entry.youtubeLinks,
-        })),
-      ];
-      const artForms = Array.from(new Set(artEntries.map((entry) => entry.category).filter(Boolean)));
+      const categoryMedia = artEntries.map((entry) => ({
+        mainCategory: entry.mainCategory,
+        category: entry.category,
+        artForm: entry.artForm,
+        profilePhotos: [] as string[],
+        performancePhotos: [] as string[],
+        youtubeLinks: entry.youtubeLinks,
+      }));
+      const artForms = Array.from(new Set(artEntries.map((entry) => entry.artForm).filter(Boolean)));
+      const categoryNames = Array.from(new Set(artEntries.map((entry) => entry.artForm).filter(Boolean)));
       const artistProfile = {
         artForms,
         experience: Number(values.experience) || 0,
@@ -1184,30 +1201,41 @@ export default function ArtistRegister() {
         status: "pending",
         rejectionReason: "",
         name: values.fullName,
+        artistName: values.fullName,
         brandName: values.brandName || "",
+        nickName: values.brandName || "",
         mobileNumber: values.mobileNumber,
+        phoneNumber: values.mobileNumber,
         emergencyNumber: values.emergencyNumber,
         phoneOptional: values.phoneOptional || "",
         dob: values.dob,
+        dateOfBirth: values.dob,
         age: Number.parseInt(getAgeLabel(values.dob), 10) || 0,
+        ageDisplay: showAgeOnProfile,
+        showAgeOnProfile,
         gender: values.gender,
         travelWillingness: values.travelWillingness,
         languages: selectedLanguages,
-        category: artEntries[0]?.category || values.artCategory,
-        subcategory: "",
+        languagesSpoken: selectedLanguages,
+        category: artEntries[0]?.mainCategory || values.mainCategory,
+        mainCategory: artEntries[0]?.mainCategory || values.mainCategory,
+        subcategory: artEntries[0]?.artForm || values.artCategory,
+        artForm: artEntries[0]?.artForm || values.artCategory,
         types: [],
-        categories: Array.from(new Set(artEntries.map((entry) => entry.category).filter(Boolean))),
+        categories: categoryNames,
+        categoriesArray: artEntries,
         artsList: artEntries,
         artistProfile,
-        soloPrice: artEntries[0]?.soloPrice || 0,
-        duoPrice: artEntries[0]?.duoPrice || 0,
-        teamPrice: artEntries[0]?.teamPrice || 0,
-        priceAmount: Number(priceAmount) || 0,
-        showPriceOnProfile,
+        soloPrice: artEntries[0]?.soloPerformancePrice || 0,
+        duoPrice: artEntries[0]?.duoPerformancePrice || 0,
+        teamPrice: artEntries[0]?.teamPerformancePrice || 0,
+        showPricingOnProfile: artEntries[0]?.showPricingOnProfile || false,
+        showPriceOnProfile: artEntries[0]?.showPricingOnProfile || false,
         state: values.state,
         district: values.district,
         experience: Number(values.experience),
         bio: values.bio || "",
+        description: values.bio || "",
         availability: "available",
         aadharNumber: values.aadharNumber,
         identity: {
@@ -1243,8 +1271,8 @@ export default function ArtistRegister() {
           needAssistant: values.hasAssistant ? "yes" : "no",
         },
         suggestionComment: values.suggestionComment || "",
-        mediaUploadStatus: "verified",
-        mediaUploadWarnings: [],
+        mediaUploadStatus: "skipped",
+        mediaUploadWarnings: ["Image uploads were skipped for this registration to avoid Firebase Storage usage."],
         verified: false,
         trending: false,
         createdAt: serverTimestamp(),
@@ -1261,7 +1289,6 @@ export default function ArtistRegister() {
           email,
           name: values.fullName,
           phone: values.mobileNumber,
-          profilePhoto,
           artistProfile,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -1276,7 +1303,7 @@ export default function ArtistRegister() {
       await logout().catch((logoutError) => console.warn("Logout after artist registration failed:", logoutError));
       toast({
         title: "Registration submitted",
-        description: "Your artist profile is under review. Uploaded media was verified before submission.",
+        description: "Your artist profile is under review. Image uploads were skipped for this submission.",
       });
       navigate("/login?role=artist");
     } catch (error) {
@@ -1533,6 +1560,15 @@ export default function ArtistRegister() {
                       tabIndex={-1}
                       className="input-glass w-full cursor-not-allowed bg-white/50 px-4 py-3 text-sm font-black text-orange-600"
                     />
+                    <label className="mt-2 flex items-center gap-2 text-xs font-bold text-slate-500">
+                      <input
+                        type="checkbox"
+                        checked={showAgeOnProfile}
+                        onChange={(event) => setShowAgeOnProfile(event.target.checked)}
+                        className="h-4 w-4 rounded border-orange-200 text-orange-500 focus:ring-orange-200"
+                      />
+                      Show age on profile
+                    </label>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-bold text-slate-700">Gender *</label>
@@ -1635,37 +1671,25 @@ export default function ArtistRegister() {
 
                   <div className="my-5 h-px bg-white/80" />
 
-                  <div className="mb-4 flex items-center gap-2">
-                    <IndianRupee className="h-4 w-4 text-orange-500" />
-                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Performance Pricing</h3>
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                      <IndianRupee className="h-4 w-4 text-orange-500" />
+                      <h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Performance Pricing</h3>
+                    </div>
+                    <label className="flex h-10 items-center gap-3 rounded-xl border border-orange-100 bg-white/70 px-4 text-sm font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={showPrimaryPricingOnProfile}
+                        onChange={(event) => setShowPrimaryPricingOnProfile(event.target.checked)}
+                        className="h-4 w-4 rounded border-orange-200 text-orange-500 focus:ring-orange-200"
+                      />
+                      Show on profile
+                    </label>
                   </div>
                   <div className="grid gap-4 md:grid-cols-3">
                     <TextField label="Solo Performance" name="soloPrice" register={artistForm.register} placeholder="e.g. 10000" />
                     <TextField label="Duo Performance" name="duoPrice" register={artistForm.register} placeholder="e.g. 15000" />
                     <TextField label="Team Performance" name="teamPrice" register={artistForm.register} placeholder="e.g. 25000" />
-                  </div>
-                  <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-end">
-                    <div>
-                      <label className="mb-1.5 block text-sm font-bold text-slate-700">Price or Fee</label>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min="0"
-                        value={priceAmount}
-                        onChange={(event) => setPriceAmount(digitsOnly(event.target.value, 8))}
-                        placeholder="e.g. 20000"
-                        className={inputClass}
-                      />
-                    </div>
-                    <label className="flex h-[50px] items-center gap-3 rounded-xl border border-orange-100 bg-white/70 px-4 text-sm font-bold text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={showPriceOnProfile}
-                        onChange={(event) => setShowPriceOnProfile(event.target.checked)}
-                        className="h-4 w-4 rounded border-orange-200 text-orange-500 focus:ring-orange-200"
-                      />
-                      Show on profile
-                    </label>
                   </div>
 
                   <div className="my-5 h-px bg-white/80" />

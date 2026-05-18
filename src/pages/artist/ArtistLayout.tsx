@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { imageRegistry } from "@/services/ImageRegistryService";
+import { getUsableImageUrl } from "@/utils/fallbackImages";
 import { Button } from "@/components/ui/button";
 import {
     LayoutDashboard,
@@ -32,6 +33,12 @@ export default function ArtistLayout() {
     const location = useLocation();
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const fallbackProfileImage = imageRegistry.getUniqueImage({
+        category: artistData?.subcategory || artistData?.artForm || artistData?.category || "Default",
+        type: "artist",
+        key: artistData?.id || artistData?.uid || artistData?.name || "dashboard-artist",
+    });
+    const artistProfileImage = getUsableImageUrl(artistData?.media?.profilePhoto || artistData?.profilePhoto) || fallbackProfileImage;
 
     const handleLogout = async () => {
         await logout();
@@ -54,7 +61,7 @@ export default function ArtistLayout() {
                 {/* Artist Info */}
                 <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 border border-border/50 mb-6">
                     <img
-                            src={artistData?.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
+                            src={artistProfileImage}
                         alt={artistData?.name || "Artist"}
                         className="w-10 h-10 rounded-lg object-cover"
                     />
@@ -126,7 +133,7 @@ export default function ArtistLayout() {
 
                         <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 border border-border/50 mb-6">
                             <img
-                                    src={artistData?.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
+                                    src={artistProfileImage}
                                 alt={artistData?.name || "Artist"}
                                 className="w-10 h-10 rounded-lg object-cover"
                             />
@@ -182,7 +189,7 @@ export default function ArtistLayout() {
                             </Button>
                         </Link>
                         <img
-                                src={artistData?.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
+                                src={artistProfileImage}
                             alt="Profile"
                             className="w-8 h-8 rounded-lg object-cover"
                         />

@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { imageRegistry } from "@/services/ImageRegistryService";
+import { getUsableImageUrl } from "@/utils/fallbackImages";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,17 @@ export default function ArtistDashboard() {
     const { artistData } = useAuth();
 
     if (!artistData) return null;
+
+    const fallbackProfileImage = imageRegistry.getUniqueImage({
+        category: artistData.subcategory || artistData.artForm || artistData.category || "Default",
+        type: "artist",
+        key: artistData.id || artistData.uid || artistData.name || "dashboard-profile",
+    });
+    const artistProfileImage = getUsableImageUrl(artistData.media?.profilePhoto || artistData.profilePhoto) || fallbackProfileImage;
+    const fallbackGalleryImages = imageRegistry.getCatalogImages(
+        artistData.subcategory || artistData.artForm || artistData.category || "artists"
+    ).slice(0, 4);
+    const galleryPreview = (artistData.media?.galleryPhotos || artistData.galleryPhotos || fallbackGalleryImages).filter(Boolean);
 
     // Calculate profile completion
     const requiredFields = [
@@ -121,7 +133,7 @@ export default function ArtistDashboard() {
                             {/* Photo */}
                             <div className="flex-shrink-0">
                                 <img
-                                    src={artistData.media?.profilePhoto || artistData.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
+                                    src={artistProfileImage}
                                     alt={artistData.name}
                                     className="w-28 h-28 rounded-2xl object-cover border-2 border-border"
                                 />
@@ -174,11 +186,11 @@ export default function ArtistDashboard() {
                         </div>
 
                         {/* Gallery Preview */}
-                        {(artistData.media?.galleryPhotos || artistData.galleryPhotos)?.length > 0 && (
+                        {galleryPreview.length > 0 && (
                             <div className="mt-5">
-                                <p className="text-sm font-medium mb-2">Gallery ({(artistData.media?.galleryPhotos || artistData.galleryPhotos).length} photos)</p>
+                                <p className="text-sm font-medium mb-2">Gallery ({galleryPreview.length} photos)</p>
                                 <div className="flex gap-2 overflow-x-auto pb-2">
-                                    {(artistData.media?.galleryPhotos || artistData.galleryPhotos).slice(0, 6).map((p: string, i: number) => (
+                                    {galleryPreview.slice(0, 6).map((p: string, i: number) => (
                                         <img
                                             key={i}
                                             src={p}
@@ -186,9 +198,9 @@ export default function ArtistDashboard() {
                                             alt={`Gallery ${i + 1}`}
                                         />
                                     ))}
-                                    {(artistData.media?.galleryPhotos || artistData.galleryPhotos).length > 6 && (
+                                    {galleryPreview.length > 6 && (
                                         <div className="w-20 h-20 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0 border text-sm font-medium">
-                                            +{(artistData.media?.galleryPhotos || artistData.galleryPhotos).length - 6}
+                                            +{galleryPreview.length - 6}
                                         </div>
                                     )}
                                 </div>

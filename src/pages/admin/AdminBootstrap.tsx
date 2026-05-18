@@ -95,31 +95,46 @@ export default function AdminBootstrap() {
           continue;
         }
 
-        const primaryArt = Array.isArray(data.artsList) ? data.artsList[0] || {} : {};
+        const structuredArts = Array.isArray(data.categoriesArray) && data.categoriesArray.length
+          ? data.categoriesArray
+          : Array.isArray(data.artsList)
+            ? data.artsList
+            : [];
+        const primaryArt = structuredArts[0] || {};
+        const artForms = getArtistArtForms({ ...data, categoriesArray: structuredArts, artsList: structuredArts });
         const media = data.media || {
           profilePhoto: data.profilePhoto || "",
           coverPhoto:   data.coverPhoto   || "",
           galleryPhotos: data.galleryPhotos || [],
         };
         const artistProfile = {
-          artForms: getArtistArtForms(data),
+          artForms,
           experience: Number(data.experience) || 0,
-          bio: data.bio || "",
+          bio: data.bio || data.description || "",
           location: data.location || data.district || data.city || data.state || "",
           profileImage: media.profilePhoto || data.profilePhoto || "",
+          youtubeLinks: data.youtubeLinks || [],
         };
         const batch = writeBatch(db);
         batch.set(artistRef, {
           uid, applicationId: d.id, username: data.username || "",
-          name: data.name || "", brandName: data.brandName || "",
+          name: data.name || "", artistName: data.artistName || data.name || "", brandName: data.brandName || "", nickName: data.nickName || data.brandName || "",
           email: data.email || "", mobileNumber: data.mobileNumber || data.phone || "",
+          phoneNumber: data.phoneNumber || data.mobileNumber || data.phone || "", emergencyNumber: data.emergencyNumber || "",
+          dob: data.dob || data.dateOfBirth || "", dateOfBirth: data.dateOfBirth || data.dob || "",
+          age: Number(data.age) || 0, ageDisplay: Boolean(data.ageDisplay ?? data.showAgeOnProfile), showAgeOnProfile: Boolean(data.showAgeOnProfile ?? data.ageDisplay),
+          gender: data.gender || "", travelWillingness: data.travelWillingness || "",
+          languages: data.languages || data.languagesSpoken || [], languagesSpoken: data.languagesSpoken || data.languages || [],
           state: data.state || "", district: data.district || data.city || "",
-          bio: data.bio || "", experience: Number(data.experience) || 0,
+          bio: data.bio || data.description || "", description: data.description || data.bio || "", experience: Number(data.experience) || 0,
           availability: data.availability || "available",
-          category: data.category || primaryArt.category || "",
-          subcategory: data.subcategory || "",
-          categories: data.categories || [data.category].filter(Boolean),
-          artsList: data.artsList || [],
+          category: data.mainCategory || data.category || primaryArt.mainCategory || "",
+          mainCategory: data.mainCategory || data.category || primaryArt.mainCategory || "",
+          subcategory: data.subcategory || data.artForm || primaryArt.artForm || primaryArt.subcategory || primaryArt.category || "",
+          artForm: data.artForm || primaryArt.artForm || primaryArt.subcategory || primaryArt.category || "",
+          categories: artForms,
+          categoriesArray: structuredArts,
+          artsList: structuredArts,
           pricing: data.pricing || {
             soloPrice: Number(data.soloPrice) || 0,
             duoPrice:  Number(data.duoPrice)  || 0,
@@ -128,6 +143,7 @@ export default function AdminBootstrap() {
           artistProfile,
           media,
           socialLinks: data.socialLinks || [],
+          youtubeLinks: data.youtubeLinks || [],
           stats: { rating: 0, reviews: 0, followers: 0, profileViews: 0, totalBookings: 0 },
           status: "active", verified: true, trending: false,
           approvedAt: serverTimestamp(),

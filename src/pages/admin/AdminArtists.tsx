@@ -20,6 +20,7 @@ import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocatio
 import { CATEGORY_STRUCTURE, MAIN_CATEGORIES, normalizeArtistRecord } from "@/constants/artistSystem";
 import { imageRegistry } from "@/services/ImageRegistryService";
 import { useAuth } from "@/contexts/AuthContext";
+import { getUsableImageUrl } from "@/utils/fallbackImages";
 
 export default function AdminArtists() {
   const { currentUser } = useAuth();
@@ -147,7 +148,7 @@ export default function AdminArtists() {
                 <TableRow key={a.id} className="border-stone-50 hover:bg-stone-50/30 transition-colors">
                   <TableCell className="px-8 py-6">
                     <div className="flex items-center gap-4">
-                      <img src={a.media?.profilePhoto || a.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })} className="w-14 h-14 rounded-2xl object-cover shadow-lg" />
+                      <img src={getUsableImageUrl(a.media?.profilePhoto || a.profilePhoto) || imageRegistry.getUniqueImage({ category: a.subcategory || a.artForm || a.category || "Default", type: "artist", key: a.id || a.name })} className="w-14 h-14 rounded-2xl object-cover shadow-lg" />
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-black text-stone-950">{a.name}</span>

@@ -21,8 +21,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAuth } from "@/contexts/AuthContext";
 import { languageToLocale, type Language, useI18n } from "@/i18n/I18nProvider";
 import { SmartImage } from "@/components/SmartImage";
-import { STATIC_IMAGES } from "@/services/ImageRegistryService";
+import { STATIC_IMAGES, imageRegistry } from "@/services/ImageRegistryService";
 import { getInitials } from "@/services/dataNormalizer";
+import { getUsableImageUrl } from "@/utils/fallbackImages";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -67,7 +68,14 @@ export default function Navbar() {
     : typeof artistData?.profilePhoto === "string"
       ? artistData.profilePhoto
       : "";
-  const profilePhoto = artistPhoto || profileValue("profilePhoto");
+  const fallbackArtistPhoto = artistData
+    ? imageRegistry.getUniqueImage({
+        category: artistData.subcategory || artistData.artForm || artistData.category || "Performers",
+        type: "artist",
+        key: artistData.uid || artistData.id || artistData.name || "navbar-artist",
+      })
+    : "";
+  const profilePhoto = getUsableImageUrl(artistPhoto || profileValue("profilePhoto")) || fallbackArtistPhoto;
   const displayName =
     artistData?.name ||
     profileValue("name") ||

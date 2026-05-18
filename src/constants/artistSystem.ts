@@ -142,13 +142,21 @@ export function getArtistTypesForFilter(categoryGroup?: CategoryGroupName | null
 export function getArtistArtForms(artist: Record<string, any>): string[] {
   const profileArtForms = Array.isArray(artist.artistProfile?.artForms) ? artist.artistProfile.artForms : [];
   const categories = Array.isArray(artist.categories) ? artist.categories : [];
+  const categoriesArray = Array.isArray(artist.categoriesArray) ? artist.categoriesArray : [];
   const artsList = Array.isArray(artist.artsList) ? artist.artsList : [];
+  const categoryValue = String(artist.category ?? "").trim();
+  const getArtValues = (art: Record<string, any> | string) =>
+    typeof art === "string"
+      ? [art]
+      : [art?.artForm, art?.category, art?.subcategory, art?.subCategory, ...(Array.isArray(art?.types) ? art.types : [])];
   const candidates = [
-    artist.category,
+    ...(categoryValue && !isCategoryGroup(categoryValue) ? [categoryValue] : []),
     artist.subcategory,
-    ...categories,
+    artist.artForm,
+    ...categories.flatMap(getArtValues),
     ...profileArtForms,
-    ...artsList.flatMap((art: Record<string, any>) => [art?.category, art?.subcategory, ...(Array.isArray(art?.types) ? art.types : [])]),
+    ...categoriesArray.flatMap(getArtValues),
+    ...artsList.flatMap(getArtValues),
   ];
 
   return Array.from(new Set(candidates.map(c => String(c ?? "").trim()).filter(Boolean)));

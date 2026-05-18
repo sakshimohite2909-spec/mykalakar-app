@@ -19,13 +19,37 @@ import { getArtistArtForms, normalizeArtistRecord, normalizeArtistType } from "@
 const numberOrZero = (value: unknown) => Number(value) || 0;
 
 function toArtistDocument(applicationId: string, data: Record<string, any>) {
-  const primaryArt = Array.isArray(data.artsList) ? data.artsList[0] || {} : {};
-  const category = normalizeArtistType(data.category) ?? normalizeArtistType(primaryArt.category) ?? normalizeArtistType(data.subcategory) ?? "";
-  const artsList = Array.isArray(data.artsList)
-    ? data.artsList.map((art: Record<string, any>) => ({
-        ...art,
-        category: normalizeArtistType(art?.category) ?? normalizeArtistType(art?.subcategory) ?? category,
-      }))
+  const rawArts = Array.isArray(data.categoriesArray) && data.categoriesArray.length
+    ? data.categoriesArray
+    : Array.isArray(data.artsList)
+      ? data.artsList
+      : [];
+  const primaryArt = rawArts[0] || {};
+  const primaryArtForm = normalizeArtistType(primaryArt.artForm || primaryArt.subcategory || primaryArt.category || data.artForm || data.subcategory) || "";
+  const category = data.mainCategory || primaryArt.mainCategory || data.category || "";
+  const artsList = rawArts.length
+    ? rawArts.map((art: Record<string, any>) => {
+        const artForm = normalizeArtistType(art?.artForm || art?.subcategory || art?.category) || primaryArtForm;
+        const soloPerformancePrice = numberOrZero(art?.soloPerformancePrice ?? art?.soloPrice);
+        const duoPerformancePrice = numberOrZero(art?.duoPerformancePrice ?? art?.duoPrice);
+        const teamPerformancePrice = numberOrZero(art?.teamPerformancePrice ?? art?.teamPrice);
+
+        return {
+          ...art,
+          mainCategory: art?.mainCategory || category,
+          artForm,
+          category: artForm,
+          subcategory: artForm,
+          soloPerformancePrice,
+          duoPerformancePrice,
+          teamPerformancePrice,
+          soloPrice: soloPerformancePrice,
+          duoPrice: duoPerformancePrice,
+          teamPrice: teamPerformancePrice,
+          showPricingOnProfile: Boolean(art?.showPricingOnProfile ?? art?.showPriceOnProfile),
+          youtubeLinks: Array.isArray(art?.youtubeLinks) ? art.youtubeLinks : [],
+        };
+      })
     : [];
   const pricing = data.pricing || {
     soloPrice: numberOrZero(data.soloPrice ?? primaryArt.soloPrice),
@@ -41,9 +65,12 @@ function toArtistDocument(applicationId: string, data: Record<string, any>) {
   const artForms = getArtistArtForms({
     ...data,
     category,
+    subcategory: primaryArtForm,
     artsList,
+    categoriesArray: artsList,
     categories: Array.isArray(data.categories) ? data.categories : [category].filter(Boolean),
   });
+  const categoryNames = artForms.filter(Boolean);
 
   return normalizeArtistRecord({
     uid: data.uid,
@@ -51,33 +78,51 @@ function toArtistDocument(applicationId: string, data: Record<string, any>) {
     applicationId,
     username: data.username || "",
     name: data.name || "",
+    artistName: data.artistName || data.name || "",
     brandName: data.brandName || "",
+    nickName: data.nickName || data.brandName || "",
     professionalName: data.professionalName || "",
     email: data.email || "",
     mobileNumber: data.mobileNumber || data.phone || "",
+    phoneNumber: data.phoneNumber || data.mobileNumber || data.phone || "",
     emergencyNumber: data.emergencyNumber || "",
+    dob: data.dob || data.dateOfBirth || "",
+    dateOfBirth: data.dateOfBirth || data.dob || "",
+    age: numberOrZero(data.age),
+    ageDisplay: Boolean(data.ageDisplay ?? data.showAgeOnProfile),
+    showAgeOnProfile: Boolean(data.showAgeOnProfile ?? data.ageDisplay),
+    gender: data.gender || "",
+    travelWillingness: data.travelWillingness || "",
+    languages: Array.isArray(data.languages) ? data.languages : Array.isArray(data.languagesSpoken) ? data.languagesSpoken : [],
+    languagesSpoken: Array.isArray(data.languagesSpoken) ? data.languagesSpoken : Array.isArray(data.languages) ? data.languages : [],
     state: data.state || "",
     district: data.district || data.city || "",
     location: data.location || data.district || data.city || data.state || "",
-    bio: data.bio || "",
+    bio: data.bio || data.description || "",
+    description: data.description || data.bio || "",
     experience: numberOrZero(data.experience),
     availability: data.availability || "available",
     category,
-    subcategory: data.subcategory || primaryArt.subcategory || "",
-    categories: Array.isArray(data.categories) ? data.categories.map(normalizeArtistType).filter(Boolean) : [category].filter(Boolean),
+    mainCategory: category,
+    subcategory: data.subcategory || primaryArtForm || "",
+    artForm: data.artForm || primaryArtForm || "",
+    categories: categoryNames,
+    categoriesArray: artsList,
     artsList,
     artistProfile: {
       artForms,
       experience: numberOrZero(data.experience),
-      bio: data.bio || "",
+      bio: data.bio || data.description || "",
       location: data.location || data.district || data.city || data.state || "",
       profileImage: media.profilePhoto || data.profilePhoto || "",
+      youtubeLinks: Array.isArray(data.youtubeLinks) ? data.youtubeLinks : [],
     },
     services: Array.isArray(data.services) ? data.services : [],
     types: Array.isArray(data.types) ? data.types : primaryArt.types || [],
     pricing,
     media,
     socialLinks: Array.isArray(data.socialLinks) ? data.socialLinks : [],
+    youtubeLinks: Array.isArray(data.youtubeLinks) ? data.youtubeLinks : [],
     liveLink: data.liveLink || "",
     assistant: data.assistant || {
       hasAssistant: Boolean(data.hasAssistant),

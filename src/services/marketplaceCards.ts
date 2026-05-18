@@ -106,7 +106,9 @@ export function getArtistServices(artist: Record<string, unknown>): ArtistServic
     : rawArts.length
       ? rawArts
       : rawCategories.length
-        ? rawCategories.map((category: string) => ({ category }))
+        ? rawCategories.map((category: string | Record<string, unknown>) =>
+            typeof category === "string" ? { category } : category
+          )
         : [{ category: getArtistSubCategory(artist) || artist.subCategory || artist.category }];
 
   const seen = new Set<string>();

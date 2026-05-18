@@ -1,6 +1,7 @@
 import { HTMLAttributes, useEffect, useMemo, useState } from "react";
 import { allocateImage } from "@/utils/globalImageAllocator";
 import { getMappedImage } from "@/utils/imageMapping";
+import { getUsableImageUrl } from "@/utils/fallbackImages";
 
 const EMPTY_PIXEL =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
@@ -52,7 +53,7 @@ export function SmartImage({
   ...props
 }: SmartImageProps) {
   const stableUsageId = usageId || `smart-image:${alt}`;
-  const preferredSrc = String(src || "").trim();
+  const preferredSrc = getUsableImageUrl(src);
   const mappedCategorySrc = useMemo(
     () => (preferredSrc ? "" : getMappedImage(category, "")),
     [category, preferredSrc],

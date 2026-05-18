@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   Clock,
   Heart,
+  IndianRupee,
   MapPin,
   Share2,
   Sparkles,
@@ -23,14 +24,15 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { getYouTubeVideoId, getYoutubeThumbnailUrl } from "@/lib/youtube";
+import { getExternalUrl, getYouTubeVideoId, getYoutubeThumbnailUrl } from "@/lib/youtube";
 import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, requireAuthUid, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
 import { getArtistArtForms } from "@/constants/artistSystem";
 import { ImageRegistryService, STATIC_IMAGES } from "@/services/ImageRegistryService";
 import { SmartImage } from "@/components/SmartImage";
-import { getArtistCategory, getArtistSubCategory } from "@/services/filterEngine";
+import { getArtistCategory, getArtistSubCategory, getParentCategoryForSubCategory } from "@/services/filterEngine";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
+import { getFallbackImageForArt, getFallbackImagesForArt, getUsableImageUrl } from "@/utils/fallbackImages";
 
 function compactLocation(artist: Record<string, any>) {
   return [artist.district || artist.city, artist.state].filter(Boolean).join(", ") || artist.location || "Maharashtra";
@@ -56,6 +58,84 @@ function uniqueVideoLinks(values: unknown[]) {
       seen.add(key);
       return true;
     });
+}
+
+function getNumberValue(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatPrice(value: unknown) {
+  const amount = getNumberValue(value);
+  return amount > 0 ? `Rs ${amount.toLocaleString("en-IN")}` : "On request";
+}
+
+function getLinkArray(value: unknown) {
+  return Array.isArray(value) ? uniqueVideoLinks(value) : [];
+}
+
+function getProfileCategories(artist: Record<string, any>) {
+  const source = Array.isArray(artist.categoriesArray) && artist.categoriesArray.length
+    ? artist.categoriesArray
+    : Array.isArray(artist.artsList) && artist.artsList.length
+      ? artist.artsList
+      : Array.isArray(artist.categories)
+        ? artist.categories
+        : [];
+
+  return source
+    .map((entry: any, index: number) => {
+      if (typeof entry === "string") {
+        const artForm = entry.trim();
+        if (!artForm) return null;
+        return {
+          id: `${artForm}-${index}`,
+          mainCategory: getParentCategoryForSubCategory(artForm) || artist.mainCategory || artist.category || "Artist",
+          artForm,
+          soloPerformancePrice: index === 0 ? artist.soloPrice : 0,
+          duoPerformancePrice: index === 0 ? artist.duoPrice : 0,
+          teamPerformancePrice: index === 0 ? artist.teamPrice : 0,
+          showPricingOnProfile: Boolean(index === 0 ? artist.showPricingOnProfile ?? artist.showPriceOnProfile : false),
+          youtubeLinks: index === 0 ? getLinkArray(artist.youtubeLinks) : [],
+        };
+      }
+
+      const artForm = String(entry?.artForm || entry?.subcategory || entry?.subCategory || entry?.category || entry?.name || "").trim();
+      if (!artForm) return null;
+      const mainCategory = String(entry?.mainCategory || entry?.categoryGroup || getParentCategoryForSubCategory(artForm) || artist.mainCategory || "").trim();
+
+      return {
+        id: String(entry?.id || `${mainCategory || "category"}-${artForm}-${index}`),
+        mainCategory: mainCategory || "Artist",
+        artForm,
+        soloPerformancePrice: entry?.soloPerformancePrice ?? entry?.soloPrice ?? entry?.price ?? 0,
+        duoPerformancePrice: entry?.duoPerformancePrice ?? entry?.duoPrice ?? 0,
+        teamPerformancePrice: entry?.teamPerformancePrice ?? entry?.teamPrice ?? 0,
+        showPricingOnProfile: Boolean(entry?.showPricingOnProfile ?? entry?.showPriceOnProfile),
+        youtubeLinks: getLinkArray(entry?.youtubeLinks),
+      };
+    })
+    .filter(Boolean);
+}
+
+function getLanguageList(artist: Record<string, any>) {
+  const raw = Array.isArray(artist.languages)
+    ? artist.languages
+    : Array.isArray(artist.languagesSpoken)
+      ? artist.languagesSpoken
+      : typeof artist.languages === "string"
+        ? artist.languages.split(",")
+        : [];
+
+  return Array.from(new Set(raw.map((value: unknown) => String(value || "").trim()).filter(Boolean)));
+}
+
+function getTravelLabel(value: unknown) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "local") return "Local Only";
+  if (normalized === "state") return "Within State";
+  if (normalized === "all") return "All India";
+  return String(value || "On request");
 }
 
 function getForcedMappedImage(...categories: unknown[]) {
@@ -311,12 +391,26 @@ export default function ArtistProfile() {
     );
   }
 
-  const artistName = artist.name || artist.professionalName || t("artist.premiumArtist"); // ADDED FOR i18n
-  const category = getArtistCategory(artist) || "Artist";
-  const artType = getArtistSubCategory(artist) || artForms[0] || category;
+  const profileCategories = getProfileCategories(artist);
+  const primaryCategory = profileCategories[0];
+  const artistName = artist.name || artist.artistName || artist.professionalName || t("artist.premiumArtist"); // ADDED FOR i18n
+  const category = primaryCategory?.mainCategory || getArtistCategory(artist) || "Artist";
+  const artType = primaryCategory?.artForm || getArtistSubCategory(artist) || artForms[0] || category;
   const artTypeLabel = getArtLabel(t, artType); // ADDED FOR i18n
   const location = compactLocation(artist);
-  const artistImage = getForcedMappedImage(
+  const customHeroImage = getUsableImageUrl(
+    artist.media?.coverPhoto ||
+    artist.coverPhoto ||
+    artist.coverImage ||
+    artist.media?.profilePhoto ||
+    artist.profilePhoto ||
+    "",
+  );
+  const fallbackHeroImage = getFallbackImageForArt(
+    [artType, category, artist.category, artist.subcategory, artist.mainCategory],
+    `profile-hero:${artist.id || artistName}`,
+  );
+  const artistImage = customHeroImage || fallbackHeroImage || getForcedMappedImage(
     artist.category,
     artist.subcategory,
     artType,
@@ -330,10 +424,15 @@ export default function ArtistProfile() {
       : Array.isArray(artist.media?.galleryPhotos)
         ? artist.media.galleryPhotos
         : [];
-  const galleryPhotos = uploadedGallery.map((photo: unknown) => String(photo || "").trim()).filter(Boolean);
+  const uploadedGalleryPhotos = uploadedGallery.map((photo: unknown) => String(photo || "").trim()).filter(Boolean);
+  const galleryPhotos = uploadedGalleryPhotos.length
+    ? uploadedGalleryPhotos
+    : getFallbackImagesForArt(artType, category, artist.category, artist.mainCategory).slice(0, 4);
+  const categoryYoutubeLinks = profileCategories.flatMap((entry) => entry.youtubeLinks);
   const youtubeLinks = uniqueVideoLinks([
     artist.portfolioUrl,
     artist.videoLink,
+    ...categoryYoutubeLinks,
     ...(Array.isArray(artist.youtubeLinks) ? artist.youtubeLinks.map(getVideoUrl) : []),
     ...(Array.isArray(artist.videos) ? artist.videos.map(getVideoUrl) : []),
     ...(Array.isArray(artist.socialLinks) ? artist.socialLinks.map(getVideoUrl) : []),
@@ -349,10 +448,16 @@ export default function ArtistProfile() {
     })
     .filter(Boolean) as Array<{ link: string; index: number; videoId: string; thumbnailUrl: string }>;
   const activeVideo = portfolioVideos[Math.min(activeVideoIndex, Math.max(portfolioVideos.length - 1, 0))];
-  const services = Array.from(new Set([...(Array.isArray(artist.services) ? artist.services : []), ...artForms])).slice(0, 10);
+  const services = Array.from(new Set([
+    ...profileCategories.map((entry) => entry.artForm),
+    ...(Array.isArray(artist.services) ? artist.services : []),
+    ...artForms,
+  ])).slice(0, 10);
   const experience = artist.experience || artist.artistProfile?.experience || 5;
   const rating = Number(artist.stats?.rating || artist.rating || 5).toFixed(1);
-  const bio = artist.bio || artist.artistProfile?.bio || t("artist.defaultBioWithLocation", { artType: artTypeLabel, location }); // ADDED FOR i18n
+  const bio = artist.bio || artist.description || artist.artistProfile?.bio || t("artist.defaultBioWithLocation", { artType: artTypeLabel, location }); // ADDED FOR i18n
+  const languages = getLanguageList(artist);
+  const travelWillingness = getTravelLabel(artist.travelWillingness);
   const pageTitle = `MyKalakar | ${artistName}`;
 
   return (
@@ -469,6 +574,62 @@ export default function ArtistProfile() {
               </h2>
               <p className="mt-3 text-sm font-medium leading-7 text-stone-600">{bio}</p>
             </section>
+
+            {profileCategories.length > 0 ? (
+              <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+                <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
+                  <Sparkles className="h-4 w-4 text-orange-500" />
+                  Art Categories
+                </h2>
+                <div className="mt-4 grid gap-3">
+                  {profileCategories.map((entry) => (
+                    <article key={entry.id} className="rounded-xl border border-stone-100 bg-stone-50 p-4">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-sm font-extrabold text-stone-950">{getArtLabel(t, entry.artForm)}</p>
+                          <p className="text-xs font-bold uppercase tracking-wide text-stone-400">{entry.mainCategory}</p>
+                        </div>
+                      </div>
+
+                      {entry.showPricingOnProfile ? (
+                        <div className="mt-3 grid gap-2 text-xs font-bold text-stone-600 sm:grid-cols-3">
+                          {[
+                            ["Solo", entry.soloPerformancePrice],
+                            ["Duo", entry.duoPerformancePrice],
+                            ["Team", entry.teamPerformancePrice],
+                          ].map(([label, value]) => (
+                            <div key={label} className="rounded-lg border border-white bg-white/80 px-3 py-2">
+                              <span className="flex items-center gap-1 text-stone-400">
+                                <IndianRupee className="h-3.5 w-3.5 text-orange-500" />
+                                {label}
+                              </span>
+                              <p className="mt-1 text-sm text-stone-950">{formatPrice(value)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {entry.youtubeLinks.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {entry.youtubeLinks.map((link, index) => (
+                            <a
+                              key={`${entry.id}-youtube-${index}`}
+                              href={getExternalUrl(link)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-red-100 bg-white px-3 py-1.5 text-[11px] font-extrabold text-red-600 transition hover:border-red-200 hover:bg-red-50"
+                            >
+                              <Youtube className="h-3.5 w-3.5" />
+                              YouTube {formatNumber(index + 1)}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {/* YouTube Videos */}
             {portfolioVideos.length > 0 && activeVideo ? (
@@ -644,6 +805,20 @@ export default function ArtistProfile() {
                 </div>
               </div>
             )}
+
+            <div className="profile-side-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+              <h2 className="profile-section-title text-sm font-extrabold text-gray-900">Profile Details</h2>
+              <div className="mt-3 space-y-3">
+                <div className="rounded-xl bg-stone-50 p-3">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wide text-stone-400">Languages</p>
+                  <p className="mt-1 text-sm font-extrabold text-stone-950">{languages.length ? languages.join(", ") : "On request"}</p>
+                </div>
+                <div className="rounded-xl bg-stone-50 p-3">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wide text-stone-400">Travel</p>
+                  <p className="mt-1 text-sm font-extrabold text-stone-950">{travelWillingness}</p>
+                </div>
+              </div>
+            </div>
 
             {/* Location card */}
             <div className="profile-side-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">

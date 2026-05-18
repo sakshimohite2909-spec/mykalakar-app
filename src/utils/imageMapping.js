@@ -1,4 +1,5 @@
 import { CATEGORY_IMAGE_MAP } from "@/config/imageRegistry";
+import { getFallbackImageForArt } from "@/utils/fallbackImages";
 
 export { CATEGORY_IMAGE_MAP };
 
@@ -59,6 +60,9 @@ const FALLBACK_ALIASES = {
 export function getMappedImage(categoryName, fallback = DEFAULT_MAPPED_IMAGE) {
   const normalized = normalizeCategoryKey(categoryName);
   if (!normalized) return fallback;
+
+  const curatedFallback = getFallbackImageForArt([categoryName], String(categoryName || ""));
+  if (curatedFallback) return curatedFallback;
 
   if (NORMALIZED_IMAGE_MAP[normalized]) {
     return NORMALIZED_IMAGE_MAP[normalized];

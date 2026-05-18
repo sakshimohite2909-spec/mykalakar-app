@@ -1,4 +1,5 @@
 import { CATEGORY_IMAGE_MAP, IMAGE_REGISTRY, FALLBACK_IMAGE } from "@/config/imageRegistry";
+import { getFallbackImageForArt, getFallbackImagesForArt } from "@/utils/fallbackImages";
 
 /**
  * Image Registry Service
@@ -63,6 +64,9 @@ const NORMALIZED_CATEGORY_IMAGE_MAP = Object.entries(CATEGORY_IMAGE_MAP).reduce<
 export function getMappedCategoryImage(category?: unknown) {
   const normalized = normalizeCategoryKey(category);
   if (!normalized) return null;
+
+  const curatedFallback = getFallbackImageForArt([category], String(category || ""));
+  if (curatedFallback) return curatedFallback;
 
   const directMatch = NORMALIZED_CATEGORY_IMAGE_MAP[normalized];
   if (directMatch) return directMatch;
@@ -143,6 +147,8 @@ function hashString(value: string) {
 
 function getPoolForCategory(category = "", type = "category"): readonly string[] {
   const normalized = `${category} ${type}`.toLowerCase();
+  const curatedImages = getFallbackImagesForArt(category);
+  if (curatedImages.length) return curatedImages;
   if (normalized.includes("artist")) return IMAGE_REGISTRY.ARTISTS;
   if (normalized.includes("event") || normalized.includes("wedding") || normalized.includes("birthday") || normalized.includes("corporate") || normalized.includes("mandap") || normalized.includes("sound system")) return IMAGE_REGISTRY.EVENTS;
   if (normalized.includes("dhol") || normalized.includes("dholki") || normalized.includes("folk") || normalized.includes("traditional") || normalized.includes("festival") || normalized.includes("gondhal") || normalized.includes("bharud") || normalized.includes("powada") || normalized.includes("shahiri") || normalized.includes("lezim") || normalized.includes("dashavatar") || normalized.includes("jalsa") || normalized.includes("bahurupiya")) return IMAGE_REGISTRY.FOLK;
@@ -230,6 +236,9 @@ export const imageRegistry = {
     return getStableImageFromPool(`${options.category || "default"}:${options.type || "ui"}:${options.key || ""}`, pool);
   },
   getCatalogImages: (catalog: keyof typeof IMAGE_CATALOG | string) => {
+    const curatedImages = getFallbackImagesForArt(catalog);
+    if (curatedImages.length) return curatedImages;
+
     const key = catalog.toLowerCase() as keyof typeof IMAGE_CATALOG;
     return IMAGE_CATALOG[key] || IMAGE_REGISTRY.UI;
   },

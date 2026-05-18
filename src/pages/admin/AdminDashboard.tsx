@@ -14,6 +14,7 @@ import { firebaseErrorMessage } from "@/lib/firebaseSafe";
 import { migrateApprovedArtists } from "@/scripts/migrateArtistData";
 import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
 import { imageRegistry } from "@/services/ImageRegistryService";
+import { getUsableImageUrl } from "@/utils/fallbackImages";
 
 export default function AdminDashboard() {
   const [counts, setCounts] = useState({
@@ -190,7 +191,7 @@ export default function AdminDashboard() {
                 <div key={a.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
                   <div className="flex items-center gap-3">
                     <img
-                      src={a.media?.profilePhoto || a.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
+                      src={getUsableImageUrl(a.media?.profilePhoto || a.profilePhoto) || imageRegistry.getUniqueImage({ category: a.subcategory || a.artForm || a.category || "Default", type: "artist", key: a.id || a.name })}
                       alt={a.name}
                       className="w-10 h-10 rounded-lg object-cover"
                     />
