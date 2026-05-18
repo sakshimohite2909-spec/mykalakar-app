@@ -191,7 +191,7 @@ export const STATIC_IMAGES = {
   heroZanj: "/assets/static/hero-zanj.webp",
   profileCover: "/assets/static/profile-cover.webp",
   eventsBanner: "/assets/static/events-banner.webp",
-  logo: "/mykalakar-logo.svg",
+  logo: "/mykalakar-logo.png",
   fallback: FALLBACK_IMAGE,
 };
 
