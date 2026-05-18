@@ -7,7 +7,9 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isAuth()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.status == "active";
     }
 
     // ── events ───────────────────────────────────────────────────────────────
@@ -30,8 +32,8 @@ service cloud.firestore {
     // ── artists ──────────────────────────────────────────────────────────────
     match /artists/{id} {
       allow read: if true;
-      allow create: if isAuth();
-      allow update: if isAuth() && request.auth.uid == id;
+      allow create: if isAuth() && (request.auth.uid == id || isAdmin());
+      allow update: if isAuth() && (request.auth.uid == id || isAdmin());
     }
 
     // ── users ────────────────────────────────────────────────────────────────
@@ -68,7 +70,7 @@ service cloud.firestore {
 
     // ── admin_requests ───────────────────────────────────────────────────────
     match /admin_requests/{id} {
-      allow create: if isAuth();
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
       allow read: if isAuth() && (resource.data.uid == request.auth.uid || isAdmin());
       allow update, delete: if isAuth() && isAdmin();
     }

@@ -7,6 +7,27 @@ export const sanitizePayload = (payload: any) =>
     Object.entries(payload).filter(([_, v]) => v !== undefined)
   );
 
+export const FIREBASE_ERROR_MESSAGES: Record<string, string> = {
+  "auth/email-already-in-use": "This username is already registered.",
+  "auth/invalid-email": "Invalid email address.",
+  "auth/weak-password": "Password must be at least 6 characters.",
+  "auth/operation-not-allowed": "Email/password sign-in is not enabled in Firebase Console.",
+  "auth/configuration-not-found": "Firebase Auth configuration is missing.",
+  "auth/invalid-credential": "Invalid username or password.",
+  "auth/user-not-found": "No account found with this username.",
+  "auth/wrong-password": "Incorrect password.",
+  "auth/too-many-requests": "Too many attempts. Please try again later.",
+  "auth/network-request-failed": "Network error while contacting Firebase Authentication. Please check your connection and try again.",
+  "auth/user-token-expired": "Your session expired. Please log in again.",
+  "permission-denied": "Firebase rules blocked this action. Please deploy the updated Firestore rules and try again.",
+  unauthenticated: "Your session expired. Please log in again.",
+  unavailable: "Firebase is taking too long to respond. Please check your internet connection and try again.",
+  "deadline-exceeded": "Firebase is taking too long to respond. Please check your internet connection and try again.",
+  "storage/unauthorized": "Firebase Storage rules blocked this upload. Please deploy the updated Storage rules and try again.",
+  "storage/retry-limit-exceeded": "The upload could not finish. Please try again with a smaller image or a stronger connection.",
+  "storage/canceled": "The upload could not finish. Please try again with a smaller image or a stronger connection.",
+};
+
 export function requireAuthUid(currentUser?: { uid?: string } | null) {
   if (!currentUser?.uid) {
     throw new Error("User not authenticated");
@@ -14,18 +35,26 @@ export function requireAuthUid(currentUser?: { uid?: string } | null) {
   return currentUser.uid;
 }
 
-export function logFirebaseError(error: any) {
-  console.group("🔥 FIREBASE ERROR");
-  console.error("Code:", error?.code);
-  console.error("Message:", error?.message);
-  console.error("Full:", error);
-  console.groupEnd();
-}
-
 export function getFirebaseErrorCode(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error
     ? String((error as { code?: unknown }).code ?? "")
     : "";
+}
+
+export function firebaseErrorMessage(error: unknown, fallback: string) {
+  const code = getFirebaseErrorCode(error);
+
+  if (code && FIREBASE_ERROR_MESSAGES[code]) return FIREBASE_ERROR_MESSAGES[code];
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
+export function logFirebaseError(error: any, context = "Firebase operation") {
+  console.group(`Firebase error: ${context}`);
+  console.error("Code:", getFirebaseErrorCode(error) || "unknown");
+  console.error("Message:", firebaseErrorMessage(error, "Unknown Firebase error."));
+  console.error("Full:", error);
+  console.groupEnd();
 }
 
 export async function withTimeout<T>(
@@ -45,52 +74,14 @@ export async function withTimeout<T>(
   }
 }
 
-export function firebaseErrorMessage(error: unknown, fallback: string) {
-  const code = getFirebaseErrorCode(error);
-
-  if (code === "permission-denied") {
-    return "Firebase rules blocked this action. Please deploy the updated Firestore rules and try again.";
-  }
-  if (code === "unauthenticated" || code === "auth/user-token-expired") {
-    return "Your session expired. Please log in again.";
-  }
-  if (code === "unavailable" || code === "deadline-exceeded") {
-    return "Firebase is taking too long to respond. Please check your internet connection and try again.";
-  }
-  if (code === "storage/unauthorized") {
-    return "Firebase Storage rules blocked this upload. Please deploy the updated Storage rules and try again.";
-  }
-  if (code === "storage/retry-limit-exceeded" || code === "storage/canceled") {
-    return "The upload could not finish. Please try again with a smaller image or a stronger connection.";
-  }
-  if (code === "auth/network-request-failed") {
-    return "Network error while contacting Firebase Authentication. Please check your connection and try again.";
-  }
-  if (code === "auth/email-already-in-use") {
-    return "This username is already registered.";
-  }
-  if (code === "auth/weak-password") {
-    return "Password must be at least 6 characters.";
-  }
-  if (code === "auth/invalid-credential") {
-    return "Invalid username or password.";
-  }
-
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-}
-
-/**
- * Returns true when Firestore throws because a composite index is missing
- * or is still being built in the Firebase Console.
- */
 export function isIndexError(error: unknown): boolean {
   const msg =
     error instanceof Error
       ? error.message
       : typeof error === "object" && error !== null && "message" in error
-      ? String((error as { message: unknown }).message)
-      : String(error);
+        ? String((error as { message: unknown }).message)
+        : String(error);
+
   return (
     msg.includes("requires an index") ||
     msg.includes("index is currently building") ||
@@ -98,15 +89,6 @@ export function isIndexError(error: unknown): boolean {
   );
 }
 
-/**
- * Central helper for onSnapshot / getDocs error handlers.
- *
- * • Index / building errors  → soft amber toast ("Optimizing database…")
- * • All other errors         → red destructive toast with the real message
- *
- * Usage:
- *   toastForFirestoreError(error, "Artists unavailable", "Could not load artists.", toast);
- */
 export function toastForFirestoreError(
   error: unknown,
   title: string,
@@ -120,9 +102,8 @@ export function toastForFirestoreError(
   logFirebaseError(error);
   if (isIndexError(error)) {
     toastFn({
-      title: "⏳ Optimizing database",
-      description:
-        "Optimizing for faster loading — please check back in a few minutes.",
+      title: "Optimizing database",
+      description: "Optimizing for faster loading. Please check back in a few minutes.",
     });
     return;
   }

@@ -182,6 +182,21 @@ h6 {
   box-shadow: var(--mk-shadow-sm) !important;
 }
 
+.brand-lockup {
+  min-width: max-content;
+}
+
+.brand-logo-mark {
+  background:
+    radial-gradient(circle at 36% 22%, rgba(255, 214, 102, 0.22), transparent 42%),
+    #fff !important;
+}
+
+.brand-logo-mark img {
+  display: block;
+  transform: scale(1.08);
+}
+
 .btn-glass-primary,
 .gradient-bg,
 .cinematic-app button[class*="bg-orange-600"],
@@ -272,11 +287,14 @@ h6 {
 
 .luxury-home-hero-copy h1,
 .luxury-hero-copy h1 {
-  max-width: 12ch !important;
+  max-width: min(100%, 9.5em) !important;
   margin-top: 1rem !important;
   color: var(--mk-ink) !important;
-  font-size: clamp(3rem, 7vw, 6.8rem) !important;
+  font-size: clamp(3rem, 6.2vw, 6rem) !important;
   line-height: 0.95 !important;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: keep-all;
 }
 
 .luxury-home-hero-copy p,
