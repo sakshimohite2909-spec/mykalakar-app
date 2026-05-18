@@ -23,7 +23,6 @@ import {
   Eye,
   EyeOff,
   FileImage,
-  Globe,
   IndianRupee,
   Loader2,
   Lock,
@@ -76,7 +75,7 @@ type ExtraArtEntry = {
   profilePreview: string;
   performanceFile: File | null;
   performancePreview: string;
-  youtubeLink: string;
+  youtubeLinks: PortfolioLink[];
 };
 
 const roleTabs: Array<{ id: AuthRole; label: string; icon: ComponentType<{ className?: string }>; color: string }> = [
@@ -237,6 +236,14 @@ const errorInputClass = "border-red-400 focus:border-red-500 focus:ring-red-200"
 
 function digitsOnly(value: string, maxLength: number) {
   return value.replace(/\D/g, "").slice(0, maxLength);
+}
+
+function createYoutubeLink(): PortfolioLink {
+  return { platform: "youtube", url: "" };
+}
+
+function getSubmittedYoutubeLinks(links: PortfolioLink[]) {
+  return links.map((link) => link.url.trim()).filter(Boolean);
 }
 
 function formatAadhar(value: string) {
@@ -530,8 +537,21 @@ function ArtCategoryCard({
   onMediaFileChange: (field: ExtraArtMediaField, file: File | null) => void;
   onRemove?: () => void;
 }) {
-  const update = (field: "mainCategory" | "category" | "soloPrice" | "duoPrice" | "teamPrice" | "youtubeLink", value: string) => {
+  const update = (field: "mainCategory" | "category" | "soloPrice" | "duoPrice" | "teamPrice", value: string) => {
     onUpdate({ ...art, [field]: value });
+  };
+  const addYoutubeLink = () => {
+    onUpdate({ ...art, youtubeLinks: [...art.youtubeLinks, createYoutubeLink()] });
+  };
+  const updateYoutubeLink = (linkIndex: number, nextLink: PortfolioLink) => {
+    onUpdate({
+      ...art,
+      youtubeLinks: art.youtubeLinks.map((link, currentIndex) => (currentIndex === linkIndex ? nextLink : link)),
+    });
+  };
+  const removeYoutubeLink = (linkIndex: number) => {
+    const nextLinks = art.youtubeLinks.filter((_, currentIndex) => currentIndex !== linkIndex);
+    onUpdate({ ...art, youtubeLinks: nextLinks.length > 0 ? nextLinks : [createYoutubeLink()] });
   };
 
   return (
@@ -636,18 +656,13 @@ function ArtCategoryCard({
         />
       </div>
 
-      <div className="mt-5">
-        <label className="mb-1.5 flex items-center gap-2 text-sm font-bold text-slate-700">
-          <Youtube className="h-4 w-4 text-red-500" />
-          YouTube Link
-        </label>
-        <input
-          type="url"
-          inputMode="url"
-          value={art.youtubeLink}
-          onChange={(event) => update("youtubeLink", event.target.value)}
-          placeholder="youtube.com/watch?v=..."
-          className={inputClass}
+      <div className="mt-5 space-y-4">
+        <SectionHeading icon={Youtube} title="Links & Portfolio" />
+        <PortfolioLinksEditor
+          links={art.youtubeLinks}
+          onAdd={addYoutubeLink}
+          onRemove={removeYoutubeLink}
+          onUpdate={updateYoutubeLink}
         />
       </div>
     </div>
@@ -874,7 +889,7 @@ function createExtraArtEntry(): ExtraArtEntry {
     profilePreview: "",
     performanceFile: null,
     performancePreview: "",
-    youtubeLink: "",
+    youtubeLinks: [createYoutubeLink()],
   };
 }
 
@@ -890,10 +905,9 @@ export default function ArtistRegister() {
   const [aadharFile, setAadharFile] = useState<File | null>(null);
   const [aadharPreview, setAadharPreview] = useState("");
   const [galleryFiles, setGalleryFiles] = useState<Array<{ file: File; preview: string }>>([]);
-  const [portfolioLinks, setPortfolioLinks] = useState<PortfolioLink[]>([{ platform: "youtube", url: "" }]);
   const [extraArtEntries, setExtraArtEntries] = useState<ExtraArtEntry[]>([]);
+  const [primaryArtYoutubeLinks, setPrimaryArtYoutubeLinks] = useState<PortfolioLink[]>([createYoutubeLink()]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
-  const [primaryArtYoutubeLink, setPrimaryArtYoutubeLink] = useState("");
   const [priceAmount, setPriceAmount] = useState("");
   const [showPriceOnProfile, setShowPriceOnProfile] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
@@ -1018,25 +1032,20 @@ export default function ArtistRegister() {
     });
   };
 
-  const addPortfolioLink = useCallback(() => {
-    setPortfolioLinks((current) => [...current, { platform: "youtube", url: "" }]);
+  const addPrimaryArtYoutubeLink = useCallback(() => {
+    setPrimaryArtYoutubeLinks((current) => [...current, createYoutubeLink()]);
   }, []);
 
-  const updatePortfolioLink = useCallback((index: number, nextLink: PortfolioLink) => {
-    setPortfolioLinks((current) => {
-      const next = current.map((link, linkIndex) => (linkIndex === index ? nextLink : link));
-      artistForm.setValue("portfolioUrl", next[0]?.url ?? "", { shouldDirty: true });
-      return next;
-    });
-  }, [artistForm]);
+  const updatePrimaryArtYoutubeLink = useCallback((index: number, nextLink: PortfolioLink) => {
+    setPrimaryArtYoutubeLinks((current) => current.map((link, linkIndex) => (linkIndex === index ? nextLink : link)));
+  }, []);
 
-  const removePortfolioLink = useCallback((index: number) => {
-    setPortfolioLinks((current) => {
+  const removePrimaryArtYoutubeLink = useCallback((index: number) => {
+    setPrimaryArtYoutubeLinks((current) => {
       const next = current.filter((_, linkIndex) => linkIndex !== index);
-      artistForm.setValue("portfolioUrl", next[0]?.url ?? "", { shouldDirty: true });
-      return next.length > 0 ? next : [{ platform: "youtube", url: "" }];
+      return next.length > 0 ? next : [createYoutubeLink()];
     });
-  }, [artistForm]);
+  }, []);
 
   const fallbackProfilePhoto = (name = "Artist") =>
     imageRegistry.getStableImage(`registration-profile:${name || "Artist"}`, {
@@ -1074,7 +1083,7 @@ export default function ArtistRegister() {
         soloPrice: entry.soloPrice.trim(),
         duoPrice: entry.duoPrice.trim(),
         teamPrice: entry.teamPrice.trim(),
-        youtubeLink: entry.youtubeLink.trim(),
+        youtubeLinks: getSubmittedYoutubeLinks(entry.youtubeLinks),
       }))
       .filter(
         (entry) =>
@@ -1082,7 +1091,7 @@ export default function ArtistRegister() {
           entry.soloPrice ||
           entry.duoPrice ||
           entry.teamPrice ||
-          entry.youtubeLink ||
+          entry.youtubeLinks.length > 0 ||
           entry.profileFile ||
           entry.performanceFile
       );
@@ -1118,10 +1127,7 @@ export default function ArtistRegister() {
           };
         })
       );
-      const socialLinks = portfolioLinks
-        .map((link) => ({ platform: link.platform, url: link.url.trim() }))
-        .filter((link) => link.url.length > 0);
-      const youtubeLinks = socialLinks.filter((link) => link.platform === "youtube").map((link) => link.url);
+      const primaryCategoryYoutubeLinks = getSubmittedYoutubeLinks(primaryArtYoutubeLinks);
       const normalizeSubmittedCategory = (value: string) => normalizeArtistType(value) ?? value.trim();
       const artEntries = [
         {
@@ -1131,6 +1137,7 @@ export default function ArtistRegister() {
           soloPrice: Number(values.soloPrice) || 0,
           duoPrice: Number(values.duoPrice) || 0,
           teamPrice: Number(values.teamPrice) || 0,
+          youtubeLinks: primaryCategoryYoutubeLinks,
         },
         ...preparedExtraArts.map((entry) => ({
           category: normalizeSubmittedCategory(entry.category),
@@ -1139,23 +1146,25 @@ export default function ArtistRegister() {
           soloPrice: Number(entry.soloPrice) || 0,
           duoPrice: Number(entry.duoPrice) || 0,
           teamPrice: Number(entry.teamPrice) || 0,
+          youtubeLinks: entry.youtubeLinks,
         })),
       ];
-      const primaryArtYoutubeLinks = primaryArtYoutubeLink.trim() ? [primaryArtYoutubeLink.trim()] : [];
+      const youtubeLinks = Array.from(new Set(artEntries.flatMap((entry) => entry.youtubeLinks)));
+      const socialLinks = youtubeLinks.map((url) => ({ platform: "youtube" as const, url }));
       const categoryMedia = [
         {
           mainCategory: values.mainCategory,
           category: artEntries[0]?.category || values.artCategory,
           profilePhotos: profilePhoto ? [profilePhoto] : [],
           performancePhotos: galleryPhotos,
-          youtubeLinks: primaryArtYoutubeLinks,
+          youtubeLinks: primaryCategoryYoutubeLinks,
         },
         ...preparedExtraArts.map((entry, index) => ({
           mainCategory: entry.mainCategory,
           category: normalizeSubmittedCategory(entry.category),
           profilePhotos: uploadedExtraArtMedia[index]?.profilePhotos || [],
           performancePhotos: uploadedExtraArtMedia[index]?.performancePhotos || [],
-          youtubeLinks: entry.youtubeLink ? [entry.youtubeLink] : [],
+          youtubeLinks: entry.youtubeLinks,
         })),
       ];
       const artForms = Array.from(new Set(artEntries.map((entry) => entry.category).filter(Boolean)));
@@ -1165,6 +1174,7 @@ export default function ArtistRegister() {
         bio: values.bio || "",
         location: [values.district, values.state].filter(Boolean).join(", "),
         profileImage: profilePhoto,
+        youtubeLinks,
       };
 
       const payload = sanitizePayload({
@@ -1708,18 +1718,13 @@ export default function ArtistRegister() {
                     <p className="mt-2 text-xs font-semibold text-slate-500">Upload photos of your best work</p>
                   </div>
 
-                  <div className="mt-5">
-                    <label className="mb-1.5 flex items-center gap-2 text-sm font-bold text-slate-700">
-                      <Youtube className="h-4 w-4 text-red-500" />
-                      YouTube Link
-                    </label>
-                    <input
-                      type="url"
-                      inputMode="url"
-                      value={primaryArtYoutubeLink}
-                      onChange={(event) => setPrimaryArtYoutubeLink(event.target.value)}
-                      placeholder="youtube.com/watch?v=..."
-                      className={inputClass}
+                  <div className="mt-5 space-y-4">
+                    <SectionHeading icon={Youtube} title="Links & Portfolio" />
+                    <PortfolioLinksEditor
+                      links={primaryArtYoutubeLinks}
+                      onAdd={addPrimaryArtYoutubeLink}
+                      onRemove={removePrimaryArtYoutubeLink}
+                      onUpdate={updatePrimaryArtYoutubeLink}
                     />
                   </div>
                 </div>
@@ -1881,14 +1886,6 @@ export default function ArtistRegister() {
                     )}
                   />
                 </div>
-
-                <SectionHeading icon={Globe} title="Links & Portfolio" />
-                <PortfolioLinksEditor
-                  links={portfolioLinks}
-                  onAdd={addPortfolioLink}
-                  onRemove={removePortfolioLink}
-                  onUpdate={updatePortfolioLink}
-                />
 
                 <SectionHeading icon={Sparkles} title="Additional Details" />
                 <TextField
