@@ -1,27 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  ExternalLink,
   Loader2,
+  Pencil,
   Save,
   ShieldCheck,
-  SlidersHorizontal,
 } from "lucide-react";
 import {
-  fetchAdminArtistProfile,
-  updateAdminArtistProfile,
+  fetchCompleteArtistProfileById,
+  updateExistingArtistProfile,
 } from "@/services/firebaseServices";
 
-const readonlyFields = new Set(["id", "createdAt", "updatedAt"]);
+const readOnlyFields = new Set(["documentId"]);
 const priorityFields = [
+  "documentId",
   "id",
   "uid",
   "artistId",
   "status",
   "applicationStatus",
+  "fullName",
+  "stageName",
+  "name",
+  "displayName",
   "email",
   "privateEmail",
   "phone",
@@ -33,6 +38,20 @@ const priorityFields = [
 
 function isTimestampLike(value) {
   return value && typeof value === "object" && typeof value.toDate === "function";
+}
+
+function timestampToDate(value) {
+  if (isTimestampLike(value)) return value.toDate();
+  if (value instanceof Date) return value;
+  return null;
+}
+
+function toDateTimeLocal(value) {
+  const date = timestampToDate(value);
+  if (!date || Number.isNaN(date.getTime())) return "";
+
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
 }
 
 function formatLabel(key) {
@@ -54,22 +73,55 @@ function formatValue(value) {
 }
 
 function serializeDraftValue(value) {
-  if (typeof value === "boolean") return value;
+  if (isTimestampLike(value) || value instanceof Date) return toDateTimeLocal(value);
+  if (typeof value === "boolean") return Boolean(value);
   if (value === null || value === undefined) return "";
-  if (Array.isArray(value) || (typeof value === "object" && !isTimestampLike(value))) {
-    return JSON.stringify(value, null, 2);
-  }
-  return formatValue(value);
+  if (Array.isArray(value) || typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value);
 }
 
 function coerceDraftValue(originalValue, draftValue) {
-  if (typeof originalValue === "boolean") return Boolean(draftValue);
-  if (typeof originalValue === "number") return Number(draftValue);
-  if (Array.isArray(originalValue) || (typeof originalValue === "object" && originalValue !== null && !isTimestampLike(originalValue))) {
-    if (!String(draftValue).trim()) return Array.isArray(originalValue) ? [] : {};
-    return JSON.parse(draftValue);
+  if (isTimestampLike(originalValue) || originalValue instanceof Date) {
+    const nextDate = new Date(draftValue);
+    if (Number.isNaN(nextDate.getTime())) {
+      throw new Error("Enter a valid date and time.");
+    }
+    return nextDate;
   }
+
+  if (typeof originalValue === "boolean") {
+    return Boolean(draftValue);
+  }
+
+  if (typeof originalValue === "number") {
+    const numberValue = Number(draftValue);
+    if (Number.isNaN(numberValue)) throw new Error("Enter a valid number.");
+    return numberValue;
+  }
+
+  if (Array.isArray(originalValue)) {
+    if (!String(draftValue).trim()) return [];
+    const parsedValue = JSON.parse(draftValue);
+    if (!Array.isArray(parsedValue)) throw new Error("This field must remain a JSON array.");
+    return parsedValue;
+  }
+
+  if (originalValue && typeof originalValue === "object") {
+    if (!String(draftValue).trim()) return {};
+    const parsedValue = JSON.parse(draftValue);
+    if (!parsedValue || typeof parsedValue !== "object" || Array.isArray(parsedValue)) {
+      throw new Error("This field must remain a JSON object.");
+    }
+    return parsedValue;
+  }
+
   return draftValue;
+}
+
+function normalizeComparable(value) {
+  if (isTimestampLike(value)) return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  return value;
 }
 
 function makeDraft(profile) {
@@ -82,67 +134,66 @@ function sortProfileEntries(profile) {
   return Object.entries(profile || {}).sort(([a], [b]) => {
     const aPriority = priorityFields.indexOf(a);
     const bPriority = priorityFields.indexOf(b);
+
     if (aPriority !== -1 || bPriority !== -1) {
       if (aPriority === -1) return 1;
       if (bPriority === -1) return -1;
       return aPriority - bPriority;
     }
+
     return a.localeCompare(b);
   });
 }
 
-function FloatingToast({ toast, onClose }) {
+function isImageUrl(key, value) {
+  if (typeof value !== "string") return false;
+  if (!/^https?:\/\//i.test(value)) return false;
+  return /(image|photo|avatar|picture|profile)/i.test(key) || /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(value);
+}
+
+function isUrl(value) {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
+}
+
+function StatusMessage({ message, onDismiss }) {
   useEffect(() => {
-    if (!toast) return undefined;
-    const timer = window.setTimeout(onClose, 4200);
+    if (!message) return undefined;
+    const timer = window.setTimeout(onDismiss, 4800);
     return () => window.clearTimeout(timer);
-  }, [toast, onClose]);
+  }, [message, onDismiss]);
+
+  if (!message) return null;
 
   return (
-    <AnimatePresence>
-      {toast ? (
-        <motion.div
-          initial={{ opacity: 0, y: -14, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -14, scale: 0.98 }}
-          className="fixed right-4 top-5 z-[80] w-[calc(100vw-2rem)] max-w-md rounded-lg border border-white/60 bg-white/55 p-4 shadow-[0_24px_80px_rgba(31,41,55,0.18)] backdrop-blur-2xl"
-          role="status"
-        >
-          <div className="flex gap-3">
-            <div
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                toast.type === "success" ? "bg-emerald-500/15 text-emerald-700" : "bg-red-500/15 text-red-700"
-              }`}
-            >
-              {toast.type === "success" ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
-            </div>
-            <div>
-              <p className="text-sm font-black text-[#1E1B4B]">{toast.title}</p>
-              <p className="mt-1 text-sm font-semibold text-[#1F2937]">{toast.message}</p>
-            </div>
-          </div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+    <div
+      className={`rounded-lg border p-4 ${
+        message.type === "success"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+          : "border-red-200 bg-red-50 text-red-950"
+      }`}
+      role="status"
+    >
+      <div className="flex items-start gap-3">
+        {message.type === "success" ? (
+          <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700" />
+        ) : (
+          <AlertCircle className="mt-0.5 h-5 w-5 text-red-700" />
+        )}
+        <div>
+          <p className="font-semibold">{message.title}</p>
+          <p className="mt-1 text-sm">{message.body}</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function DashboardSkeleton() {
+function LoadingState() {
   return (
-    <div className="space-y-6">
-      <div className="animate-pulse rounded-xl bg-white/60 p-8">
-        <div className="h-8 w-64 rounded-xl bg-white/60" />
-        <div className="mt-4 h-4 w-96 max-w-full rounded-xl bg-white/60" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((item) => (
-          <div key={item} className="h-28 animate-pulse rounded-xl bg-white/60" />
-        ))}
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        {Array.from({ length: 8 }).map((_, index) => (
-          <div key={index} className="h-32 animate-pulse rounded-xl bg-white/60" />
-        ))}
+    <div className="flex min-h-[420px] items-center justify-center rounded-lg border border-slate-200 bg-white">
+      <div className="text-center">
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-orange-600" />
+        <p className="mt-4 text-sm font-semibold text-slate-700">Loading artist profile...</p>
       </div>
     </div>
   );
@@ -155,149 +206,202 @@ export default function AdminArtistDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [toast, setToast] = useState(null);
+  const [message, setMessage] = useState(null);
 
   useEffect(() => {
-    let isActive = true;
+    let isMounted = true;
 
     async function loadProfile() {
       setLoading(true);
+      setMessage(null);
+
       try {
-        const result = await fetchAdminArtistProfile(id);
-        if (!isActive) return;
+        const result = await fetchCompleteArtistProfileById(id);
+        if (!isMounted) return;
         setProfile(result);
         setDraft(makeDraft(result));
       } catch (error) {
-        if (!isActive) return;
-        setToast({
+        if (!isMounted) return;
+        setMessage({
           type: "error",
           title: "Profile unavailable",
-          message: error?.message || "Could not load this artist profile.",
+          body: error?.message || "Could not load this artist profile.",
         });
       } finally {
-        if (isActive) setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
     loadProfile();
 
     return () => {
-      isActive = false;
+      isMounted = false;
     };
   }, [id]);
 
   const entries = useMemo(() => sortProfileEntries(profile), [profile]);
+  const profileImage = profile?.profileImageUrl || profile?.profilePhoto || profile?.imageUrl || profile?.media?.profilePhoto;
 
   const summary = useMemo(
     () => [
       { label: "Private Email", value: profile?.privateEmail || profile?.email },
       { label: "Phone", value: profile?.phoneNumber || profile?.mobileNumber || profile?.phone },
       { label: "Status", value: profile?.status || profile?.applicationStatus },
-      { label: "Internal ID", value: profile?.id || id },
+      { label: "Document ID", value: profile?.documentId || id },
     ],
     [id, profile]
   );
 
-  const updateDraft = (field, value) => {
+  function updateDraft(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
-  };
+  }
 
-  const cancelEditing = () => {
+  function cancelEditing() {
     setDraft(makeDraft(profile));
     setEditMode(false);
-  };
+    setMessage(null);
+  }
 
-  const saveChanges = async () => {
+  async function saveChanges() {
     if (!profile) return;
 
     setSaving(true);
+    setMessage(null);
+
     try {
       const updates = {};
 
       for (const [key, originalValue] of entries) {
-        if (readonlyFields.has(key) || isTimestampLike(originalValue)) continue;
+        if (readOnlyFields.has(key)) continue;
+
         const nextValue = coerceDraftValue(originalValue, draft[key]);
-        if (JSON.stringify(nextValue) !== JSON.stringify(originalValue)) {
+        const before = JSON.stringify(normalizeComparable(originalValue));
+        const after = JSON.stringify(normalizeComparable(nextValue));
+
+        if (before !== after) {
           updates[key] = nextValue;
         }
       }
 
       if (!Object.keys(updates).length) {
-        setToast({
+        setMessage({
           type: "success",
           title: "No changes to save",
-          message: "The profile is already synchronized.",
+          body: "This artist profile is already up to date.",
         });
         setEditMode(false);
         return;
       }
 
-      const syncedFields = await updateAdminArtistProfile(id, updates);
+      const result = await updateExistingArtistProfile(profile.documentId || id, updates);
       const nextProfile = {
         ...profile,
         ...updates,
-        updatedAt: syncedFields.updatedAt,
+        adminLastSavedAt: new Date(result.clientSavedAt),
+        ...(Object.prototype.hasOwnProperty.call(updates, "updatedAt")
+          ? {}
+          : { updatedAt: new Date(result.clientSavedAt) }),
       };
 
       setProfile(nextProfile);
       setDraft(makeDraft(nextProfile));
       setEditMode(false);
-      setToast({
+      setMessage({
         type: "success",
         title: "Artist updated",
-        message: "Local admin state now matches the saved Firebase document.",
+        body: "The Firestore artist document was updated successfully.",
       });
     } catch (error) {
-      setToast({
+      setMessage({
         type: "error",
         title: "Update failed",
-        message: error?.message || "Could not update this artist profile.",
+        body: error?.message || "Could not update this artist profile.",
       });
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  const renderEditControl = (key, value) => {
-    const readOnly = readonlyFields.has(key) || isTimestampLike(value);
+  function renderValue(key, value) {
+    if (isImageUrl(key, value)) {
+      return (
+        <div className="mt-3 space-y-3">
+          <img src={value} alt={formatLabel(key)} className="h-40 w-full rounded-lg border border-slate-200 object-cover" />
+          <a href={value} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 break-all text-sm font-semibold text-orange-700 hover:text-orange-900">
+            Open image <ExternalLink className="h-4 w-4" />
+          </a>
+        </div>
+      );
+    }
 
-    if (readOnly) {
+    if (isUrl(value)) {
+      return (
+        <a href={value} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 break-all text-sm font-semibold text-orange-700 hover:text-orange-900">
+          {value} <ExternalLink className="h-4 w-4" />
+        </a>
+      );
+    }
+
+    return (
+      <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-800">
+        {formatValue(value)}
+      </pre>
+    );
+  }
+
+  function renderEditControl(key, value) {
+    if (readOnlyFields.has(key)) {
       return (
         <input
           value={formatValue(value)}
           disabled
-          className="mt-3 h-11 w-full rounded-lg border border-white/60 bg-white/35 px-3 text-sm font-bold text-slate-600"
+          className="mt-3 h-11 w-full rounded-lg border border-slate-200 bg-slate-100 px-3 text-sm font-medium text-slate-500"
+        />
+      );
+    }
+
+    if (isTimestampLike(value) || value instanceof Date) {
+      return (
+        <input
+          type="datetime-local"
+          value={draft[key] ?? ""}
+          onChange={(event) => updateDraft(key, event.target.value)}
+          className="mt-3 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-950 outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
         />
       );
     }
 
     if (typeof value === "boolean") {
       return (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={Boolean(draft[key])}
-          onClick={() => updateDraft(key, !draft[key])}
-          className={`mt-3 inline-flex h-9 w-16 items-center rounded-full border border-white/70 p-1 transition ${
-            draft[key] ? "bg-indigo-700" : "bg-white/50"
-          }`}
-        >
-          <span
-            className={`h-7 w-7 rounded-full bg-white shadow-sm transition ${
-              draft[key] ? "translate-x-7" : "translate-x-0"
-            }`}
+        <label className="mt-3 inline-flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
+          <input
+            type="checkbox"
+            checked={Boolean(draft[key])}
+            onChange={(event) => updateDraft(key, event.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
           />
-        </button>
+          {draft[key] ? "True" : "False"}
+        </label>
       );
     }
 
-    if (Array.isArray(value) || (typeof value === "object" && value !== null)) {
+    if (Array.isArray(value) || (value && typeof value === "object")) {
       return (
         <textarea
           value={draft[key] ?? ""}
           onChange={(event) => updateDraft(key, event.target.value)}
-          className="mt-3 min-h-36 w-full rounded-lg border border-white/60 bg-white/45 px-3 py-3 font-mono text-xs font-semibold leading-5 text-[#1F2937] outline-none backdrop-blur-2xl focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
+          className="mt-3 min-h-36 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 font-mono text-xs leading-5 text-slate-950 outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
           spellCheck={false}
+        />
+      );
+    }
+
+    if (String(draft[key] ?? "").length > 120) {
+      return (
+        <textarea
+          value={draft[key] ?? ""}
+          onChange={(event) => updateDraft(key, event.target.value)}
+          className="mt-3 min-h-28 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm leading-6 text-slate-950 outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
         />
       );
     }
@@ -307,155 +411,146 @@ export default function AdminArtistDashboard() {
         type={typeof value === "number" ? "number" : "text"}
         value={draft[key] ?? ""}
         onChange={(event) => updateDraft(key, event.target.value)}
-        className="mt-3 h-11 w-full rounded-lg border border-white/60 bg-white/45 px-3 text-sm font-bold text-[#1F2937] outline-none backdrop-blur-2xl focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
+        className="mt-3 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-950 outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
       />
     );
-  };
+  }
+
+  if (loading) {
+    return (
+      <section className="mx-auto w-full max-w-7xl bg-slate-50 px-4 py-8 text-slate-950 sm:px-6 lg:px-8">
+        <LoadingState />
+      </section>
+    );
+  }
 
   return (
-    <section className="mx-auto w-full max-w-7xl text-[#1F2937]">
-      <FloatingToast toast={toast} onClose={() => setToast(null)} />
+    <section className="mx-auto w-full max-w-7xl bg-slate-50 px-4 py-8 text-slate-950 sm:px-6 lg:px-8">
+      <div className="space-y-6">
+        <StatusMessage message={message} onDismiss={() => setMessage(null)} />
 
-      {loading ? (
-        <DashboardSkeleton />
-      ) : profile ? (
-        <div className="space-y-6">
-          <div className="rounded-lg border border-white/60 bg-white/40 p-6 shadow-[0_24px_80px_rgba(31,41,55,0.10)] backdrop-blur-2xl">
-            <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
-              <div>
-                <Link
-                  to="/admin/artists"
-                  className="inline-flex items-center gap-2 text-sm font-black text-indigo-700 transition hover:text-indigo-950"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Artist registry
-                </Link>
-                <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-center">
-                  <div className="h-24 w-24 overflow-hidden rounded-lg border border-white/70 bg-white/50">
-                    {profile.profileImageUrl || profile.profilePhoto || profile.media?.profilePhoto ? (
-                      <img
-                        src={profile.profileImageUrl || profile.profilePhoto || profile.media?.profilePhoto}
-                        alt={profile.name || "Artist profile"}
-                        className="h-full w-full object-cover"
-                      />
+        {profile ? (
+          <>
+            <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-start">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                    {profileImage ? (
+                      <img src={profileImage} alt={profile.name || "Artist profile"} className="h-full w-full object-cover" />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xl font-black text-indigo-700">
-                        {(profile.name || "A").slice(0, 1)}
-                      </div>
+                      <span className="text-3xl font-bold text-slate-400">
+                        {(profile.name || profile.fullName || "A").slice(0, 1)}
+                      </span>
                     )}
                   </div>
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-700">Admin Artist Control</p>
-                    <h1 className="mt-2 text-3xl font-black text-[#1E1B4B] sm:text-4xl">
-                      {profile.name || profile.fullName || "Artist Profile"}
+                    <Link to="/admin/artists" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-orange-700">
+                      <ArrowLeft className="h-4 w-4" />
+                      Artist registry
+                    </Link>
+                    <p className="mt-4 text-xs font-bold uppercase tracking-[0.22em] text-orange-600">
+                      Admin Artist Dashboard
+                    </p>
+                    <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                      {profile.name || profile.fullName || profile.stageName || "Artist Profile"}
                     </h1>
-                    <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[#1F2937]">
-                      Unrestricted document view with synchronized Firebase update controls.
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                      Complete Firestore profile view with private contact details, timestamps, media URLs, and editable submitted data.
                     </p>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={editMode}
-                  onClick={() => setEditMode((value) => !value)}
-                  className="inline-flex items-center gap-3 rounded-lg border border-white/60 bg-white/45 px-4 py-3 text-sm font-black text-[#1E1B4B] backdrop-blur-2xl transition hover:bg-white/70"
-                >
-                  <span
-                    className={`relative h-7 w-12 rounded-full border border-white/70 transition ${
-                      editMode ? "bg-indigo-700" : "bg-white/60"
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditMode((current) => !current)}
+                    className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-bold transition ${
+                      editMode
+                        ? "border-orange-500 bg-orange-50 text-orange-800"
+                        : "border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
                     }`}
                   >
-                    <span
-                      className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition ${
-                        editMode ? "left-5" : "left-0.5"
-                      }`}
-                    />
-                  </span>
-                  {editMode ? "Edit Mode" : "Read-Only"}
-                </button>
-
-                {editMode ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={cancelEditing}
-                      className="rounded-lg border border-white/60 bg-white/45 px-4 py-3 text-sm font-black text-[#1E1B4B] backdrop-blur-2xl transition hover:bg-white/70"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={saveChanges}
-                      disabled={saving}
-                      className={`inline-flex items-center gap-2 rounded-lg bg-[#1E1B4B] px-4 py-3 text-sm font-black text-white shadow-[0_16px_40px_rgba(30,27,75,0.22)] transition ${
-                        saving ? "pointer-events-none cursor-not-allowed opacity-50" : "hover:bg-indigo-900"
-                      }`}
-                    >
-                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                      Save Changes
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {summary.map((item) => (
-              <div key={item.label} className="rounded-lg border border-white/60 bg-white/40 p-5 backdrop-blur-2xl">
-                <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-indigo-700">
-                  <ShieldCheck className="h-4 w-4" />
-                  {item.label}
-                </p>
-                <p className="mt-3 break-words text-lg font-black text-[#1E1B4B]">{formatValue(item.value)}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-lg border border-white/60 bg-white/35 p-5 backdrop-blur-2xl">
-            <div className="mb-5 flex items-center gap-3">
-              <SlidersHorizontal className="h-5 w-5 text-indigo-700" />
-              <h2 className="text-xl font-black text-[#1E1B4B]">Complete Firestore Document</h2>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              {entries.map(([key, value]) => (
-                <motion.div
-                  key={key}
-                  layout
-                  className="rounded-lg border border-white/60 bg-white/40 p-4 backdrop-blur-2xl"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-700">{formatLabel(key)}</p>
-                    <span className="rounded-lg border border-white/60 bg-white/40 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-600">
-                      {Array.isArray(value) ? "array" : isTimestampLike(value) ? "timestamp" : typeof value}
-                    </span>
-                  </div>
+                    <Pencil className="h-4 w-4" />
+                    {editMode ? "Editing Profile" : "Edit Profile"}
+                  </button>
 
                   {editMode ? (
-                    renderEditControl(key, value)
-                  ) : (
-                    <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-white/60 bg-white/35 p-3 text-sm font-semibold leading-6 text-[#1F2937]">
-                      {formatValue(value)}
-                    </pre>
-                  )}
-                </motion.div>
+                    <>
+                      <button
+                        type="button"
+                        onClick={cancelEditing}
+                        disabled={saving}
+                        className="h-11 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveChanges}
+                        disabled={saving}
+                        className="inline-flex h-11 items-center gap-2 rounded-lg bg-orange-500 px-4 text-sm font-bold text-black transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        {saving ? "Saving" : "Save Updates"}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {summary.map((item) => (
+                <div key={item.label} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-orange-600">
+                    <ShieldCheck className="h-4 w-4" />
+                    {item.label}
+                  </p>
+                  <p className="mt-3 break-words text-lg font-bold text-slate-950">{formatValue(item.value)}</p>
+                </div>
               ))}
             </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-end">
+                <div>
+                  <h2 className="text-xl font-bold tracking-tight text-slate-950">Submitted Profile Data</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {editMode ? "Edit the fields below and save directly to Firestore." : "Review every field currently stored on the artist document."}
+                  </p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-600">
+                  {entries.length} fields
+                </span>
+              </div>
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                {entries.map(([key, value]) => (
+                  <article key={key} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                        {formatLabel(key)}
+                      </p>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                        {Array.isArray(value) ? "array" : isTimestampLike(value) ? "timestamp" : typeof value}
+                      </span>
+                    </div>
+
+                    {editMode ? renderEditControl(key, value) : renderValue(key, value)}
+                  </article>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <p className="text-lg font-bold text-slate-950">Artist profile not found.</p>
+            <Link to="/admin/artists" className="mt-4 inline-flex text-sm font-semibold text-orange-700 hover:text-orange-900">
+              Back to registry
+            </Link>
           </div>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-white/60 bg-white/40 p-8 text-center backdrop-blur-2xl">
-          <p className="text-lg font-black text-[#1E1B4B]">Artist profile not found.</p>
-          <Link to="/admin/artists" className="mt-4 inline-flex text-sm font-black text-indigo-700">
-            Back to registry
-          </Link>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }
