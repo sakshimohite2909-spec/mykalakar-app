@@ -35,6 +35,13 @@ service firebase.storage {
       allow write: if (isOwner(uid) || isAdmin()) && isImage();
     }
 
+    match /artists/{artistId}/{fileName} {
+      allow read: if true;
+      allow write: if (isOwner(artistId) || isAdmin())
+        && isImage()
+        && fileName.matches('profile_.*');
+    }
+
     match /identity/{uid}/{fileName} {
       allow read, write: if isOwner(uid) || isAdmin();
     }

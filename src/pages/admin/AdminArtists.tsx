@@ -170,7 +170,7 @@ export default function AdminArtists() {
                   </TableCell>
                   <TableCell className="text-right px-8">
                     <div className="flex justify-end gap-2">
-                       <Link to={`/artist/${a.id}`}>
+                       <Link to={`/admin/artist/${a.id}`}>
                         <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white hover:text-orange-600 shadow-sm"><Eye className="h-4 w-4" /></Button>
                       </Link>
                       <Button variant="ghost" size="icon" onClick={() => { setEditingArtist(a); setEditModalOpen(true); }} className="rounded-xl hover:bg-white hover:text-blue-600 shadow-sm"><Edit className="h-4 w-4" /></Button>
