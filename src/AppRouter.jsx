@@ -13,7 +13,6 @@ const LocationSelection = lazy(() => import("./pages/LocationSelection"));
 const EventRequirements = lazy(() => import("./pages/EventRequirements"));
 const ArtistProfile = lazy(() => import("./pages/ArtistProfile"));
 const EventDetails = lazy(() => import("./pages/EventDetails"));
-const ArtistRegistrationForm = lazy(() => import("./pages/artist-registration/ArtistRegistrationForm"));
 const ArtistRegister = lazy(() => import("./pages/ArtistRegister"));
 const ArtistLogin = lazy(() => import("./pages/ArtistLogin"));
 const UserProfile = lazy(() => import("./pages/UserProfile"));
@@ -42,7 +41,7 @@ const router = createBrowserRouter([
     element: <MainLayout />,
     children: [
       { index: true, element: <Index /> },
-      { path: "register", element: <ArtistRegistrationForm /> },
+      { path: "register", element: <ArtistRegister /> },
       { path: "artist-register", element: <ArtistRegister /> },
       { path: "admin-register", element: <ArtistRegister /> },
       { path: "user-register", element: <ArtistRegister /> },

@@ -42,8 +42,9 @@ import {
   Youtube,
 } from "lucide-react";
 import { collection, doc, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
+import { FIREBASE_UPLOAD_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getExternalUrl, getYoutubeThumbnailUrl } from "@/lib/youtube";
@@ -76,6 +77,7 @@ type ExtraArtEntry = {
   performancePreview: string;
   youtubeLinks: PortfolioLink[];
 };
+type PreparedExtraArtEntry = Omit<ExtraArtEntry, "youtubeLinks"> & { youtubeLinks: string[] };
 
 const roleTabs: Array<{ id: AuthRole; label: string; icon: ComponentType<{ className?: string }>; color: string }> = [
   { id: "artist", label: "Artist", icon: Music, color: "from-orange-500 to-amber-400" },
@@ -232,6 +234,9 @@ const userDefaults: UserRegistrationValues = {
 const inputClass =
   "input-premium w-full px-4 py-3 text-[#1A1A1A]";
 const errorInputClass = "border-red-400 focus:border-red-500 focus:ring-red-200";
+const PROFILE_IMAGE_HELPER_TEXT = "For optimal 3D gallery display, images must be close-up shots and 4k resolution.";
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
 
 function digitsOnly(value: string, maxLength: number) {
   return value.replace(/\D/g, "").slice(0, maxLength);
@@ -265,6 +270,71 @@ function getAgeLabel(dob: string) {
 
 function syntheticEmail(username: string) {
   return `${username.toLowerCase().trim()}@mykalakar.app`;
+}
+
+function sanitizeStorageFileName(fileName: string) {
+  const safeName = String(fileName || "artist-image")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9._-]/g, "")
+    .replace(/-+/g, "-")
+    .slice(0, 96);
+
+  return safeName || "artist-image";
+}
+
+function validateImageFile(file: File | null, required = false) {
+  if (!file) {
+    return required
+      ? { valid: false, message: "Profile image is required before submitting." }
+      : { valid: true, message: "" };
+  }
+
+  if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+    return { valid: false, message: "Please upload a JPG, PNG, or WebP image." };
+  }
+
+  if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    return { valid: false, message: "Image must be 20MB or smaller." };
+  }
+
+  return { valid: true, message: "" };
+}
+
+async function uploadArtistRegistrationImage(uid: string, file: File, folder: string) {
+  const validation = validateImageFile(file, true);
+  if (!validation.valid) throw new Error(validation.message);
+
+  const safeFileName = sanitizeStorageFileName(file.name);
+  const storagePath = `artists/${uid}/${folder}/${Date.now()}-${safeFileName}`;
+  const storageRef = ref(storage, storagePath);
+  const snapshot = await withTimeout(
+    uploadBytes(storageRef, file, {
+      contentType: file.type,
+      customMetadata: {
+        artistId: uid,
+        uploadPurpose: folder,
+      },
+    }),
+    FIREBASE_UPLOAD_TIMEOUT_MS,
+    `Could not upload ${folder.replace(/-/g, " ")} image.`
+  );
+  const downloadUrl = await withTimeout(
+    getDownloadURL(snapshot.ref),
+    FIREBASE_UPLOAD_TIMEOUT_MS,
+    `Could not resolve ${folder.replace(/-/g, " ")} image URL.`
+  );
+
+  return { downloadUrl, storagePath };
+}
+
+async function uploadOptionalArtistImage(uid: string, file: File | null, folder: string) {
+  if (!file) return { downloadUrl: "", storagePath: "" };
+
+  const validation = validateImageFile(file);
+  if (!validation.valid) throw new Error(validation.message);
+
+  return uploadArtistRegistrationImage(uid, file, folder);
 }
 
 function FieldError({ message }: { message?: string }) {
@@ -784,6 +854,7 @@ function FileDrop({
   description,
   file,
   preview,
+  helperText,
   required,
   tone = "orange",
   onChange,
@@ -792,6 +863,7 @@ function FileDrop({
   description: string;
   file: File | null;
   preview: string;
+  helperText?: string;
   required?: boolean;
   tone?: "orange" | "blue" | "slate";
   onChange: (file: File | null) => void;
@@ -812,7 +884,7 @@ function FileDrop({
   return (
     <div>
       <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">
-        {label} {required ? "*" : ""}
+        {label} {required ? <span className="text-red-500">*</span> : null}
       </label>
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleChange} />
       <button
@@ -836,6 +908,7 @@ function FileDrop({
           </>
         )}
       </button>
+      {helperText ? <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{helperText}</p> : null}
     </div>
   );
 }
@@ -984,6 +1057,12 @@ export default function ArtistRegister() {
     setFile: (file: File | null) => void,
     setPreview: (preview: string) => void
   ) => {
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      toast({ variant: "destructive", title: "Invalid image", description: validation.message });
+      return;
+    }
+
     if (currentPreview) URL.revokeObjectURL(currentPreview);
     setFile(file);
     setPreview(file ? URL.createObjectURL(file) : "");
@@ -991,6 +1070,12 @@ export default function ArtistRegister() {
 
   const addGalleryFile = (file: File | null) => {
     if (!file) return;
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      toast({ variant: "destructive", title: "Invalid image", description: validation.message });
+      return;
+    }
+
     if (galleryFiles.length >= 10) {
       toast({ variant: "destructive", title: "Gallery limit", description: "You can upload up to 10 gallery photos." });
       return;
@@ -1021,6 +1106,12 @@ export default function ArtistRegister() {
   };
 
   const updateExtraArtMediaFile = (id: string, field: ExtraArtMediaField, file: File | null) => {
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      toast({ variant: "destructive", title: "Invalid image", description: validation.message });
+      return;
+    }
+
     const fileKey = field === "profile" ? "profileFile" : "performanceFile";
     const previewKey = field === "profile" ? "profilePreview" : "performancePreview";
 
@@ -1061,12 +1152,50 @@ export default function ArtistRegister() {
     });
   }, []);
 
-  const getSkippedRegistrationMedia = () => ({
-    profilePhoto: "",
-    coverPhoto: "",
-    aadharPhoto: "",
-    galleryPhotos: [] as string[],
-  });
+  const uploadRegistrationMedia = async (uid: string, preparedExtraArts: PreparedExtraArtEntry[]) => {
+    if (!profileFile) {
+      throw new Error("Profile image is required before submitting.");
+    }
+
+    const profileUpload = await uploadArtistRegistrationImage(uid, profileFile, "profile");
+    const [coverUpload, aadharUpload, galleryUploads, extraArtUploads] = await Promise.all([
+      uploadOptionalArtistImage(uid, coverFile, "cover"),
+      uploadOptionalArtistImage(uid, aadharFile, "identity"),
+      Promise.all(
+        galleryFiles.map((item, index) =>
+          uploadArtistRegistrationImage(uid, item.file, `gallery/${index + 1}`)
+        )
+      ),
+      Promise.all(
+        preparedExtraArts.map(async (entry, index) => {
+          const [profileMedia, performanceMedia] = await Promise.all([
+            uploadOptionalArtistImage(uid, entry.profileFile, `arts/${index + 2}/profile`),
+            uploadOptionalArtistImage(uid, entry.performanceFile, `arts/${index + 2}/performance`),
+          ]);
+
+          return {
+            id: entry.id,
+            profilePhoto: profileMedia.downloadUrl,
+            profileStoragePath: profileMedia.storagePath,
+            performancePhoto: performanceMedia.downloadUrl,
+            performanceStoragePath: performanceMedia.storagePath,
+          };
+        })
+      ),
+    ]);
+
+    return {
+      profilePhoto: profileUpload.downloadUrl,
+      profileStoragePath: profileUpload.storagePath,
+      coverPhoto: coverUpload.downloadUrl,
+      coverStoragePath: coverUpload.storagePath,
+      aadharPhoto: aadharUpload.downloadUrl,
+      aadharStoragePath: aadharUpload.storagePath,
+      galleryPhotos: galleryUploads.map((item) => item.downloadUrl),
+      galleryStoragePaths: galleryUploads.map((item) => item.storagePath),
+      extraArtUploads,
+    };
+  };
 
   const scrollToError = () => {
     errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1099,6 +1228,13 @@ export default function ArtistRegister() {
       return;
     }
 
+    const profileValidation = validateImageFile(profileFile, true);
+    if (!profileValidation.valid) {
+      toast({ variant: "destructive", title: "Profile image required", description: profileValidation.message });
+      scrollToError();
+      return;
+    }
+
     setLoadingRole("artist");
 
     try {
@@ -1112,7 +1248,18 @@ export default function ArtistRegister() {
       }
 
       const uid = authResult.uid;
-      const { profilePhoto, coverPhoto, aadharPhoto, galleryPhotos } = getSkippedRegistrationMedia();
+      const {
+        profilePhoto,
+        profileStoragePath,
+        coverPhoto,
+        coverStoragePath,
+        aadharPhoto,
+        aadharStoragePath,
+        galleryPhotos,
+        galleryStoragePaths,
+        extraArtUploads,
+      } = await uploadRegistrationMedia(uid, preparedExtraArts);
+      const extraArtUploadMap = new Map(extraArtUploads.map((item) => [item.id, item]));
       const primaryCategoryYoutubeLinks = getSubmittedYoutubeLinks(primaryArtYoutubeLinks);
       const normalizeSubmittedCategory = (value: string) => normalizeArtistType(value) ?? value.trim();
       const buildCategoryEntry = ({
@@ -1175,14 +1322,29 @@ export default function ArtistRegister() {
       ];
       const youtubeLinks = Array.from(new Set(artEntries.flatMap((entry) => entry.youtubeLinks)));
       const socialLinks = youtubeLinks.map((url) => ({ platform: "youtube" as const, url }));
-      const categoryMedia = artEntries.map((entry) => ({
-        mainCategory: entry.mainCategory,
-        category: entry.category,
-        artForm: entry.artForm,
-        profilePhotos: [] as string[],
-        performancePhotos: [] as string[],
-        youtubeLinks: entry.youtubeLinks,
-      }));
+      const categoryMedia = [
+        {
+          mainCategory: artEntries[0]?.mainCategory || values.mainCategory,
+          category: artEntries[0]?.category || values.artCategory,
+          artForm: artEntries[0]?.artForm || values.artCategory,
+          profilePhotos: [profilePhoto].filter(Boolean),
+          performancePhotos: [coverPhoto, ...galleryPhotos].filter(Boolean),
+          youtubeLinks: primaryCategoryYoutubeLinks,
+        },
+        ...preparedExtraArts.map((entry, index) => {
+          const media = extraArtUploadMap.get(entry.id);
+          const artEntry = artEntries[index + 1];
+
+          return {
+            mainCategory: artEntry?.mainCategory || entry.mainCategory,
+            category: artEntry?.category || entry.category,
+            artForm: artEntry?.artForm || entry.category,
+            profilePhotos: media?.profilePhoto ? [media.profilePhoto] : [],
+            performancePhotos: media?.performancePhoto ? [media.performancePhoto] : [],
+            youtubeLinks: entry.youtubeLinks,
+          };
+        }),
+      ];
       const artForms = Array.from(new Set(artEntries.map((entry) => entry.artForm).filter(Boolean)));
       const categoryNames = Array.from(new Set(artEntries.map((entry) => entry.artForm).filter(Boolean)));
       const artistProfile = {
@@ -1191,6 +1353,7 @@ export default function ArtistRegister() {
         bio: values.bio || "",
         location: [values.district, values.state].filter(Boolean).join(", "),
         profileImage: profilePhoto,
+        coverImage: coverPhoto,
         youtubeLinks,
       };
 
@@ -1198,6 +1361,7 @@ export default function ArtistRegister() {
         uid,
         username: normalizedUsername,
         email,
+        privateEmail: email,
         status: "pending",
         rejectionReason: "",
         name: values.fullName,
@@ -1251,13 +1415,21 @@ export default function ArtistRegister() {
         },
         media: {
           profilePhoto,
+          profileImageUrl: profilePhoto,
+          profileStoragePath,
           coverPhoto,
+          coverImageUrl: coverPhoto,
+          coverStoragePath,
           galleryPhotos,
+          galleryStoragePaths,
           aadharPhoto,
+          aadharStoragePath,
           categoryMedia,
         },
         profilePhoto,
+        profileImageUrl: profilePhoto,
         coverPhoto,
+        coverImageUrl: coverPhoto,
         galleryPhotos,
         aadharPhoto,
         socialLinks,
@@ -1271,8 +1443,8 @@ export default function ArtistRegister() {
           needAssistant: values.hasAssistant ? "yes" : "no",
         },
         suggestionComment: values.suggestionComment || "",
-        mediaUploadStatus: "skipped",
-        mediaUploadWarnings: ["Image uploads were skipped for this registration to avoid Firebase Storage usage."],
+        mediaUploadStatus: "uploaded",
+        mediaUploadWarnings: [],
         verified: false,
         trending: false,
         createdAt: serverTimestamp(),
@@ -1281,6 +1453,7 @@ export default function ArtistRegister() {
 
       const batch = writeBatch(db);
       batch.set(doc(collection(db, "artist_applications")), payload);
+      batch.set(doc(db, "artists", uid), payload, { merge: true });
       batch.set(
         doc(db, "users", uid),
         sanitizePayload({
@@ -1303,7 +1476,7 @@ export default function ArtistRegister() {
       await logout().catch((logoutError) => console.warn("Logout after artist registration failed:", logoutError));
       toast({
         title: "Registration submitted",
-        description: "Your artist profile is under review. Image uploads were skipped for this submission.",
+        description: "Your artist profile and media assets are saved for admin review.",
       });
       navigate("/login?role=artist");
     } catch (error) {
@@ -1704,6 +1877,8 @@ export default function ArtistRegister() {
                       description="Upload Profile Photo"
                       file={profileFile}
                       preview={profilePreview}
+                      required
+                      helperText={PROFILE_IMAGE_HELPER_TEXT}
                       onChange={(file) => setPreviewFile(file, profilePreview, setProfileFile, setProfilePreview)}
                     />
                     <FileDrop
@@ -1960,9 +2135,10 @@ export default function ArtistRegister() {
 
                 <button
                   type="submit"
-                  disabled={!artistForm.formState.isValid || loadingRole === "artist"}
+                  disabled={!artistForm.formState.isValid || !profileFile || loadingRole === "artist"}
+                  aria-disabled={!artistForm.formState.isValid || !profileFile || loadingRole === "artist"}
                   className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-400 text-sm font-black uppercase tracking-widest text-white shadow-lg ${
-                    !artistForm.formState.isValid || loadingRole === "artist" ? "cursor-not-allowed opacity-50" : ""
+                    !artistForm.formState.isValid || !profileFile || loadingRole === "artist" ? "cursor-not-allowed opacity-50" : ""
                   }`}
                 >
                   {loadingRole === "artist" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
