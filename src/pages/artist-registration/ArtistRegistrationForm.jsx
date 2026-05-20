@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
   AlertCircle,
   ArrowRight,
@@ -8,10 +11,8 @@ import {
   Loader2,
   UploadCloud,
 } from "lucide-react";
-import {
-  registerArtistProfile,
-  validateProfileImageFile,
-} from "@/services/firebaseServices";
+import { auth, db, storage } from "@/lib/firebase";
+import { validateProfileImageFile } from "@/services/firebaseServices";
 
 const initialFormState = {
   fullName: "",
@@ -48,6 +49,16 @@ function isValidUrl(value) {
   } catch {
     return false;
   }
+}
+
+function sanitizeUploadFileName(fileName) {
+  const safeName = String(fileName || "artist-profile.jpg")
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9._-]/g, "")
+    .slice(0, 96);
+
+  return safeName || "artist-profile.jpg";
 }
 
 function validateForm(formData, profileImage) {
@@ -157,26 +168,25 @@ function FormMessage({ message, onDismiss }) {
 export default function ArtistRegistrationForm() {
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState(initialFormState);
-  const [profileImage, setProfileImage] = useState(null);
+  const [selectedImageState, setSelectedImageState] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const currentValidation = useMemo(() => validateForm(formData, profileImage), [formData, profileImage]);
-  const canSubmit = Object.keys(currentValidation).length === 0 && !submitting;
+  const canSubmit = Boolean(selectedImageState) && !isLoading;
 
   useEffect(() => {
-    if (!profileImage) {
+    if (!selectedImageState) {
       setPreviewUrl("");
       return undefined;
     }
 
-    const objectUrl = URL.createObjectURL(profileImage);
+    const objectUrl = URL.createObjectURL(selectedImageState);
     setPreviewUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
-  }, [profileImage]);
+  }, [selectedImageState]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -192,19 +202,19 @@ export default function ArtistRegistrationForm() {
     const validation = validateProfileImageFile(file);
 
     if (!validation.valid) {
-      setProfileImage(null);
+      setSelectedImageState(null);
       setErrors((current) => ({ ...current, profileImage: validation.message }));
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
-    setProfileImage(file);
+    setSelectedImageState(file);
     setErrors((current) => ({ ...current, profileImage: "" }));
   }
 
   function resetForm() {
     setFormData(initialFormState);
-    setProfileImage(null);
+    setSelectedImageState(null);
     setPreviewUrl("");
     setUploadProgress(0);
     setErrors({});
@@ -215,7 +225,7 @@ export default function ArtistRegistrationForm() {
     event.preventDefault();
     setMessage(null);
 
-    const nextErrors = validateForm(formData, profileImage);
+    const nextErrors = validateForm(formData, selectedImageState);
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -227,33 +237,73 @@ export default function ArtistRegistrationForm() {
       return;
     }
 
-    setSubmitting(true);
+    setIsLoading(true);
     setUploadProgress(0);
 
     try {
+      const credential = await createUserWithEmailAndPassword(
+        auth,
+        formData.email.trim(),
+        formData.password
+      );
+      const safeFileName = sanitizeUploadFileName(selectedImageState.name);
+      const profileImageRef = ref(
+        storage,
+        `artists/${credential.user.uid}/profile/${Date.now()}_${safeFileName}`
+      );
+      const uploadSnapshot = await uploadBytes(profileImageRef, selectedImageState, {
+        contentType: selectedImageState.type,
+      });
+      const profileImageUrl = await getDownloadURL(uploadSnapshot.ref);
+      setUploadProgress(100);
+
       const payload = {
-        ...formData,
         fullName: formData.fullName.trim(),
         stageName: formData.stageName.trim(),
-        email: formData.email.trim(),
+        email: credential.user.email || formData.email.trim(),
+        privateEmail: credential.user.email || formData.email.trim(),
         phoneNumber: formData.phoneNumber.trim(),
+        mobileNumber: formData.phoneNumber.trim(),
+        discipline: formData.discipline,
+        mainCategory: formData.discipline,
+        category: formData.artForm.trim(),
         artForm: formData.artForm.trim(),
+        subcategory: formData.artForm.trim(),
         city: formData.city.trim(),
+        district: formData.city.trim(),
         state: formData.state.trim(),
         experienceYears: Number(formData.experienceYears),
         bio: formData.bio.trim(),
         instagramUrl: formData.instagramUrl.trim(),
         portfolioUrl: formData.portfolioUrl.trim(),
+        uid: credential.user.uid,
+        artistId: credential.user.uid,
+        name: formData.stageName.trim() || formData.fullName.trim(),
+        displayName: formData.stageName.trim() || formData.fullName.trim(),
+        profileImageUrl,
+        imageUrl: profileImageUrl,
+        profilePhoto: profileImageUrl,
+        media: {
+          profilePhoto: profileImageUrl,
+          profileImageUrl,
+          profileStoragePath: uploadSnapshot.ref.fullPath,
+        },
+        storage: {
+          profileImagePath: uploadSnapshot.ref.fullPath,
+        },
+        status: "pending",
+        applicationStatus: "pending",
+        verified: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
 
-      const result = await registerArtistProfile(payload, profileImage, ({ progress }) => {
-        setUploadProgress(progress);
-      });
+      const artistRef = await addDoc(collection(db, "artists"), payload);
 
       setMessage({
         type: "success",
         title: "Artist profile submitted",
-        body: `The profile was saved to Firebase with artist ID ${result.artistId}.`,
+        body: `The profile was saved to Firebase with artist ID ${artistRef.id}.`,
       });
       resetForm();
     } catch (error) {
@@ -263,7 +313,7 @@ export default function ArtistRegistrationForm() {
         body: error?.message || "Could not submit the artist profile.",
       });
     } finally {
-      setSubmitting(false);
+      setIsLoading(false);
     }
   }
 
@@ -429,10 +479,10 @@ export default function ArtistRegistrationForm() {
                 </div>
                 <div className="text-sm text-slate-700">
                   <p className="font-semibold text-slate-950">
-                    {profileImage ? profileImage.name : "No valid image selected"}
+                    {selectedImageState ? selectedImageState.name : "No valid image selected"}
                   </p>
                   <p className="mt-1">Accepted formats: JPG, PNG, WebP. Maximum size: 12MB.</p>
-                  {submitting ? (
+                  {isLoading ? (
                     <div className="mt-3">
                       <div className="h-2 overflow-hidden rounded-full bg-slate-200">
                         <div className="h-full bg-orange-500 transition-all" style={{ width: `${uploadProgress}%` }} />
@@ -450,17 +500,17 @@ export default function ArtistRegistrationForm() {
               </p>
               <button
                 type="submit"
-                disabled={!canSubmit}
-                aria-disabled={!canSubmit}
+                disabled={!selectedImageState || isLoading}
+                aria-disabled={!selectedImageState || isLoading}
                 className={`inline-flex h-12 items-center justify-center gap-2 rounded-lg px-6 text-sm font-bold transition ${
                   canSubmit
                     ? "bg-orange-500 text-black shadow-sm hover:bg-orange-600 focus:outline-none focus:ring-4 focus:ring-orange-100"
                     : "pointer-events-none cursor-not-allowed bg-slate-200 text-slate-500"
                 }`}
               >
-                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
-                {submitting ? "Submitting" : "Submit Profile"}
-                {!submitting ? <ArrowRight className="h-4 w-4" /> : null}
+                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
+                {isLoading ? "Submitting" : "Submit Profile"}
+                {!isLoading ? <ArrowRight className="h-4 w-4" /> : null}
               </button>
             </div>
           </form>

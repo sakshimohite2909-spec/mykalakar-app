@@ -122,7 +122,12 @@ function normalizeArtEntries(profile) {
 function readArtistProfile(profile, routeId) {
   const identity = profile?.identity || {};
   const contact = profile?.contact || {};
-  const artistProfile = profile?.artistProfile || {};
+  const artistProfile = profile?.artistProfile || profile?.artisticProfile || {};
+  const artistExperience = artistProfile?.experience || {};
+  const artistExperienceYears =
+    artistExperience && typeof artistExperience === "object" ? artistExperience?.years : artistExperience;
+  const artistCompletedShows =
+    artistExperience && typeof artistExperience === "object" ? artistExperience?.completedShows : undefined;
   const analytics = profile?.performanceAnalytics || {};
   const pricing = profile?.services?.pricing || profile?.pricing || {};
   const media = profile?.media || {};
@@ -133,6 +138,7 @@ function readArtistProfile(profile, routeId) {
   const primaryArt = artEntries[0] || {};
   const categories = uniqueList([
     ...toArray(artistProfile.artForms),
+    ...toArray(artistProfile.categories),
     ...toArray(profile?.categories),
     ...toArray(profile?.categoriesArray).map((entry) => firstValue(entry?.artForm, entry?.category)),
     primaryArt.artForm,
@@ -148,8 +154,8 @@ function readArtistProfile(profile, routeId) {
     documentId: firstValue(routeId, profile?.id, profile?.artistId, profile?.uid),
     uid: firstValue(profile?.uid, profile?.artistId, routeId),
     username: profile?.username,
-    fullName: firstValue(profile?.name, profile?.fullName, profile?.artistName, identity.legalName),
-    brandName: firstValue(profile?.brandName, profile?.nickName, identity.brandName, profile?.stageName),
+    fullName: firstValue(identity.legalName, profile?.legalName, profile?.fullName, profile?.artistName, profile?.name),
+    brandName: firstValue(identity.brandName, profile?.brandName, profile?.stageName, profile?.nickName),
     privateEmail: firstValue(contact.privateEmail, profile?.privateEmail, profile?.email),
     mobileNumber: firstValue(contact.mobileNumber, profile?.mobileNumber, profile?.phoneNumber, profile?.phone),
     emergencyNumber: firstValue(contact.emergencyNumber, profile?.emergencyNumber),
@@ -160,15 +166,18 @@ function readArtistProfile(profile, routeId) {
     gender: profile?.gender,
     travelWillingness: profile?.travelWillingness,
     languages: uniqueList([...toArray(profile?.languages), ...toArray(profile?.languagesSpoken)]),
-    district: firstValue(contact.district, profile?.district, profile?.city),
+    city: firstValue(contact.city, profile?.city),
+    district: firstValue(contact.district, profile?.district),
     state: firstValue(contact.state, profile?.state),
-    mainCategory: firstValue(primaryArt.mainCategory, profile?.mainCategory, profile?.category),
-    artForm: firstValue(primaryArt.artForm, profile?.artForm, profile?.subcategory),
+    discipline: firstValue(profile?.discipline, profile?.mainCategory, profile?.category, primaryArt.mainCategory),
+    mainCategory: firstValue(primaryArt.mainCategory, profile?.mainCategory, profile?.category, profile?.discipline),
+    artForm: firstValue(primaryArt.artForm, profile?.artForm, artistProfile?.subcategory, profile?.subcategory),
     categories,
     types: uniqueList([...toArray(profile?.types), ...toArray(primaryArt.types)]),
     artEntries,
     bio: firstValue(artistProfile.bio, profile?.bio, profile?.description),
-    experience: toNumber(firstValue(artistProfile.experience, profile?.experience, profile?.experienceYears)),
+    experience: toNumber(firstValue(artistExperienceYears, profile?.experience, profile?.experienceYears)),
+    completedShows: toNumber(firstValue(artistCompletedShows, profile?.completedShows)),
     followers: toNumber(firstValue(analytics.followers, profile?.followers)),
     views: toNumber(firstValue(analytics.views, profile?.views)),
     rating: toNumber(profile?.rating),
@@ -186,6 +195,7 @@ function readArtistProfile(profile, routeId) {
     bankName: firstValue(bankDetails.bankName, profile?.bankName),
     ifscCode: firstValue(bankDetails.ifscCode, profile?.ifscCode),
     accountNumber: firstValue(bankDetails.accountNumber, profile?.accountNumber),
+    instagramUrl: firstValue(profile?.instagramUrl),
     portfolioUrl: firstValue(profile?.portfolioUrl, youtubeLinks[0]),
     liveLink: profile?.liveLink,
     youtubeLinks,
@@ -199,6 +209,7 @@ function readArtistProfile(profile, routeId) {
     trending: Boolean(profile?.trending),
     mediaUploadStatus: profile?.mediaUploadStatus,
     mediaUploadWarnings: toArray(profile?.mediaUploadWarnings),
+    profileStoragePath: firstValue(media.profileStoragePath, profile?.storage?.profileImagePath),
     createdAt: profile?.createdAt,
     updatedAt: profile?.updatedAt,
   };
@@ -219,14 +230,17 @@ function makeDraft(viewModel) {
     gender: viewModel.gender || "",
     travelWillingness: viewModel.travelWillingness || "",
     languages: viewModel.languages.join(", "),
+    city: viewModel.city || "",
     district: viewModel.district || "",
     state: viewModel.state || "",
+    discipline: viewModel.discipline || "",
     mainCategory: viewModel.mainCategory || "",
     artForm: viewModel.artForm || "",
     categories: viewModel.categories.join(", "),
     types: viewModel.types.join(", "),
     bio: viewModel.bio || "",
     experience: String(viewModel.experience || 0),
+    completedShows: String(viewModel.completedShows || 0),
     followers: String(viewModel.followers || 0),
     views: String(viewModel.views || 0),
     rating: String(viewModel.rating || 0),
@@ -243,6 +257,7 @@ function makeDraft(viewModel) {
     bankName: viewModel.bankName || "",
     ifscCode: viewModel.ifscCode || "",
     accountNumber: viewModel.accountNumber || "",
+    instagramUrl: viewModel.instagramUrl || "",
     portfolioUrl: viewModel.portfolioUrl || "",
     liveLink: viewModel.liveLink || "",
     youtubeLinks: viewModel.youtubeLinks.join("\n"),
@@ -386,14 +401,16 @@ function EditCheckbox({ checked, label, name, onChange }) {
   );
 }
 
-function Pills({ emptyText = "None recorded", items }) {
-  if (!items.length) {
+function Pills({ emptyText = "None recorded", items = [] }) {
+  const safeItems = Array.isArray(items) ? items : [];
+
+  if (!safeItems.length) {
     return <p className="text-sm font-bold text-gray-600">{emptyText}</p>;
   }
 
   return (
     <div className="flex flex-wrap gap-2">
-      {items.map((item) => (
+      {safeItems.map((item) => (
         <span key={item} className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-black text-orange-700">
           {item}
         </span>
@@ -437,12 +454,14 @@ function MediaFrame({ alt, src, title, wide = false }) {
   );
 }
 
-function GalleryGrid({ images }) {
-  if (!images.length) return <p className="text-sm font-bold text-gray-600">No gallery photos uploaded</p>;
+function GalleryGrid({ images = [] }) {
+  const safeImages = Array.isArray(images) ? images : [];
+
+  if (!safeImages.length) return <p className="text-sm font-bold text-gray-600">No gallery photos uploaded</p>;
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-      {images.map((image, index) => (
+      {safeImages.map((image, index) => (
         <div key={`${image}-${index}`} className="aspect-square overflow-hidden rounded-lg border border-gray-200 bg-[#F9FAFB]">
           <img src={image} alt={`Gallery ${index + 1}`} className="h-full w-full object-cover" />
         </div>
@@ -451,12 +470,14 @@ function GalleryGrid({ images }) {
   );
 }
 
-function CategoryMediaList({ items }) {
-  if (!items.length) return <p className="text-sm font-bold text-gray-600">No category-specific media recorded</p>;
+function CategoryMediaList({ items = [] }) {
+  const safeItems = Array.isArray(items) ? items : [];
+
+  if (!safeItems.length) return <p className="text-sm font-bold text-gray-600">No category-specific media recorded</p>;
 
   return (
     <div className="grid gap-4">
-      {items.map((item, index) => {
+      {safeItems.map((item, index) => {
         const profilePhotos = toArray(item?.profilePhotos);
         const performancePhotos = toArray(item?.performancePhotos);
 
@@ -481,12 +502,14 @@ function CategoryMediaList({ items }) {
   );
 }
 
-function LinkList({ links }) {
-  if (!links.length) return <p className="text-sm font-bold text-gray-600">No links submitted</p>;
+function LinkList({ links = [] }) {
+  const safeLinks = Array.isArray(links) ? links : [];
+
+  if (!safeLinks.length) return <p className="text-sm font-bold text-gray-600">No links submitted</p>;
 
   return (
     <div className="grid gap-2">
-      {links.map((link) => (
+      {safeLinks.map((link) => (
         <a key={link} href={link} target="_blank" rel="noreferrer" className="break-all text-sm font-bold text-orange-700 hover:text-orange-900">
           {link}
         </a>
@@ -495,7 +518,9 @@ function LinkList({ links }) {
   );
 }
 
-function PricingTable({ artEntries }) {
+function PricingTable({ artEntries = [] }) {
+  const safeArtEntries = Array.isArray(artEntries) ? artEntries : [];
+
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200">
       <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr] bg-[#F9FAFB] text-xs font-black uppercase tracking-[0.14em] text-gray-500">
@@ -504,7 +529,7 @@ function PricingTable({ artEntries }) {
         <div className="px-3 py-3">Duo</div>
         <div className="px-3 py-3">Team</div>
       </div>
-      {artEntries.map((entry) => (
+      {safeArtEntries.map((entry) => (
         <div key={entry.id} className="grid grid-cols-[1.5fr_1fr_1fr_1fr] border-t border-gray-100 text-sm font-bold text-[#111827]">
           <div className="px-3 py-3">{formatValue(entry.artForm || entry.category)}</div>
           <div className="px-3 py-3">{formatCurrency(entry.soloPrice)}</div>
@@ -597,12 +622,15 @@ export default function AdminArtistDashboard() {
     const mobileNumber = draft.mobileNumber.trim();
     const emergencyNumber = draft.emergencyNumber.trim();
     const phoneOptional = draft.phoneOptional.trim();
+    const city = draft.city.trim();
     const district = draft.district.trim();
     const state = draft.state.trim();
-    const mainCategory = draft.mainCategory.trim();
+    const discipline = draft.discipline.trim();
+    const mainCategory = draft.mainCategory.trim() || discipline;
     const artForm = draft.artForm.trim() || categories[0] || "";
     const bio = draft.bio.trim();
     const experience = toNumber(draft.experience);
+    const completedShows = toNumber(draft.completedShows);
     const soloPrice = toNumber(draft.soloPrice);
     const duoPrice = toNumber(draft.duoPrice);
     const teamPrice = toNumber(draft.teamPrice);
@@ -674,8 +702,10 @@ export default function AdminArtistDashboard() {
       travelWillingness: draft.travelWillingness.trim(),
       languages,
       languagesSpoken: languages,
+      city,
       district,
       state,
+      discipline,
       category: mainCategory,
       mainCategory,
       subcategory: artForm,
@@ -687,6 +717,8 @@ export default function AdminArtistDashboard() {
       bio,
       description: bio,
       experience,
+      experienceYears: experience,
+      completedShows,
       followers: toNumber(draft.followers),
       views: toNumber(draft.views),
       rating: toNumber(draft.rating),
@@ -702,6 +734,7 @@ export default function AdminArtistDashboard() {
       coverImageUrl,
       galleryPhotos,
       aadharPhoto: aadharImageUrl,
+      instagramUrl: draft.instagramUrl.trim(),
       portfolioUrl: draft.portfolioUrl.trim(),
       liveLink: draft.liveLink.trim(),
       youtubeLinks,
@@ -728,6 +761,7 @@ export default function AdminArtistDashboard() {
       "contact.privateEmail": privateEmail,
       "contact.mobileNumber": mobileNumber,
       "contact.emergencyNumber": emergencyNumber,
+      "contact.city": city,
       "contact.district": district,
       "contact.state": state,
       "artistProfile.artForms": categories,
@@ -737,6 +771,14 @@ export default function AdminArtistDashboard() {
       "artistProfile.profileImage": profileImageUrl,
       "artistProfile.coverImage": coverImageUrl,
       "artistProfile.youtubeLinks": youtubeLinks,
+      "artisticProfile.categories": categories,
+      "artisticProfile.subcategory": artForm,
+      "artisticProfile.bio": bio,
+      "artisticProfile.experience": {
+        years: experience,
+        completedShows,
+        track: `${experience} years / ${completedShows} completed shows`,
+      },
       "performanceAnalytics.followers": toNumber(draft.followers),
       "performanceAnalytics.views": toNumber(draft.views),
       "services.pricing.soloPrice": soloPrice,
@@ -901,6 +943,7 @@ export default function AdminArtistDashboard() {
                 <EditInput label="Gender" name="gender" value={draft.gender} onChange={updateDraft} />
                 <EditInput label="Travel Willingness" name="travelWillingness" value={draft.travelWillingness} onChange={updateDraft} />
                 <EditInput label="Languages Spoken" name="languages" value={draft.languages} onChange={updateDraft} />
+                <EditInput label="City" name="city" value={draft.city} onChange={updateDraft} />
                 <EditInput label="District" name="district" value={draft.district} onChange={updateDraft} />
                 <EditInput label="State" name="state" value={draft.state} onChange={updateDraft} />
                 <EditCheckbox label="Show Age On Profile" name="showAgeOnProfile" checked={draft.showAgeOnProfile} onChange={updateDraft} />
@@ -918,6 +961,7 @@ export default function AdminArtistDashboard() {
                 <InfoRow label="Age Display" value={viewModel.showAgeOnProfile ? `${formatValue(viewModel.age)} shown` : "Hidden"} />
                 <InfoRow label="Gender" value={viewModel.gender} />
                 <InfoRow label="Travel Willingness" value={viewModel.travelWillingness} />
+                <InfoRow label="City" value={viewModel.city} />
                 <InfoRow label="District" value={viewModel.district} />
                 <InfoRow label="State" value={viewModel.state} />
                 <div className="py-3">
@@ -932,11 +976,14 @@ export default function AdminArtistDashboard() {
             {editMode ? (
               <div className="grid gap-4">
                 <div className="grid gap-4 sm:grid-cols-2">
+                  <EditInput label="Discipline" name="discipline" value={draft.discipline} onChange={updateDraft} />
                   <EditInput label="Main Category" name="mainCategory" value={draft.mainCategory} onChange={updateDraft} />
                   <EditInput label="Art Form / Subcategory" name="artForm" value={draft.artForm} onChange={updateDraft} />
                   <EditInput label="Category Pills" name="categories" value={draft.categories} onChange={updateDraft} />
                   <EditInput label="Types" name="types" value={draft.types} onChange={updateDraft} />
                   <EditInput label="Experience Years" name="experience" type="number" value={draft.experience} onChange={updateDraft} />
+                  <EditInput label="Completed Shows" name="completedShows" type="number" value={draft.completedShows} onChange={updateDraft} />
+                  <EditInput label="Instagram URL" name="instagramUrl" value={draft.instagramUrl} onChange={updateDraft} />
                   <EditInput label="Portfolio URL" name="portfolioUrl" value={draft.portfolioUrl} onChange={updateDraft} />
                   <EditInput label="Live Stream Link" name="liveLink" value={draft.liveLink} onChange={updateDraft} />
                 </div>
@@ -955,6 +1002,7 @@ export default function AdminArtistDashboard() {
                   <p className={labelClass}>Category / Subcategory</p>
                   <div className="mt-2"><Pills items={viewModel.categories} /></div>
                 </div>
+                <InfoRow label="Discipline" value={viewModel.discipline} />
                 <InfoRow label="Main Category" value={viewModel.mainCategory} />
                 <InfoRow label="Art Form / Subcategory" value={viewModel.artForm} />
                 <div>
@@ -968,12 +1016,14 @@ export default function AdminArtistDashboard() {
                   </p>
                 </div>
                 <InfoRow label="Experience" value={`${formatNumber(viewModel.experience)} years`} />
+                <InfoRow label="Completed Shows" value={viewModel.completedShows} />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <StatBox label="Followers" value={viewModel.followers} />
                   <StatBox label="Views" value={viewModel.views} />
                   <StatBox label="Rating" value={viewModel.rating} />
                   <StatBox label="Reviews" value={viewModel.reviews} />
                 </div>
+                <InfoRow label="Instagram URL" value={viewModel.instagramUrl} />
                 <InfoRow label="Portfolio URL" value={viewModel.portfolioUrl} />
                 <InfoRow label="Live Stream Link" value={viewModel.liveLink} />
                 <div>
@@ -1010,6 +1060,7 @@ export default function AdminArtistDashboard() {
           <Card title="Media Elements">
             <div className="grid gap-5">
               <MediaFrame alt={`${displayName} profile`} src={viewModel.profileImageUrl} title="Profile Image" />
+              <InfoRow label="Profile Storage Path" value={viewModel.profileStoragePath} />
               <MediaFrame alt={`${displayName} cover`} src={viewModel.coverImageUrl} title="Cover Image" wide />
               <MediaFrame alt={`${displayName} identity document`} src={viewModel.aadharImageUrl} title="Aadhar Card Image" wide />
               <div>
