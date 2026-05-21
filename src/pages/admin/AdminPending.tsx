@@ -121,7 +121,7 @@ function ArtistApplicationCard({ a, onApprove, onReject }: { a: any; onApprove: 
                     </Button>
                   </div>
                 </div>
-                <div className="modal-scroll no-scrollbar p-6 space-y-6">
+                <div className="overflow-y-auto max-h-[60vh] p-6 space-y-6">
                   {/* Identity */}
                   <Card className="bg-secondary/10"><CardContent className="p-4 space-y-1">
                     <h4 className="font-bold flex items-center gap-2 text-primary mb-3 pb-2 border-b"><ShieldCheck className="h-4 w-4" />Account & Security</h4>
