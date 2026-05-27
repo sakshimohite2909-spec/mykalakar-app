@@ -536,34 +536,40 @@ type PremiumCheckboxProps = {
 };
 
 export function PremiumCheckbox({ checked, onChange, label, disabled = false, className }: PremiumCheckboxProps) {
+  const isChecked = Boolean(checked);
+
   return (
     <label
+      data-checked={isChecked ? "true" : "false"}
       className={cn(
         "group inline-flex min-h-10 cursor-pointer items-center gap-3 rounded-xl border px-4 text-sm font-bold transition-all duration-200",
-        checked
-          ? "border-orange-300 bg-orange-50 text-orange-700 shadow-sm"
-          : "border-orange-100 bg-white/70 text-slate-700 hover:border-orange-200 hover:bg-orange-50/70",
-        "focus-within:ring-4 focus-within:ring-orange-500/10 active:scale-[0.99]",
+        isChecked
+          ? "border-orange-300 bg-orange-50 text-orange-700 shadow-[0_0_0_1px_rgba(251,146,60,0.22),0_12px_28px_rgba(251,146,60,0.22)]"
+          : "border-orange-100 bg-white/75 text-slate-700 shadow-sm hover:border-orange-200 hover:bg-orange-50/70 hover:shadow-[0_8px_22px_rgba(251,146,60,0.16)]",
+        "focus-within:ring-4 focus-within:ring-orange-500/20 active:scale-[0.99]",
         disabled && "cursor-not-allowed opacity-60",
         className,
       )}
     >
       <input
         type="checkbox"
-        checked={checked}
+        checked={isChecked}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
         className="sr-only"
       />
       <span
+        aria-hidden="true"
         className={cn(
-          "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all duration-200",
-          checked ? "border-orange-500 bg-orange-500 text-white" : "border-orange-200 bg-white group-hover:border-orange-300",
+          "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition-all duration-200",
+          isChecked
+            ? "border-orange-600 bg-gradient-to-br from-orange-500 to-orange-700 text-white shadow-[0_0_0_4px_rgba(251,146,60,0.18),0_8px_18px_rgba(234,88,12,0.3)]"
+            : "border-orange-300 bg-white text-transparent group-hover:border-orange-400 group-hover:shadow-[0_0_0_4px_rgba(251,146,60,0.1)]",
         )}
       >
-        {checked ? <Check className="h-3.5 w-3.5" /> : null}
+        {isChecked ? <Check className="h-4 w-4 stroke-[3.5]" /> : null}
       </span>
-      {label}
+      <span>{label}</span>
     </label>
   );
 }
