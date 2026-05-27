@@ -15,6 +15,12 @@ import { getArtistArtForms } from "@/constants/artistSystem";
 import { getYoutubeVideoId } from "@/lib/youtube";
 import { updateUnifiedArtistProfile } from "@/services/UnifiedProfileService";
 import {
+    DateOfBirthSelect,
+    INDIAN_BANK_OPTIONS,
+    SearchableLanguageSelect,
+    SearchableSingleSelect,
+} from "@/components/artist/ArtistProfileInputs";
+import {
     Save,
     Loader2,
     Upload,
@@ -70,12 +76,29 @@ export default function ArtistEditProfile() {
             .map((link) => link.url.trim())
             .filter((url) => url && getYoutubeVideoId(url));
 
-    const buildArtistProfile = (profileImage?: string) => ({
+    const getCurrentProfileImage = () =>
+        artistData?.media?.profilePhoto ||
+        artistData?.media?.profileImageUrl ||
+        artistData?.profilePhoto ||
+        artistData?.profileImageUrl ||
+        artistData?.artistProfile?.profileImage ||
+        "";
+
+    const getCurrentCoverImage = () =>
+        artistData?.media?.coverPhoto ||
+        artistData?.media?.coverImageUrl ||
+        artistData?.coverPhoto ||
+        artistData?.coverImageUrl ||
+        artistData?.artistProfile?.coverImage ||
+        "";
+
+    const buildArtistProfile = (mediaOverrides: { profileImage?: string; coverImage?: string } = {}) => ({
         artForms: getArtistArtForms(artistData || {}),
         experience: Number(formData.experience) || 0,
         bio: formData.bio || "",
         location: [formData.district || artistData?.district, formData.state || artistData?.state].filter(Boolean).join(", "),
-        profileImage: profileImage || artistData?.media?.profilePhoto || artistData?.profilePhoto || "",
+        profileImage: mediaOverrides.profileImage || getCurrentProfileImage(),
+        coverImage: mediaOverrides.coverImage || getCurrentCoverImage(),
         youtubeLinks: getValidYoutubeLinks(),
     });
 
@@ -96,7 +119,7 @@ export default function ArtistEditProfile() {
                 experience: artistData.experience || "",
                 availability: artistData.availability || "available",
                 travelWillingness: artistData.travelWillingness || "local",
-                languageSpoken: artistData.languageSpoken || [],
+                languageSpoken: artistData.languageSpoken || artistData.languagesSpoken || artistData.languages || [],
                 bankName: artistData.bankDetails?.bankName || artistData.bankName || "",
                 ifscCode: artistData.bankDetails?.ifscCode || artistData.ifscCode || "",
                 accountNumber: artistData.bankDetails?.accountNumber || artistData.accountNumber || "",
@@ -147,8 +170,8 @@ export default function ArtistEditProfile() {
             if (!ownerId) throw new Error("User not authenticated");
             const url = await uploadFile(file, type === "profile" ? `avatars/${ownerId}` : `covers/${ownerId}`);
             const updateData = type === "profile"
-                ? { "media.profilePhoto": url, "artistProfile.profileImage": url, profilePhoto: url }
-                : { "media.coverPhoto": url, coverPhoto: url };
+                ? { "media.profilePhoto": url, "media.profileImageUrl": url, "artistProfile.profileImage": url, profilePhoto: url, profileImageUrl: url }
+                : { "media.coverPhoto": url, "media.coverImageUrl": url, "artistProfile.coverImage": url, coverPhoto: url, coverImageUrl: url };
             await withTimeout(
                 updateUnifiedArtistProfile({
                     artistId: artistData.id,
@@ -160,7 +183,7 @@ export default function ArtistEditProfile() {
                             email: artistData.email || "",
                             phone: artistData.mobileNumber || artistData.phone || "",
                             profilePhoto: url,
-                            artistProfile: buildArtistProfile(url),
+                            artistProfile: buildArtistProfile({ profileImage: url }),
                         }
                         : undefined,
                 }),
@@ -288,6 +311,9 @@ export default function ArtistEditProfile() {
                     experience: Number(formData.experience),
                     availability: formData.availability,
                     travelWillingness: formData.travelWillingness,
+                    languageSpoken: formData.languageSpoken,
+                    languages: formData.languageSpoken,
+                    languagesSpoken: formData.languageSpoken,
                     "bankDetails.bankName": formData.bankName,
                     "bankDetails.ifscCode": formData.ifscCode,
                     "bankDetails.accountNumber": formData.accountNumber,
@@ -352,7 +378,7 @@ export default function ArtistEditProfile() {
                                     className="relative border-2 border-dashed border-border rounded-xl h-44 cursor-pointer hover:border-primary/50 transition-colors overflow-hidden group"
                                 >
                                     <img
-                                        src={artistData.media?.profilePhoto || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
+                                        src={getCurrentProfileImage() || imageRegistry.getUniqueImage({ category: "Default", type: "ui" })}
                                         className="w-full h-full object-cover"
                                         alt="Profile"
                                     />
@@ -383,8 +409,8 @@ export default function ArtistEditProfile() {
                                     onClick={() => coverInputRef.current?.click()}
                                     className="relative border-2 border-dashed border-border rounded-xl h-44 cursor-pointer hover:border-primary/50 transition-colors overflow-hidden group"
                                 >
-                                    {artistData.media?.coverPhoto || artistData.coverPhoto ? (
-                                        <img src={artistData.media?.coverPhoto || artistData.coverPhoto} className="w-full h-full object-cover" alt="Cover" />
+                                    {getCurrentCoverImage() ? (
+                                        <img src={getCurrentCoverImage()} className="w-full h-full object-cover" alt="Cover" />
                                     ) : (
                                         <div className="flex items-center justify-center h-full">
                                             <div className="text-center text-muted-foreground">
@@ -489,7 +515,11 @@ export default function ArtistEditProfile() {
                             </div>
                             <div>
                                 <Label>Date of Birth</Label>
-                                <Input name="dob" type="date" value={formData.dob} onChange={handleChange} />
+                                <DateOfBirthSelect
+                                    label=""
+                                    value={formData.dob}
+                                    onChange={(value) => setFormData((prev) => ({ ...prev, dob: value }))}
+                                />
                             </div>
                             <div>
                                 <Label>Gender</Label>
@@ -518,18 +548,12 @@ export default function ArtistEditProfile() {
                             </div>
                             <div>
                                 <Label>Languages Spoken</Label>
-                                <div className="flex gap-3 mt-2">
-                                    {["Hindi", "Marathi", "English"].map((lang) => (
-                                        <label key={lang} className="flex items-center gap-2 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.languageSpoken.includes(lang)}
-                                                onChange={() => handleSelectChange("languageSpoken", lang)}
-                                                className="w-4 h-4 rounded border-border"
-                                            />
-                                            <span className="text-sm">{lang}</span>
-                                        </label>
-                                    ))}
+                                <div className="mt-2">
+                                    <SearchableLanguageSelect
+                                        label=""
+                                        values={formData.languageSpoken}
+                                        onChange={(values) => setFormData((prev) => ({ ...prev, languageSpoken: values }))}
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -551,7 +575,7 @@ export default function ArtistEditProfile() {
                             {artistData.types && artistData.types.length > 0 && (
                                 <p className="text-sm"><strong>Types:</strong> {artistData.types.join(", ")}</p>
                             )}
-                            <p className="text-xs text-muted-foreground mt-2">âš ï¸ Category changes require admin approval. Contact support.</p>
+                            <p className="text-xs text-muted-foreground mt-2">⚠️ Category changes require admin approval. Contact support.</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -575,8 +599,8 @@ export default function ArtistEditProfile() {
                             <Select value={formData.availability} onValueChange={(v) => handleSelectChange("availability", v)}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="available">âœ… Available for Booking</SelectItem>
-                                    <SelectItem value="busy">ðŸ”´ Currently Busy</SelectItem>
+                                    <SelectItem value="available">✅ Available for Booking</SelectItem>
+                                    <SelectItem value="busy">🔴 Currently Busy</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -641,8 +665,14 @@ export default function ArtistEditProfile() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <Label>Bank Name</Label>
-                                <Input name="bankName" value={formData.bankName} onChange={handleChange} placeholder="e.g. SBI, HDFC" />
+                                <SearchableSingleSelect
+                                    label="Bank Name"
+                                    value={formData.bankName}
+                                    options={INDIAN_BANK_OPTIONS}
+                                    placeholder="Search Indian bank"
+                                    allowCustom
+                                    onChange={(value) => setFormData((prev) => ({ ...prev, bankName: value }))}
+                                />
                             </div>
                             <div>
                                 <Label>IFSC Code</Label>

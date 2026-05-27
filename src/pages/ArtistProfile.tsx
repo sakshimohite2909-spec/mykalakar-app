@@ -70,6 +70,69 @@ function formatPrice(value: unknown) {
   return amount > 0 ? `Rs ${amount.toLocaleString("en-IN")}` : "On request";
 }
 
+function isPricingVisible(value: unknown) {
+  if (value === true || value === 1) return true;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "visible";
+  }
+  return false;
+}
+
+function firstText(...values: unknown[]) {
+  return values.map((value) => String(value || "").trim()).find(Boolean) || "";
+}
+
+function getPublicArtistName(artist: Record<string, any>, fallback: string) {
+  return firstText(
+    artist.nickName,
+    artist.brandName,
+    artist.stageName,
+    artist.capName,
+    artist.displayName,
+    artist.professionalName,
+    artist.name,
+    artist.artistName,
+    fallback,
+  );
+}
+
+function getOfficialArtistName(artist: Record<string, any>, publicName: string) {
+  const officialName = firstText(artist.fullName, artist.legalName, artist.name, artist.artistName);
+  return officialName && officialName.toLowerCase() !== publicName.toLowerCase() ? officialName : "";
+}
+
+function getProfileImageUrl(artist: Record<string, any>) {
+  return getUsableImageUrl(
+    artist.media?.profilePhoto ||
+    artist.media?.profileImageUrl ||
+    artist.profilePhoto ||
+    artist.profileImageUrl ||
+    artist.artistProfile?.profileImage ||
+    artist.profileImage?.url ||
+    artist.profileImage?.thumbnail ||
+    artist.profilePicUrl ||
+    artist.imageUrl ||
+    "",
+  );
+}
+
+function getCoverImageUrl(artist: Record<string, any>) {
+  return getUsableImageUrl(
+    artist.media?.coverPhoto ||
+    artist.media?.coverImageUrl ||
+    artist.coverPhoto ||
+    artist.coverImageUrl ||
+    artist.artistProfile?.coverImage ||
+    artist.coverImage?.url ||
+    artist.coverImage?.thumbnail ||
+    (typeof artist.coverImage === "string" ? artist.coverImage : "") ||
+    artist.bannerImageUrl ||
+    artist.coverImages?.[0] ||
+    "",
+  );
+}
+
 function getLinkArray(value: unknown) {
   return Array.isArray(value) ? uniqueVideoLinks(value) : [];
 }
@@ -95,7 +158,7 @@ function getProfileCategories(artist: Record<string, any>) {
           soloPerformancePrice: index === 0 ? artist.soloPrice : 0,
           duoPerformancePrice: index === 0 ? artist.duoPrice : 0,
           teamPerformancePrice: index === 0 ? artist.teamPrice : 0,
-          showPricingOnProfile: Boolean(index === 0 ? artist.showPricingOnProfile ?? artist.showPriceOnProfile : false),
+          showPricingOnProfile: isPricingVisible(index === 0 ? artist.showPricingOnProfile ?? artist.showPriceOnProfile ?? artist.showPrice ?? artist.showPrices : false),
           youtubeLinks: index === 0 ? getLinkArray(artist.youtubeLinks) : [],
         };
       }
@@ -111,7 +174,7 @@ function getProfileCategories(artist: Record<string, any>) {
         soloPerformancePrice: entry?.soloPerformancePrice ?? entry?.soloPrice ?? entry?.price ?? 0,
         duoPerformancePrice: entry?.duoPerformancePrice ?? entry?.duoPrice ?? 0,
         teamPerformancePrice: entry?.teamPerformancePrice ?? entry?.teamPrice ?? 0,
-        showPricingOnProfile: Boolean(entry?.showPricingOnProfile ?? entry?.showPriceOnProfile),
+        showPricingOnProfile: isPricingVisible(entry?.showPricingOnProfile ?? entry?.showPriceOnProfile ?? entry?.showPrice ?? entry?.showPrices),
         youtubeLinks: getLinkArray(entry?.youtubeLinks),
       };
     })
@@ -149,14 +212,36 @@ function getForcedMappedImage(...categories: unknown[]) {
 
 function mapArtistDocument(id: string, data: Record<string, any>) {
   const media = data.media && typeof data.media === "object" ? data.media : {};
+  const artistProfile = data.artistProfile && typeof data.artistProfile === "object" ? data.artistProfile : {};
   return {
     ...data,
     id,
     name: data.name || data.professionalName || "Premium Artist",
     media: {
       ...media,
-      profilePhoto: media.profilePhoto || data.profilePhoto || data.profilePicUrl || "",
-      coverPhoto: media.coverPhoto || data.coverPhoto || data.coverImage || data.coverImages?.[0] || "",
+      profilePhoto:
+        media.profilePhoto ||
+        media.profileImageUrl ||
+        data.profilePhoto ||
+        data.profileImageUrl ||
+        artistProfile.profileImage ||
+        data.profileImage?.url ||
+        data.profileImage?.thumbnail ||
+        data.profilePicUrl ||
+        data.imageUrl ||
+        "",
+      coverPhoto:
+        media.coverPhoto ||
+        media.coverImageUrl ||
+        data.coverPhoto ||
+        data.coverImageUrl ||
+        artistProfile.coverImage ||
+        data.coverImage?.url ||
+        data.coverImage?.thumbnail ||
+        (typeof data.coverImage === "string" ? data.coverImage : "") ||
+        data.bannerImageUrl ||
+        data.coverImages?.[0] ||
+        "",
       galleryPhotos: media.galleryPhotos || data.galleryPhotos || [],
     },
   };
@@ -279,7 +364,7 @@ export default function ArtistProfile() {
   useEffect(() => {
     if (!artist) return;
 
-    const name = artist.name || artist.professionalName || t("artist.premiumArtist"); // ADDED FOR i18n
+    const name = getPublicArtistName(artist, t("artist.premiumArtist")); // ADDED FOR i18n
     const title = `MyKalakar | ${name}`;
     const description = t("artist.metaDescription", { name }); // ADDED FOR i18n
     const image = getForcedMappedImage(
@@ -324,21 +409,21 @@ export default function ArtistProfile() {
       if (isSaved) {
         await withTimeout(deleteDoc(savedRef), FIREBASE_WRITE_TIMEOUT_MS, t("artist.saveRemoveFailed")); // ADDED FOR i18n
         setIsSaved(false);
-        toast({ title: t("artist.removedTitle"), description: t("artist.removedText", { name: artist.name || t("artist.fallbackName") }) }); // ADDED FOR i18n
+        toast({ title: t("artist.removedTitle"), description: t("artist.removedText", { name: getPublicArtistName(artist, t("artist.fallbackName")) }) }); // ADDED FOR i18n
       } else {
         await withTimeout(
           setDoc(savedRef, sanitizePayload({
             artistId: artist.id,
-            name: artist.name || artist.professionalName || "",
+            name: getPublicArtistName(artist, ""),
             category: artist.category || artist.subcategory || "",
-            profilePhoto: artist.profilePhoto || artist.media?.profilePhoto || "",
+            profilePhoto: getProfileImageUrl(artist),
             savedAt: serverTimestamp(),
           })),
           FIREBASE_WRITE_TIMEOUT_MS,
           t("artist.saveFailed"), // ADDED FOR i18n
         );
         setIsSaved(true);
-        toast({ title: t("artist.savedTitle"), description: t("artist.savedText", { name: artist.name || t("artist.fallbackName") }) }); // ADDED FOR i18n
+        toast({ title: t("artist.savedTitle"), description: t("artist.savedText", { name: getPublicArtistName(artist, t("artist.fallbackName")) }) }); // ADDED FOR i18n
       }
     } catch (error: any) {
       logFirebaseError(error);
@@ -350,7 +435,7 @@ export default function ArtistProfile() {
   };
 
   const handleShare = async () => {
-    const artistName = artist?.name || artist?.professionalName || t("artist.premiumArtist"); // ADDED FOR i18n
+    const artistName = artist ? getPublicArtistName(artist, t("artist.premiumArtist")) : t("artist.premiumArtist"); // ADDED FOR i18n
     const url = window.location.href;
     const sharePayload = {
       title: `MyKalakar | ${artistName}`,
@@ -393,24 +478,19 @@ export default function ArtistProfile() {
 
   const profileCategories = getProfileCategories(artist);
   const primaryCategory = profileCategories[0];
-  const artistName = artist.name || artist.artistName || artist.professionalName || t("artist.premiumArtist"); // ADDED FOR i18n
+  const artistName = getPublicArtistName(artist, t("artist.premiumArtist")); // ADDED FOR i18n
+  const officialArtistName = getOfficialArtistName(artist, artistName);
   const category = primaryCategory?.mainCategory || getArtistCategory(artist) || "Artist";
   const artType = primaryCategory?.artForm || getArtistSubCategory(artist) || artForms[0] || category;
   const artTypeLabel = getArtLabel(t, artType); // ADDED FOR i18n
   const location = compactLocation(artist);
-  const customHeroImage = getUsableImageUrl(
-    artist.media?.coverPhoto ||
-    artist.coverPhoto ||
-    artist.coverImage ||
-    artist.media?.profilePhoto ||
-    artist.profilePhoto ||
-    "",
-  );
+  const profileAvatarImage = getProfileImageUrl(artist);
+  const customHeroImage = getCoverImageUrl(artist);
   const fallbackHeroImage = getFallbackImageForArt(
     [artType, category, artist.category, artist.subcategory, artist.mainCategory],
     `profile-hero:${artist.id || artistName}`,
   );
-  const artistImage = customHeroImage || fallbackHeroImage || getForcedMappedImage(
+  const coverImage = customHeroImage || fallbackHeroImage || getForcedMappedImage(
     artist.category,
     artist.subcategory,
     artType,
@@ -418,6 +498,10 @@ export default function ArtistProfile() {
     artForms[0],
     artist.services?.[0],
   );
+  const avatarFallbackImage = getFallbackImageForArt(
+    [artType, category, artist.category, artist.subcategory, artist.mainCategory],
+    `profile-avatar:${artist.id || artistName}`,
+  ) || getForcedMappedImage(artist.category, artist.subcategory, artType, category);
   const uploadedGallery =
     Array.isArray(artist.galleryPhotos) && artist.galleryPhotos.length
       ? artist.galleryPhotos
@@ -495,12 +579,35 @@ export default function ArtistProfile() {
                 ) : null}
               </div>
 
-              <h1 className="mt-4 max-w-3xl text-4xl font-extrabold leading-[1.02] text-stone-950 sm:text-5xl lg:text-[56px]">
-                {artistName}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-stone-600 sm:text-base">
-                {t("artist.basedIn", { artType: artTypeLabel, location })} {/* ADDED FOR i18n */}
-              </p>
+              <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full border-4 border-white bg-stone-100 shadow-[0_18px_40px_rgba(28,25,23,0.16)] ring-1 ring-orange-100 sm:h-28 sm:w-28">
+                  <SmartImage
+                    src={profileAvatarImage || avatarFallbackImage || STATIC_IMAGES.profileCover}
+                    alt={`${artistName} profile photo`}
+                    usageId={`profile-avatar:${artist.id}`}
+                    category={artType}
+                    orientation="portrait"
+                    priority
+                    aspectRatio="aspect-auto"
+                    sizes="112px"
+                    containerClassName="h-full w-full overflow-hidden rounded-full"
+                    imageClassName="h-full w-full object-cover object-center"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="max-w-3xl text-4xl font-extrabold leading-[1.02] text-stone-950 sm:text-5xl lg:text-[56px]">
+                    {artistName}
+                  </h1>
+                  {officialArtistName ? (
+                    <p className="mt-2 text-xs font-extrabold uppercase tracking-widest text-stone-400">
+                      Official Name: <span className="normal-case tracking-normal text-stone-600">{officialArtistName}</span>
+                    </p>
+                  ) : null}
+                  <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-stone-600 sm:text-base">
+                    {t("artist.basedIn", { artType: artTypeLabel, location })} {/* ADDED FOR i18n */}
+                  </p>
+                </div>
+              </div>
 
               <div className="mt-5 flex flex-wrap gap-3 text-sm font-semibold text-stone-500">
                 <span className="inline-flex items-center gap-1.5">
@@ -546,8 +653,8 @@ export default function ArtistProfile() {
 
             <div className="relative order-1 lg:order-2 w-full aspect-video lg:aspect-auto lg:h-full overflow-hidden bg-stone-100 rounded-t-2xl lg:rounded-r-2xl lg:rounded-l-none">
               <SmartImage
-                src={artistImage || STATIC_IMAGES.profileCover}
-                alt={`${artistName} profile image`}
+                src={coverImage || STATIC_IMAGES.profileCover}
+                alt={`${artistName} cover image`}
                 usageId={`profile-banner:${artist.id}`}
                 category={artType}
                 orientation="landscape"

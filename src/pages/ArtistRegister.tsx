@@ -18,7 +18,6 @@ import {
   AtSign,
   BadgeCheck,
   Building2,
-  ChevronDown,
   CreditCard,
   Eye,
   EyeOff,
@@ -31,7 +30,6 @@ import {
   Music,
   Phone,
   Plus,
-  Search,
   Send,
   Sparkles,
   Trash2,
@@ -58,6 +56,13 @@ import {
 } from "@/lib/phoneUtils";
 import { useI18n } from "@/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import {
+  DateOfBirthSelect,
+  INDIAN_BANK_OPTIONS,
+  PremiumCheckbox,
+  SearchableLanguageSelect,
+  SearchableSingleSelect,
+} from "@/components/artist/ArtistProfileInputs";
 
 type AuthRole = "artist" | "user";
 type PortfolioPlatform = "youtube";
@@ -85,7 +90,6 @@ const roleTabs: Array<{ id: AuthRole; label: string; icon: ComponentType<{ class
 ];
 
 const artCategoryOptions = [...ARTIST_TYPES];
-const languageOptions = ["English", "Hindi", "Marathi", "Spanish", "French", "Other"];
 
 const fullNameRule = z
   .string()
@@ -474,118 +478,17 @@ function SearchableDropdown({
   error?: string;
   onChange: (value: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState("");
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  const filteredOptions = useMemo(() => {
-    const query = searchValue.trim().toLowerCase();
-    if (!query) return options;
-    return options.filter((option) => option.toLowerCase().includes(query));
-  }, [options, searchValue]);
-  const customValue = searchValue.trim();
-  const canAddCustom =
-    allowCustom &&
-    customValue.length > 1 &&
-    !options.some((option) => option.toLowerCase() === customValue.toLowerCase());
-  const selectValue = (nextValue: string) => {
-    onChange(nextValue);
-    setOpen(false);
-    setSearchValue("");
-  };
-
-  useEffect(() => {
-    const onMouseDown = (event: MouseEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-        setSearchValue("");
-      }
-    };
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, []);
-
-  useEffect(() => {
-    if (open) window.requestAnimationFrame(() => inputRef.current?.focus());
-  }, [open]);
-
-  useEffect(() => {
-    if (disabled) {
-      setOpen(false);
-      setSearchValue("");
-    }
-  }, [disabled]);
-
   return (
-    <div ref={wrapperRef} className="relative">
-      <label className="mb-1.5 block text-sm font-bold text-slate-700">{label}</label>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => {
-          if (!disabled) setOpen((current) => !current);
-        }}
-        className={`input-glass flex h-[50px] w-full items-center justify-between px-4 text-left text-sm ${
-          disabled ? "cursor-not-allowed opacity-60" : ""
-        } ${error ? errorInputClass : ""}`}
-      >
-        <span className={value ? "text-[#1A1A1A]" : "text-slate-400"}>{value || placeholder}</span>
-        <ChevronDown className={`h-4 w-4 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
-      </button>
-
-      {open && !disabled ? (
-        <div className="absolute left-0 right-0 z-50 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
-          <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                ref={inputRef}
-                value={searchValue}
-                onChange={(event) => setSearchValue(event.target.value)}
-                placeholder={`Search ${label.toLowerCase()}`}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-100"
-              />
-            </div>
-          </div>
-          <ul
-            className="dropdown-scroll-area no-scrollbar pointer-events-auto max-h-[min(300px,50vh)] overflow-y-auto py-1"
-            role="listbox"
-          >
-            {canAddCustom ? (
-              <li>
-                <button
-                  type="button"
-                  onClick={() => selectValue(customValue)}
-                  className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-orange-600 transition hover:bg-orange-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add "{customValue}"
-                </button>
-              </li>
-            ) : null}
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
-                <li key={option}>
-                  <button
-                    type="button"
-                    onClick={() => selectValue(option)}
-                    className={`w-full px-4 py-2.5 text-left text-sm transition ${
-                      option === value ? "bg-orange-50 font-bold text-orange-600" : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    {option}
-                  </button>
-                </li>
-              ))
-            ) : (
-              <li className="px-4 py-3 text-sm text-slate-500">{allowCustom ? "Type a new art form to add it." : "No results found."}</li>
-            )}
-          </ul>
-        </div>
-      ) : null}
-      <FieldError message={error} />
-    </div>
+    <SearchableSingleSelect
+      label={label}
+      value={value}
+      options={options}
+      placeholder={placeholder}
+      disabled={disabled}
+      allowCustom={allowCustom}
+      error={error}
+      onChange={onChange}
+    />
   );
 }
 
@@ -672,15 +575,12 @@ function ArtCategoryCard({
           <IndianRupee className="h-4 w-4 text-orange-500" />
           <h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Performance Pricing</h3>
         </div>
-        <label className="flex h-10 items-center gap-3 rounded-xl border border-orange-100 bg-white/70 px-4 text-sm font-bold text-slate-700">
-          <input
-            type="checkbox"
-            checked={art.showPricingOnProfile}
-            onChange={(event) => updateShowPricing(event.target.checked)}
-            className="h-4 w-4 rounded border-orange-200 text-orange-500 focus:ring-orange-200"
-          />
-          Show on profile
-        </label>
+        <PremiumCheckbox
+          checked={art.showPricingOnProfile}
+          onChange={updateShowPricing}
+          label="Show on profile"
+          className="w-full justify-start sm:w-auto"
+        />
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <div>
@@ -1379,6 +1279,7 @@ export default function ArtistRegister() {
         showAgeOnProfile,
         gender: values.gender,
         travelWillingness: values.travelWillingness,
+        languageSpoken: selectedLanguages,
         languages: selectedLanguages,
         languagesSpoken: selectedLanguages,
         category: artEntries[0]?.mainCategory || values.mainCategory,
@@ -1713,12 +1614,19 @@ export default function ArtistRegister() {
                       </div>
                     )}
                   />
-                  <TextField
-                    label="Date of Birth *"
+                  <Controller
                     name="dob"
-                    type="date"
-                    register={artistForm.register}
-                    error={artistForm.formState.errors.dob?.message}
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <DateOfBirthSelect
+                        label="Date of Birth"
+                        required
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        error={artistForm.formState.errors.dob?.message}
+                      />
+                    )}
                   />
                   <div>
                     <label className="mb-1.5 block text-sm font-bold text-slate-700">
@@ -1733,15 +1641,12 @@ export default function ArtistRegister() {
                       tabIndex={-1}
                       className="input-glass w-full cursor-not-allowed bg-white/50 px-4 py-3 text-sm font-black text-orange-600"
                     />
-                    <label className="mt-2 flex items-center gap-2 text-xs font-bold text-slate-500">
-                      <input
-                        type="checkbox"
-                        checked={showAgeOnProfile}
-                        onChange={(event) => setShowAgeOnProfile(event.target.checked)}
-                        className="h-4 w-4 rounded border-orange-200 text-orange-500 focus:ring-orange-200"
-                      />
-                      Show age on profile
-                    </label>
+                    <PremiumCheckbox
+                      checked={showAgeOnProfile}
+                      onChange={setShowAgeOnProfile}
+                      label="Show age on profile"
+                      className="mt-2 min-h-9 px-3 text-xs"
+                    />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-bold text-slate-700">Gender *</label>
@@ -1762,27 +1667,10 @@ export default function ArtistRegister() {
                     </select>
                   </div>
                   <div className="md:col-span-2">
-                    <label className="mb-2 block text-sm font-bold text-slate-700">Languages Spoken</label>
-                    <div className="flex flex-wrap gap-2">
-                      {languageOptions.map((language) => {
-                        const active = selectedLanguages.includes(language);
-                        return (
-                          <button
-                            key={language}
-                            type="button"
-                            onClick={() => toggleLanguage(language)}
-                            className={`rounded-full border px-4 py-2 text-xs font-black uppercase tracking-wider transition ${
-                              active
-                                ? "border-orange-400 bg-orange-500 text-white shadow-md shadow-orange-100"
-                                : "border-orange-100 bg-white/70 text-slate-600 hover:border-orange-200 hover:bg-orange-50"
-                            }`}
-                            aria-pressed={active}
-                          >
-                            {language}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <SearchableLanguageSelect
+                      values={selectedLanguages}
+                      onChange={setSelectedLanguages}
+                    />
                   </div>
                 </div>
 
@@ -1849,15 +1737,12 @@ export default function ArtistRegister() {
                       <IndianRupee className="h-4 w-4 text-orange-500" />
                       <h3 className="text-sm font-black uppercase tracking-widest text-slate-600">Performance Pricing</h3>
                     </div>
-                    <label className="flex h-10 items-center gap-3 rounded-xl border border-orange-100 bg-white/70 px-4 text-sm font-bold text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={showPrimaryPricingOnProfile}
-                        onChange={(event) => setShowPrimaryPricingOnProfile(event.target.checked)}
-                        className="h-4 w-4 rounded border-orange-200 text-orange-500 focus:ring-orange-200"
-                      />
-                      Show on profile
-                    </label>
+                    <PremiumCheckbox
+                      checked={showPrimaryPricingOnProfile}
+                      onChange={setShowPrimaryPricingOnProfile}
+                      label="Show on profile"
+                      className="w-full justify-start sm:w-auto"
+                    />
                   </div>
                   <div className="grid gap-4 md:grid-cols-3">
                     <TextField label="Solo Performance" name="soloPrice" register={artistForm.register} placeholder="e.g. 10000" />
@@ -2039,12 +1924,19 @@ export default function ArtistRegister() {
 
                 <SectionHeading icon={Building2} title="Bank Account Details" />
                 <div className="grid gap-4 md:grid-cols-2">
-                  <TextField
-                    label="Bank Name *"
+                  <Controller
                     name="bankName"
-                    register={artistForm.register}
-                    error={artistForm.formState.errors.bankName?.message}
-                    placeholder="e.g. SBI, HDFC"
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <SearchableDropdown
+                        label="Bank Name *"
+                        value={field.value}
+                        options={INDIAN_BANK_OPTIONS}
+                        placeholder="Search Indian bank"
+                        error={artistForm.formState.errors.bankName?.message}
+                        onChange={field.onChange}
+                      />
+                    )}
                   />
                   <Controller
                     name="ifscCode"
