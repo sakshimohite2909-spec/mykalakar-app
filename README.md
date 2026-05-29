@@ -222,16 +222,6 @@ npx firebase-tools@latest deploy \
 
 ---
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/your-feature`
-3. Run tests and build: `npm run test && npm run build`
-4. Commit with clear messages: `git commit -m "feat: add your feature"`
-5. Push and open a Pull Request
-
----
-
 ## 📄 License
 
 This project is **proprietary and private**, maintained by the Artist HUB team.
@@ -239,7 +229,7 @@ This project is **proprietary and private**, maintained by the Artist HUB team.
 ---
 
 <div align="center">
-  Built with ❤️ by the <strong>Artist HUB Pro</strong> team
+  Built by the <strong>Varad</strong> team
   <br/>
   <sub>Powered by React · Vite · Firebase · Tailwind CSS</sub>
 </div>
