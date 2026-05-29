@@ -224,7 +224,7 @@ h6 {
 
 .luxury-home-hero {
   width: min(100% - 2rem, 1240px) !important;
-  margin: 5.75rem auto 0 !important;
+  margin: 1.5rem auto 0 !important;
 }
 
 .luxury-home-hero::before,

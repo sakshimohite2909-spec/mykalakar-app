@@ -29,7 +29,7 @@ export default function AdminLocations() {
 
     useEffect(() => {
         let mounted = true;
-        const useDefaultLocations = async () => {
+        const loadDefaultLocations = async () => {
             const defaults = await getDefaultIndiaStateDocuments();
             if (mounted) setStates(defaults);
         };
@@ -43,13 +43,13 @@ export default function AdminLocations() {
             if (data.length > 0) {
                 setStates(data);
             } else {
-                void useDefaultLocations();
+                void loadDefaultLocations();
             }
             setLoading(false);
         }, (error) => {
             console.error(error);
             toastForFirestoreError(error, "Locations unavailable", "Could not load states and districts.", toast);
-            void useDefaultLocations();
+            void loadDefaultLocations();
             setLoading(false);
         });
         return () => {

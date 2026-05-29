@@ -61,7 +61,7 @@ function Hero() {
   const tileLabels = [t("home.hero.tile.liveBriefs"), t("home.hero.tile.verifiedArtists"), t("home.hero.tile.culturalDepth")]; // ADDED FOR i18n
 
   return (
-    <section className="luxury-home-hero">
+    <section className="luxury-home-hero mt-6">
       <div className="luxury-home-hero-bg" aria-hidden="true">
         <SmartImage
           src={heroImages[0]}

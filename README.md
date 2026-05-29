@@ -1,116 +1,245 @@
-# Artist HUB
+# 🎨 Artist HUB Pro
 
-A production-ready React + Vite platform for artist discovery, booking workflows, and role-based dashboards.
+<div align="center">
 
-## Tech Stack
+![Artist HUB Pro](https://img.shields.io/badge/Artist%20HUB%20Pro-Premium%20Platform-6366f1?style=for-the-badge&logo=react)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite)
+![Firebase](https://img.shields.io/badge/Firebase-12-FFCA28?style=for-the-badge&logo=firebase)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-06B6D4?style=for-the-badge&logo=tailwindcss)
 
-- React 18 + TypeScript
-- Vite 5
-- Tailwind CSS + shadcn/ui
-- Firebase (Auth, Firestore, Storage)
-- Vitest
+**A production-ready, premium platform for artist discovery, event booking, and role-based management dashboards.**
 
-## Project Structure
+[🚀 Live Demo](https://artist-hub-pro-main.vercel.app) · [📖 Docs](./docs) · [🐛 Issues](https://github.com/Varad-Shadow/Artist_HUB/issues)
 
-- `src/pages` - route pages (public, artist, admin)
-- `src/components` - reusable UI and feature components
-- `src/contexts` - global state providers (auth)
-- `src/lib` - firebase integration, utilities, domain helpers
-- `firestore.rules` / `storage.rules` - Firebase security rules
+</div>
 
-## Local Development
+---
 
-1. Install dependencies:
+## ✨ Features
+
+### For Clients / Event Planners
+- 🔍 **Artist Discovery** — Browse and filter artists by category, location, budget, and availability
+- 📅 **Smart Booking Flow** — Step-by-step event → location → requirements booking wizard
+- 🎭 **Artist Profiles** — Rich media profiles with portfolios, reviews, and availability calendars
+- ⭐ **Reviews & Ratings** — Verified review system with star ratings
+
+### For Artists
+- 🎨 **Artist Dashboard** — Manage bookings, profile, and portfolio in one place
+- 📸 **Media Portfolio** — Upload and showcase images, videos, and links
+- 📊 **Booking Analytics** — Track earnings, booking history, and performance metrics
+- 🔔 **Real-time Notifications** — Instant updates on booking requests and status changes
+
+### For Admins
+- 👥 **Artist Management** — Approve, suspend, or manage artist accounts
+- 📋 **Booking Oversight** — Full visibility into platform-wide bookings
+- 🗂️ **Category & Event Management** — Create and manage event types, categories, locations
+- 📈 **Analytics Dashboard** — Platform-wide statistics and reporting
+- ⚙️ **Platform Settings** — Firebase bootstrap and configuration tools
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend Framework** | React 18 + TypeScript |
+| **Build Tool** | Vite 5 |
+| **Styling** | Tailwind CSS 3 + shadcn/ui |
+| **Animation** | Framer Motion + GSAP + Three.js |
+| **Backend / Auth** | Firebase (Auth, Firestore, Storage) |
+| **State Management** | React Context + TanStack Query |
+| **Forms** | React Hook Form + Zod |
+| **Routing** | React Router DOM v6 |
+| **Testing** | Vitest + Testing Library |
+| **Deployment** | Vercel |
+
+---
+
+## 🗂️ Project Structure
+
+```
+src/
+├── pages/                    # Route-level page components
+│   ├── Index.tsx             # Home / Landing page
+│   ├── SearchPage.tsx        # Artist discovery & search
+│   ├── ArtistProfile.tsx     # Public artist profile
+│   ├── ArtistRegister.tsx    # Artist registration flow
+│   ├── ArtistLogin.tsx       # Auth (login/register)
+│   ├── EventSelection.tsx    # Booking step 1 – event type
+│   ├── LocationSelection.tsx # Booking step 2 – location
+│   ├── EventRequirements.tsx # Booking step 3 – requirements
+│   ├── EventDetails.tsx      # Event detail view
+│   ├── UserProfile.tsx       # User account settings
+│   ├── NotFound.tsx          # 404 page
+│   ├── admin/                # Admin-only pages (protected)
+│   └── artist/               # Artist dashboard pages (protected)
+├── components/               # Reusable UI & feature components
+│   ├── HeroBanner.jsx        # Landing page hero section
+│   ├── PremiumScrollyExperience.tsx
+│   ├── ArtistProtectedRoute.jsx
+│   ├── AdminProtectedRoute.jsx
+│   └── ProtectedRoute.jsx
+├── contexts/                 # React context providers
+│   └── AuthContext           # Firebase auth state
+├── services/                 # Firebase API service layer
+├── lib/                      # Firebase setup, utilities, helpers
+├── hooks/                    # Custom React hooks
+├── data/                     # Static data and constants
+├── styles/                   # Global CSS and design tokens
+└── AppRouter.jsx             # Route definitions (React Router)
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Node.js** ≥ 18.x
+- **npm** ≥ 9.x (or **bun**)
+- A **Firebase** project with Firestore, Auth, and Storage enabled
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Varad-Shadow/Artist_HUB.git
+cd Artist_HUB
+```
+
+### 2. Install dependencies
 
 ```bash
 npm install
 ```
 
-2. Create local environment file:
+### 3. Configure environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-3. Fill all values in `.env` using your Firebase project config.
+Open `.env` and fill in your Firebase project credentials:
 
-4. Start dev server:
+```env
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX   # optional
+```
+
+### 4. Start the development server
 
 ```bash
 npm run dev
 ```
 
-5. Open the app in browser:
+Visit: [http://localhost:8080](http://localhost:8080)
 
-```text
-http://localhost:8080
-```
+---
 
-## Environment Variables
+## 🔐 Environment Variables Reference
 
-Use `.env.example` as reference. Required variables:
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_FIREBASE_API_KEY` | ✅ | Firebase project API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | ✅ | Firebase Auth domain |
+| `VITE_FIREBASE_PROJECT_ID` | ✅ | Firestore project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | ✅ | Cloud Storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | ✅ | FCM sender ID |
+| `VITE_FIREBASE_APP_ID` | ✅ | Firebase app ID |
+| `VITE_FIREBASE_MEASUREMENT_ID` | ⚡ Optional | Google Analytics |
 
-- `VITE_FIREBASE_API_KEY`
-- `VITE_FIREBASE_AUTH_DOMAIN`
-- `VITE_FIREBASE_PROJECT_ID`
-- `VITE_FIREBASE_STORAGE_BUCKET`
-- `VITE_FIREBASE_MESSAGING_SENDER_ID`
-- `VITE_FIREBASE_APP_ID`
-- `VITE_FIREBASE_MEASUREMENT_ID` (optional)
+> ⚠️ **Never commit `.env` or `.env.local` files.** Use `.env.example` as a safe template.
 
-## Security and Privacy Practices
+---
 
-- Never commit `.env`, `.env.local`, or production secrets.
-- Keep real keys in local env files and deployment platform secret stores.
-- Commit only `.env.example` with placeholder values.
-- Firebase rules are versioned and deployed explicitly from this repo.
-- Source code reads Firebase config from environment variables only.
+## 🏗️ Available Scripts
 
-## Build and Tests
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server on port 8080 |
+| `npm run build` | Build for production (outputs to `dist/`) |
+| `npm run preview` | Preview the production build locally |
+| `npm run test` | Run test suite (Vitest) |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run lint` | Run ESLint |
 
-Run production build:
+---
 
-```bash
-npm run build
-```
+## 🌐 Deployment
 
-Run tests:
+### Vercel (Recommended)
 
-```bash
-npm run test
-```
+The project includes a pre-configured `vercel.json` for SPA routing:
 
-## Deployment
+1. Import the GitHub repository at [vercel.com/new](https://vercel.com/new)
+2. Set **Build Command**: `npm run build`
+3. Set **Output Directory**: `dist`
+4. Add all `VITE_` environment variables under **Project Settings → Environment Variables**
+5. Click **Deploy** ✅
 
-### Option A: Vercel (frontend)
+### Firebase Hosting (Alternative)
 
-1. Import this GitHub repository into Vercel.
-2. Build command: `npm run build`
-3. Output directory: `dist`
-4. Add all `VITE_` environment variables in Vercel Project Settings.
-5. Deploy.
-
-`vercel.json` is configured for SPA route rewrites.
-
-### Option B: Firebase Rules Deployment
-
-Deploy Firestore and Storage rules:
+Deploy Firestore and Storage security rules:
 
 ```bash
 npx firebase-tools@latest login
-npx firebase-tools@latest deploy --only firestore:rules,storage:rules --project <your-project-id>
+npx firebase-tools@latest deploy \
+  --only firestore:rules,storage:rules \
+  --project <your-project-id>
 ```
 
-## Git Workflow
+---
 
-Recommended release workflow:
+## 🔒 Security & Privacy
 
-1. Create a feature/release branch.
-2. Run `npm run build` and `npm run test`.
-3. Commit with clear messages.
-4. Push branch and open a Pull Request.
-5. Merge after review and CI checks.
+- 🚫 **Never commit** `.env`, `.env.local`, or production secrets
+- ✅ **Only commit** `.env.example` with placeholder values
+- 🔐 Firebase Firestore and Storage rules are versioned in this repo (`firestore.rules`, `storage.rules`)
+- 🔑 All Firebase config is loaded exclusively from environment variables
+- 👮 Role-based access control enforced at both the UI level (protected routes) and database level (Firestore rules)
 
-## License
+---
 
-This project is currently private and maintained by the Artist HUB team.
+## 🗺️ Application Routes
+
+| Route | Access | Description |
+|-------|--------|-------------|
+| `/` | Public | Landing page |
+| `/explore` | Public | Artist search & discovery |
+| `/artist/:id` | Public | Artist public profile |
+| `/events` | Public | Event type selection |
+| `/login` | Public | Authentication |
+| `/register` | Public | Artist registration |
+| `/profile` | 🔒 Auth | User profile settings |
+| `/artist/dashboard` | 🎨 Artist | Artist management dashboard |
+| `/admin` | 👮 Admin | Admin control panel |
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feat/your-feature`
+3. Run tests and build: `npm run test && npm run build`
+4. Commit with clear messages: `git commit -m "feat: add your feature"`
+5. Push and open a Pull Request
+
+---
+
+## 📄 License
+
+This project is **proprietary and private**, maintained by the Artist HUB team.
+
+---
+
+<div align="center">
+  Built with ❤️ by the <strong>Artist HUB Pro</strong> team
+  <br/>
+  <sub>Powered by React · Vite · Firebase · Tailwind CSS</sub>
+</div>
