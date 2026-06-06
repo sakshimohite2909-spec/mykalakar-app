@@ -10,6 +10,7 @@ import {
 } from "@/services/filterEngine";
 import { validateUniqueImages } from "@/utils/imageAllocator";
 import { correctTypo, normalizeCategory, safeString, safeNumber, safeBoolean } from "@/services/dataNormalizer";
+import { getArtistRatingSummary } from "@/services/ratingUtils";
 
 export type ArtistService = {
   category: string;
@@ -151,6 +152,7 @@ export function buildArtistCards(artists: Record<string, unknown>[], maxCards?: 
 
     const uploadedImages = getUploadedImages(artist);
     const location = compactUnique([artist.district || artist.city, artist.state]).join(", ") || normalize(artist.location) || "Maharashtra";
+    const ratingSummary = getArtistRatingSummary(artist);
 
     services.forEach((service, serviceIndex) => {
       const cardId = `${artistId}_${service.serviceId}`;
@@ -166,8 +168,8 @@ export function buildArtistCards(artists: Record<string, unknown>[], maxCards?: 
         priceRange: service.priceRange,
         image,
         location,
-        rating: safeNumber(artist.stats?.rating || artist.rating, 5),
-        reviews: safeNumber(artist.stats?.reviews || artist.reviews, 0),
+        rating: safeNumber(ratingSummary.averageRating, 0),
+        reviews: safeNumber(ratingSummary.totalRatings, 0),
         verified: safeBoolean(artist.verified),
         featured: safeBoolean(artist.featured || artist.trending || artist.featuredExp),
         bio: safeString(artist.artistProfile?.bio || artist.bio || `Professional ${service.subCategory} available for curated events.`),

@@ -26,7 +26,7 @@ import {
   getInjectedSubcategories,
   type SmartFilters,
 } from "@/services/filterEngine";
-import { formatDate, formatRating, safeString } from "@/services/dataNormalizer";
+import { formatDate, safeString } from "@/services/dataNormalizer";
 import type { ArtistCardViewModel } from "@/services/marketplaceCards";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
@@ -251,9 +251,10 @@ export function LuxuryFilterBar({
 }
 
 export function LuxuryArtistCard({ artist, index }: { artist: ArtistCardViewModel; index: number }) {
-  const { t } = useI18n(); // ADDED FOR i18n
+  const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const categoryLabel = getArtLabel(t, artist.category); // ADDED FOR i18n
   const subCategoryLabel = getArtLabel(t, artist.subCategory); // ADDED FOR i18n
+  const ratingLabel = artist.reviews > 0 ? `${artist.rating.toFixed(1)} (${formatNumber(artist.reviews)})` : t("artist.noRatingsYet"); // ADDED FOR i18n
   return (
     <motion.article
       layout
@@ -279,7 +280,7 @@ export function LuxuryArtistCard({ artist, index }: { artist: ArtistCardViewMode
           <div className="luxury-card-vignette" />
           <span className="luxury-card-rating">
             <Star className="h-3.5 w-3.5 fill-current" />
-            {formatRating(artist.rating)}
+            {ratingLabel}
           </span>
         </div>
         <div className="luxury-card-body">

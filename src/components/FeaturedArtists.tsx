@@ -6,6 +6,7 @@ import { getCategoryGroupForArtistType } from "@/constants/artistSystem";
 import { getActiveArtists } from "@/services/dataService";
 import { SmartImage } from "@/components/SmartImage";
 import { buildArtistCards, type ArtistCardViewModel } from "@/services/marketplaceCards";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface ArtistCardProps {
   artist: ArtistCardViewModel;
@@ -13,8 +14,10 @@ interface ArtistCardProps {
 }
 
 export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
+  const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const artType = artist.subCategory || "Artist";
   const categoryGroup = getCategoryGroupForArtistType(artType) || artist.category || "Default";
+  const ratingLabel = artist.reviews > 0 ? `${artist.rating.toFixed(1)} (${formatNumber(artist.reviews)} ${t("artist.ratings")})` : t("artist.noRatingsYet"); // ADDED FOR i18n
 
   return (
     <motion.div
@@ -45,7 +48,7 @@ export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
               <div className="flex w-fit items-center gap-1.5 rounded-lg border border-stone-100 bg-white/90 px-2 py-1 backdrop-blur-md">
                 <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                 <span className="text-xs font-black tracking-tighter text-stone-800">
-                  {artist.rating.toFixed(1)} ({artist.reviews} Reviews)
+                  {ratingLabel}
                 </span>
               </div>
             </div>

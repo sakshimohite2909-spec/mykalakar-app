@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Loader2, Sparkles } from "lucide-react";
@@ -7,6 +7,13 @@ import Footer from "@/components/Footer";
 import { useMasterData } from "@/contexts/MasterDataContext";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
+import { getActiveArtistsPage } from "@/services/dataService";
+import {
+  buildEventRequirementGroups,
+  filterArtistCardsByLocation,
+  filterArtistCardsForEvent,
+} from "@/services/eventArtistFiltering";
+import { buildArtistCards } from "@/services/marketplaceCards";
 
 const EVENTS = [
   { id: "1", name: "Wedding", icon: "💍", description: "Artists, rituals, hosts, and media teams for complete wedding celebrations" },
@@ -16,18 +23,14 @@ const EVENTS = [
   { id: "5", name: "Spiritual Event", icon: "🪔", description: "Kirtan, bhajan, pravachan, varkari groups, and devotional stage support" },
 ];
 
-function getGroupSubcategories(group: Record<string, any>) {
-  if (Array.isArray(group.categories)) return group.categories;
-  if (Array.isArray(group.subcategories)) return group.subcategories;
-  return [];
-}
-
 export default function EventRequirements() {
   const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { categoryGroups, loading: masterLoading } = useMasterData();
   const [ready, setReady] = useState(false);
+  const [artists, setArtists] = useState<Record<string, unknown>[]>([]);
+  const [artistsLoading, setArtistsLoading] = useState(true);
 
   const eventId = searchParams.get("eventId") || "";
   const district = searchParams.get("district") || "";
@@ -38,6 +41,52 @@ export default function EventRequirements() {
     const timeout = window.setTimeout(() => setReady(true), 150);
     return () => window.clearTimeout(timeout);
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadArtists() {
+      setArtistsLoading(true);
+      try {
+        const items: Record<string, unknown>[] = [];
+        let cursor: Awaited<ReturnType<typeof getActiveArtistsPage>>["nextCursor"] = null;
+        let hasMore = true;
+
+        while (hasMore) {
+          const page = await getActiveArtistsPage(50, cursor || undefined);
+          items.push(...(page.items as Record<string, unknown>[]));
+          cursor = page.nextCursor;
+          hasMore = page.hasMore && Boolean(cursor);
+        }
+
+        if (mounted) setArtists(items);
+      } catch (error) {
+        console.warn("Event requirement artists unavailable.", error);
+        if (mounted) setArtists([]);
+      } finally {
+        if (mounted) setArtistsLoading(false);
+      }
+    }
+
+    loadArtists();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const artistCards = useMemo(() => buildArtistCards(artists), [artists]);
+  const eventMatchedArtists = useMemo(
+    () => filterArtistCardsForEvent(artistCards, eventId, selectedEvent?.name),
+    [artistCards, eventId, selectedEvent?.name]
+  );
+  const locationMatchedArtists = useMemo(
+    () => filterArtistCardsByLocation(eventMatchedArtists, state, district),
+    [district, eventMatchedArtists, state]
+  );
+  const requirementGroups = useMemo(
+    () => buildEventRequirementGroups(locationMatchedArtists, categoryGroups),
+    [categoryGroups, locationMatchedArtists]
+  );
 
   const buildArtistUrl = (categoryName?: string, subCategory?: string) => {
     const params = new URLSearchParams();
@@ -73,7 +122,7 @@ export default function EventRequirements() {
     );
   }
 
-  const isLoading = !ready || masterLoading;
+  const isLoading = !ready || masterLoading || artistsLoading;
 
   return (
     <div className="event-requirements-page min-h-screen w-full font-sans" style={{ background: "var(--app-background)" }}>
@@ -118,8 +167,8 @@ export default function EventRequirements() {
             </div>
 
             <div className="event-requirements-grid grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {categoryGroups.map((group: Record<string, any>, index) => {
-                const subcategories = getGroupSubcategories(group);
+              {requirementGroups.map((group, index) => {
+                const subcategories = group.subcategories;
                 return (
                   <motion.div
                     key={group.id || group.name}
@@ -134,9 +183,9 @@ export default function EventRequirements() {
                           {group.icon || "✨"}
                         </span>
                         <div className="min-w-0">
-                          <h3 className="text-base font-black tracking-tight text-stone-950">{getArtLabel(t, group.name)}</h3> {/* ADDED FOR i18n */}
+                          <h3 className="text-base font-black tracking-tight text-stone-950">{getArtLabel(t, group.name)} ({formatNumber(group.count)})</h3> {/* ADDED FOR i18n */}
                           <p className="mt-1 text-xs font-bold uppercase tracking-wide text-orange-600">
-                            {t("requirements.artistTypeCount", { count: formatNumber(subcategories.length) })} {/* ADDED FOR i18n */}
+                            {t("requirements.artistCount", { count: formatNumber(group.count) })} {/* ADDED FOR i18n */}
                           </p>
                         </div>
                       </div>
@@ -150,14 +199,14 @@ export default function EventRequirements() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {subcategories.slice(0, 9).map((subCategory: string) => (
+                      {subcategories.map((subCategory) => (
                         <button
-                          key={subCategory}
+                          key={subCategory.name}
                           type="button"
-                          onClick={() => navigate(buildArtistUrl(group.name, subCategory))}
+                          onClick={() => navigate(buildArtistUrl(group.name, subCategory.name))}
                           className="rounded-lg border border-orange-100 bg-[#fffaf6] px-3 py-2 text-[11px] font-extrabold text-stone-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
                         >
-                          {getArtLabel(t, subCategory)} {/* ADDED FOR i18n */}
+                          {getArtLabel(t, subCategory.name)} ({formatNumber(subCategory.count)}) {/* ADDED FOR i18n */}
                         </button>
                       ))}
                     </div>

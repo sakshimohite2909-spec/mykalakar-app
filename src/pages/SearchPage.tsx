@@ -11,7 +11,8 @@ import { ImageRegistryService } from "@/services/ImageRegistryService";
 import { getActiveArtistsPage, getApprovedEvents } from "@/services/dataService";
 import { filterEvents } from "@/services/filterEngine";
 import { useMarketplaceFilters } from "@/hooks/useMarketplaceFilters";
-import { buildArtistCards, filterArtistCards, type ArtistCardViewModel } from "@/services/marketplaceCards";
+import { filterArtistCardsByLocation, filterArtistCardsForEvent } from "@/services/eventArtistFiltering";
+import { buildArtistCards, filterArtistCards } from "@/services/marketplaceCards";
 import {
   AnimatePresence,
   LuxuryArtistCard,
@@ -37,10 +38,6 @@ function splitParam(value: string | null) {
     .filter(Boolean);
 }
 
-function normalizeLocation(value: unknown) {
-  return String(value ?? "").trim().toLowerCase();
-}
-
 function compact(values: unknown[]) {
   const seen = new Set<string>();
   return values
@@ -54,29 +51,14 @@ function compact(values: unknown[]) {
     });
 }
 
-function artistMatchesLocation(artist: ArtistCardViewModel, state: string, district: string) {
-  const values = [
-    artist.location,
-    artist.artist?.location,
-    artist.artist?.district,
-    artist.artist?.city,
-    artist.artist?.state,
-    artist.artist?.artistProfile?.location,
-  ].map(normalizeLocation).filter(Boolean);
-
-  const matchesState = !state || values.some((value) => value.includes(normalizeLocation(state)));
-  const matchesDistrict = !district || values.some((value) => value.includes(normalizeLocation(district)));
-  return matchesState && matchesDistrict;
-}
-
-async function getInitialArtistCollection() {
+async function getInitialArtistCollection(loadAll = false) {
   const firstPage = await getActiveArtistsPage(50);
   const items = [...(firstPage.items as Record<string, unknown>[])];
   let cursor = firstPage.nextCursor;
   let hasMore = firstPage.hasMore;
   let pageCount = 1;
 
-  while (hasMore && cursor && pageCount < 4) {
+  while (hasMore && cursor && (loadAll || pageCount < 4)) {
     const nextPage = await getActiveArtistsPage(50, cursor);
     items.push(...(nextPage.items as Record<string, unknown>[]));
     cursor = nextPage.nextCursor;
@@ -149,7 +131,7 @@ export default function SearchPage() {
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([getInitialArtistCollection(), getApprovedEvents()])
+    Promise.all([getInitialArtistCollection(Boolean(routeEventId)), getApprovedEvents()])
       .then(([artistPage, eventData]) => {
         if (!mounted) return;
         setArtists(artistPage.items);
@@ -169,7 +151,7 @@ export default function SearchPage() {
     return () => {
       mounted = false;
     };
-  }, [t]); // ADDED FOR i18n
+  }, [routeEventId, t]); // ADDED FOR i18n
 
   const loadMoreArtists = async () => {
     if (!hasMoreArtists || loadingMore) return;
@@ -189,13 +171,17 @@ export default function SearchPage() {
 
   const artistCards = useMemo(() => buildArtistCards(artists), [artists]);
   const filteredArtists = useMemo(() => filterArtistCards(artistCards, debouncedFilters), [artistCards, debouncedFilters]);
+  const eventMatchedArtists = useMemo(
+    () => filterArtistCardsForEvent(filteredArtists, routeEventId),
+    [filteredArtists, routeEventId],
+  );
   const locationMatchedArtists = useMemo(
-    () => filteredArtists.filter((artist) => artistMatchesLocation(artist, routeState, routeDistrict)),
-    [filteredArtists, routeDistrict, routeState],
+    () => filterArtistCardsByLocation(eventMatchedArtists, routeState, routeDistrict),
+    [eventMatchedArtists, routeDistrict, routeState],
   );
   const hasLocationContext = Boolean(routeState || routeDistrict);
-  const isLocationFallback = hasLocationContext && locationMatchedArtists.length === 0 && filteredArtists.length > 0;
-  const visibleArtists = isLocationFallback ? filteredArtists : locationMatchedArtists;
+  const isLocationFallback = !routeEventId && hasLocationContext && locationMatchedArtists.length === 0 && eventMatchedArtists.length > 0;
+  const visibleArtists = isLocationFallback ? eventMatchedArtists : locationMatchedArtists;
   const filteredEvents = useMemo(() => filterEvents(events, debouncedFilters), [events, debouncedFilters]);
   const resultCount = activeTab === "artists" ? visibleArtists.length : filteredEvents.length;
   const tagOptions = useMemo(

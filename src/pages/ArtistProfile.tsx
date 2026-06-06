@@ -33,6 +33,8 @@ import { getArtistCategory, getArtistSubCategory, getParentCategoryForSubCategor
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
 import { getFallbackImageForArt, getFallbackImagesForArt, getUsableImageUrl } from "@/utils/fallbackImages";
+import { getUserArtistRating, submitArtistRating } from "@/services/ratingService";
+import { getArtistRatingSummary, hasRatings } from "@/services/ratingUtils";
 
 function compactLocation(artist: Record<string, any>) {
   return [artist.district || artist.city, artist.state].filter(Boolean).join(", ") || artist.location || "Maharashtra";
@@ -284,6 +286,33 @@ function ArtistProfileSkeleton() {
   );
 }
 
+function RatingStarInput({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: number;
+  disabled?: boolean;
+  onChange: (rating: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(star)}
+          className="rounded-full p-1 text-orange-500 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={`Rate ${star} out of 5`}
+        >
+          <Star className={`h-5 w-5 ${star <= value ? "fill-orange-500 text-orange-500" : "text-stone-300"}`} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function ArtistProfile() {
   const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const { id } = useParams();
@@ -293,6 +322,9 @@ export default function ArtistProfile() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [userRating, setUserRating] = useState<number | null>(null);
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [isRatingSubmitting, setIsRatingSubmitting] = useState(false);
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
 
   useEffect(() => {
@@ -331,11 +363,18 @@ export default function ArtistProfile() {
 
         if (currentUser) {
           const savedRef = doc(db, "users", currentUser.uid, "savedArtists", artistRecord.id);
-          const savedSnap = await withTimeout(getDoc(savedRef), FIREBASE_READ_TIMEOUT_MS, "Saved artist status is taking too long.").catch(() => null);
+          const [savedSnap, existingRating] = await Promise.all([
+            withTimeout(getDoc(savedRef), FIREBASE_READ_TIMEOUT_MS, "Saved artist status is taking too long.").catch(() => null),
+            withTimeout(getUserArtistRating(artistRecord.id, currentUser.uid), FIREBASE_READ_TIMEOUT_MS, "Artist rating is taking too long.").catch(() => null),
+          ]);
           if (!mounted) return;
           setIsSaved(Boolean(savedSnap?.exists()));
+          setUserRating(existingRating);
+          setSelectedRating(existingRating || 0);
         } else {
           setIsSaved(false);
+          setUserRating(null);
+          setSelectedRating(0);
         }
       } catch (error) {
         logFirebaseError(error);
@@ -431,6 +470,58 @@ export default function ArtistProfile() {
       throw error;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSubmitRating = async () => {
+    if (!currentUser) {
+      toast({ title: t("artist.loginRequiredTitle"), description: t("artist.loginToRate") }); // ADDED FOR i18n
+      return;
+    }
+    if (!artist) return;
+    if (currentUser.uid === artist.id || currentUser.uid === artist.uid || currentUser.uid === artist.userId) {
+      toast({ title: t("artist.selfRatingUnavailable") }); // ADDED FOR i18n
+      return;
+    }
+    if (!selectedRating) {
+      toast({ title: t("artist.selectRating") }); // ADDED FOR i18n
+      return;
+    }
+
+    setIsRatingSubmitting(true);
+    try {
+      const uid = requireAuthUid(currentUser);
+      const result = await withTimeout(
+        submitArtistRating({ artistId: artist.id, userId: uid, rating: selectedRating }),
+        FIREBASE_WRITE_TIMEOUT_MS,
+        t("artist.ratingFailed"), // ADDED FOR i18n
+      );
+
+      setUserRating(result.rating);
+      setSelectedRating(result.rating);
+      setArtist((current: any) =>
+        current
+          ? {
+              ...current,
+              averageRating: result.averageRating,
+              totalRatings: result.totalRatings,
+              ratingSum: result.ratingSum,
+              rating: result.averageRating,
+              reviews: result.totalRatings,
+              stats: {
+                ...(current.stats || {}),
+                rating: result.averageRating,
+                reviews: result.totalRatings,
+              },
+            }
+          : current
+      );
+      toast({ title: t("artist.ratingSubmittedTitle"), description: t("artist.ratingSubmittedText", { rating: result.rating }) }); // ADDED FOR i18n
+    } catch (error: any) {
+      logFirebaseError(error, "Submit artist rating");
+      toast({ variant: "destructive", title: t("common.error"), description: firebaseErrorMessage(error, t("artist.ratingFailed")) }); // ADDED FOR i18n
+    } finally {
+      setIsRatingSubmitting(false);
     }
   };
 
@@ -538,7 +629,20 @@ export default function ArtistProfile() {
     ...artForms,
   ])).slice(0, 10);
   const experience = artist.experience || artist.artistProfile?.experience || 5;
-  const rating = Number(artist.stats?.rating || artist.rating || 5).toFixed(1);
+  const ratingSummary = getArtistRatingSummary(artist);
+  const hasArtistRatings = hasRatings(ratingSummary);
+  const rating = hasArtistRatings ? ratingSummary.averageRating.toFixed(1) : t("artist.noRatingsYet"); // ADDED FOR i18n
+  const ratingWithCount = hasArtistRatings
+    ? `${rating} (${formatNumber(ratingSummary.totalRatings)} ${t("artist.ratings")})`
+    : t("artist.noRatingsYet"); // ADDED FOR i18n
+  const isOwnArtist = Boolean(currentUser && (currentUser.uid === artist.id || currentUser.uid === artist.uid || currentUser.uid === artist.userId));
+  const ratingHelpText = isOwnArtist
+    ? t("artist.selfRatingUnavailable")
+    : userRating
+      ? t("artist.yourRating", { rating: userRating })
+      : currentUser
+        ? t("artist.selectRating")
+        : t("artist.loginToRate"); // ADDED FOR i18n
   const bio = artist.bio || artist.description || artist.artistProfile?.bio || t("artist.defaultBioWithLocation", { artType: artTypeLabel, location }); // ADDED FOR i18n
   const languages = getLanguageList(artist);
   const travelWillingness = getTravelLabel(artist.travelWillingness);
@@ -620,7 +724,7 @@ export default function ArtistProfile() {
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <Star className="h-4 w-4 fill-orange-500 text-orange-500" />
-                  {rating}
+                  {ratingWithCount}
                 </span>
               </div>
 
@@ -865,6 +969,22 @@ export default function ArtistProfile() {
                       <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wide">{label}</p>
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-4 rounded-xl border border-stone-100 bg-stone-50 p-3">
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-stone-400">{t("artist.rateArtist")}</p> {/* ADDED FOR i18n */}
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <RatingStarInput value={selectedRating} disabled={isRatingSubmitting || isOwnArtist} onChange={setSelectedRating} />
+                    <button
+                      type="button"
+                      disabled={isRatingSubmitting || isOwnArtist || !selectedRating}
+                      onClick={handleSubmitRating}
+                      className="rounded-lg bg-orange-600 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {userRating ? t("artist.updateRating") : t("artist.submitRating")} {/* ADDED FOR i18n */}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs font-semibold text-stone-500">{ratingHelpText}</p> {/* ADDED FOR i18n */}
                 </div>
 
                 {/* CTA */}
