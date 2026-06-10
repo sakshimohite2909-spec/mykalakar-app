@@ -41,6 +41,7 @@ const LocationSelection = () => {
   const [districtMenuOpen, setDistrictMenuOpen] = useState(false);
 
   const eventId    = searchParams.get("eventId");
+  const eventType  = searchParams.get("eventType") || searchParams.get("event") || "";
   const searchType = searchParams.get("type");
 
   // Sort state names alphabetically
@@ -76,12 +77,14 @@ const LocationSelection = () => {
 
   const handleContinue = () => {
     if (!selectedDistrict) return;
-    if (searchType === "artist") {
-      navigate(`/search?state=${selectedState}&district=${selectedDistrict}&type=artist`);
-    } else if (eventId) {
-      navigate(
-        `/event-requirements?eventId=${eventId}&state=${encodeURIComponent(selectedState)}&district=${encodeURIComponent(selectedDistrict)}`
-      );
+    const next = new URLSearchParams();
+    next.set("state", selectedState);
+    next.set("city", selectedDistrict);
+    if (eventId) next.set("eventId", eventId);
+    if (eventType) next.set("eventType", eventType);
+
+    if (searchType === "artist" || eventId || eventType) {
+      navigate(`/artists?${next.toString()}`);
     }
   };
 

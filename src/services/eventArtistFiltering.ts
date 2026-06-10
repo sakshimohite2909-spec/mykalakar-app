@@ -1,4 +1,5 @@
 import { normalizeCategoryKey } from "@/constants/artistSystem";
+import { getArtistSubCategory, getParentCategoryForSubCategory } from "@/services/filterEngine";
 import type { ArtistCardViewModel } from "@/services/marketplaceCards";
 
 export type EventRequirementSubcategory = {
@@ -55,6 +56,19 @@ function compactUnique(values: unknown[]) {
       seen.add(key);
       return true;
     });
+}
+
+export function isArtistCardAvailable(card: ArtistCardViewModel) {
+  const artist = card.artist || {};
+  const availability = normalizeKey(artist.availability || artist.artistProfile?.availability || "available");
+  const status = normalizeKey(artist.status || artist.applicationStatus || artist.verification?.status || "active");
+  const unavailableValues = new Set(["busy", "booked", "inactive", "unavailable", "not available", "not_available"]);
+
+  return !unavailableValues.has(availability) && (!status || ["active", "approved"].includes(status));
+}
+
+export function filterAvailableArtistCards<T extends ArtistCardViewModel>(cards: T[]) {
+  return cards.filter(isArtistCardAvailable);
 }
 
 function getArtistProfile(card: ArtistCardViewModel) {
@@ -154,8 +168,12 @@ export function buildEventRequirementGroups(cards: ArtistCardViewModel[], metada
   >();
 
   cards.forEach((card, index) => {
-    const category = normalize(card.category);
-    const subCategory = normalize(card.subCategory);
+    if (!isArtistCardAvailable(card)) return;
+
+    const rawCategory = normalize(card.category);
+    const rawSubCategory = normalize(card.subCategory);
+    const subCategory = getArtistSubCategory({ subCategory: rawSubCategory }) || rawSubCategory;
+    const category = getParentCategoryForSubCategory(subCategory) || rawCategory;
     const artistId = normalize(card.artistId || card.uid || card.artist?.id || card.artist?.uid || card.cardId);
     if (!category || !subCategory || !artistId) return;
 
@@ -188,14 +206,8 @@ export function buildEventRequirementGroups(cards: ArtistCardViewModel[], metada
   });
 
   return Array.from(groups.values())
-    .map((group) => ({
-      id: group.id,
-      name: group.name,
-      icon: group.icon,
-      count: group.artistIds.size,
-      firstSeen: group.firstSeen,
-      sortOrder: group.sortOrder,
-      subcategories: Array.from(group.subcategories.values())
+    .map((group) => {
+      const subcategories = Array.from(group.subcategories.values())
         .map((subCategory) => ({
           name: subCategory.name,
           count: subCategory.artistIds.size,
@@ -203,8 +215,18 @@ export function buildEventRequirementGroups(cards: ArtistCardViewModel[], metada
         }))
         .filter((subCategory) => subCategory.count > 0)
         .sort((a, b) => a.firstSeen - b.firstSeen)
-        .map(({ firstSeen, ...subCategory }) => subCategory),
-    }))
+        .map(({ firstSeen, ...subCategory }) => subCategory);
+
+      return {
+        id: group.id,
+        name: group.name,
+        icon: group.icon,
+        count: subcategories.reduce((total, subCategory) => total + subCategory.count, 0),
+        firstSeen: group.firstSeen,
+        sortOrder: group.sortOrder,
+        subcategories,
+      };
+    })
     .filter((group) => group.count > 0 && group.subcategories.length > 0)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.firstSeen - b.firstSeen)
     .map(({ firstSeen, sortOrder, ...group }) => group);

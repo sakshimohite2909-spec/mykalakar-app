@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildEventFilterGroups,
   filterArtists,
   filterEvents,
   getActiveCategories,
@@ -49,6 +50,34 @@ describe("smart filter engine", () => {
     expect(filterEvents(events, { query: "", category: "Folk & Traditional Arts", subCategory: null })).toHaveLength(1);
     expect(filterEvents(events, { query: "", category: "Folk & Traditional Arts", subCategory: "Dhol Pathak" })).toHaveLength(1);
     expect(filterEvents(events, { query: "", category: "Performers", subCategory: "Dhol Pathak" })).toHaveLength(0);
+  });
+
+  it("builds event category facets from live event records", () => {
+    const events = [
+      { id: "1", title: "Festival", requiredCategories: ["Dhol Pathak", "Lezim Pathak"] },
+      { id: "2", title: "Wedding", requiredCategories: ["Photography"] },
+      { id: "3", title: "Wedding 2", requiredCategories: ["Photography"] },
+    ];
+
+    const groups = buildEventFilterGroups(events).map(({ icon, ...group }) => group);
+
+    expect(groups).toEqual([
+      {
+        id: "event-services",
+        name: "Event Services",
+        count: 2,
+        subcategories: [{ name: "Photography", count: 2 }],
+      },
+      {
+        id: "folk-and-traditional-arts",
+        name: "Folk & Traditional Arts",
+        count: 2,
+        subcategories: [
+          { name: "Dhol Pathak", count: 1 },
+          { name: "Lezim Pathak", count: 1 },
+        ],
+      },
+    ]);
   });
 
   it("supports multi-layer parent category, subcategory, tags, and event types", () => {

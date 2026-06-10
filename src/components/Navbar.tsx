@@ -154,13 +154,18 @@ export default function Navbar() {
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <Link to="/" className="brand-lockup flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/35">
-            <div className="brand-logo-mark flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-[0_10px_24px_rgba(124,45,18,0.12)]">
-              <img src={STATIC_IMAGES.logo} alt="MyKalakar Logo" className="h-11 w-11 object-contain" />
+          <Link to="/" className="brand-lockup flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/35">
+            <div className="brand-logo-mark flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-orange-100 bg-white shadow-md">
+              <img 
+                src={STATIC_IMAGES.logo} 
+                alt="MyKalaakar Logo" 
+                className="h-10 w-10 object-contain"
+                style={{ imageRendering: "auto" }}
+              />
             </div>
-            <div className="hidden sm:block min-w-0">
-              <span className="block whitespace-nowrap text-base font-extrabold leading-5 text-stone-950">{t("brand.name")}</span>
-              <span className="hidden truncate text-[11px] font-semibold text-stone-500 xl:block">{t("brand.tagline")}</span>
+            <div className="hidden sm:flex flex-col min-w-0 leading-tight">
+              <span className="block whitespace-nowrap text-base font-black tracking-tight text-stone-900">MyKalaakar</span>
+              <span className="block whitespace-nowrap text-[10px] font-bold text-orange-650 tracking-wider">Artists • Culture • Events</span>
             </div>
           </Link>
         </div>

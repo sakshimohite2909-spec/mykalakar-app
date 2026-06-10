@@ -167,7 +167,6 @@ const artistRegistrationSchema = z
     ifscCode: ifscRule,
     accountNumber: accountRule,
     portfolioUrl: z.string().optional(),
-    liveLink: z.string().optional(),
     hasAssistant: z.boolean(),
     assistantName: z.string().optional(),
     assistantContact: z.string().optional(),
@@ -220,7 +219,6 @@ const artistDefaults: ArtistRegistrationValues = {
   ifscCode: "",
   accountNumber: "",
   portfolioUrl: "",
-  liveLink: "",
   hasAssistant: false,
   assistantName: "",
   assistantContact: "",
@@ -897,6 +895,8 @@ export default function ArtistRegister() {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [showAgeOnProfile, setShowAgeOnProfile] = useState(true);
   const [showPrimaryPricingOnProfile, setShowPrimaryPricingOnProfile] = useState(false);
+  // "Other" bank name free-text state
+  const [customBankName, setCustomBankName] = useState("");
   const errorRef = useRef<HTMLDivElement>(null);
   const { register: authRegister, logout } = useAuth();
   const navigate = useNavigate();
@@ -1102,6 +1102,22 @@ export default function ArtistRegister() {
   };
 
   const submitArtist = async (values: ArtistRegistrationValues) => {
+    // Resolve effective bank name (handle "Other" free-text input)
+    const effectiveBankName =
+      values.bankName === "Other"
+        ? customBankName.trim()
+        : values.bankName;
+
+    if (values.bankName === "Other" && effectiveBankName.length < 2) {
+      toast({
+        variant: "destructive",
+        title: "Bank name required",
+        description: "Please enter your bank name in the text field below the dropdown.",
+      });
+      scrollToError();
+      return;
+    }
+
     const preparedExtraArts = extraArtEntries
       .map((entry) => ({
         ...entry,
@@ -1306,11 +1322,11 @@ export default function ArtistRegister() {
         identity: {
           aadharNumber: values.aadharNumber,
         },
-        bankName: values.bankName,
+        bankName: effectiveBankName,
         ifscCode: values.ifscCode,
         accountNumber: values.accountNumber,
         bankDetails: {
-          bankName: values.bankName,
+          bankName: effectiveBankName,
           ifscCode: values.ifscCode,
           accountNumber: values.accountNumber,
         },
@@ -1336,7 +1352,6 @@ export default function ArtistRegister() {
         socialLinks,
         youtubeLinks,
         portfolioUrl: socialLinks[0]?.url || values.portfolioUrl || "",
-        liveLink: values.liveLink || "",
         assistant: {
           hasAssistant: values.hasAssistant,
           name: values.assistantName || "",
@@ -1924,20 +1939,51 @@ export default function ArtistRegister() {
 
                 <SectionHeading icon={Building2} title="Bank Account Details" />
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Controller
-                    name="bankName"
-                    control={artistForm.control}
-                    render={({ field }) => (
-                      <SearchableDropdown
-                        label="Bank Name *"
-                        value={field.value}
-                        options={INDIAN_BANK_OPTIONS}
-                        placeholder="Search Indian bank"
-                        error={artistForm.formState.errors.bankName?.message}
-                        onChange={field.onChange}
-                      />
+                  <div>
+                    <Controller
+                      name="bankName"
+                      control={artistForm.control}
+                      render={({ field }) => (
+                        <SearchableDropdown
+                          label="Bank Name *"
+                          value={field.value}
+                          options={INDIAN_BANK_OPTIONS}
+                          placeholder="Search Indian bank"
+                          error={artistForm.formState.errors.bankName?.message}
+                          onChange={(val) => {
+                            field.onChange(val);
+                            // Reset custom name whenever a new option is chosen
+                            if (val !== "Other") setCustomBankName("");
+                          }}
+                        />
+                      )}
+                    />
+                    {/* Conditional free-text input for "Other" bank */}
+                    {artistForm.watch("bankName") === "Other" && (
+                      <div className="mt-3">
+                        <label className="mb-1.5 block text-sm font-bold text-slate-700">
+                          <span className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-orange-500" />
+                            Enter Bank Name *
+                          </span>
+                        </label>
+                        <input
+                          type="text"
+                          value={customBankName}
+                          onChange={(e) => setCustomBankName(e.target.value)}
+                          placeholder="Enter your Bank Name manually"
+                          required
+                          maxLength={80}
+                          className={`${inputClass} ${customBankName.trim().length === 0 || (customBankName.trim().length > 0 && customBankName.trim().length < 2) ? errorInputClass : ""}`}
+                        />
+                        {customBankName.trim().length === 0 ? (
+                          <p className="mt-1.5 text-xs font-semibold text-red-500">Bank name is required when 'Other' is selected.</p>
+                        ) : customBankName.trim().length < 2 ? (
+                          <p className="mt-1.5 text-xs font-semibold text-red-500">Bank name must be at least 2 characters.</p>
+                        ) : null}
+                      </div>
                     )}
-                  />
+                  </div>
                   <Controller
                     name="ifscCode"
                     control={artistForm.control}
@@ -1979,13 +2025,6 @@ export default function ArtistRegister() {
                 </div>
 
                 <SectionHeading icon={Sparkles} title="Additional Details" />
-                <TextField
-                  label="Live Stream Link (Optional)"
-                  name="liveLink"
-                  register={artistForm.register}
-                  placeholder="e.g. YouTube Live URL"
-                  inputMode="url"
-                />
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <TextField

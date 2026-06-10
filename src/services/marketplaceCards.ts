@@ -203,6 +203,12 @@ export function filterArtistCards<T extends ArtistCardViewModel>(cards: T[], fil
   const activeEventTypes = getActiveEventTypes(filters).map(normalizeKey);
 
   return cards.filter((card) => {
+    const normalizedSubCategory = getArtistSubCategory({ subCategory: card.subCategory });
+    const categoryValues = compactUnique([
+      card.category,
+      getParentCategoryForSubCategory(normalizedSubCategory || card.subCategory),
+    ]).map(normalizeKey);
+    const subCategoryValues = compactUnique([card.subCategory, normalizedSubCategory]).map(normalizeKey);
     const tagValues = compactUnique([
       ...card.tags,
       ...toArray(card.artist.tags),
@@ -227,8 +233,8 @@ export function filterArtistCards<T extends ArtistCardViewModel>(cards: T[], fil
       ...tagValues,
       ...eventTypeValues,
     ].some((value) => normalizeKey(value).includes(query));
-    const matchesCategory = !activeCategories.length || activeCategories.includes(normalizeKey(card.category));
-    const matchesSubCategory = !activeSubCategories.length || activeSubCategories.includes(normalizeKey(card.subCategory));
+    const matchesCategory = !activeCategories.length || activeCategories.some((category) => categoryValues.includes(category));
+    const matchesSubCategory = !activeSubCategories.length || activeSubCategories.some((subCategory) => subCategoryValues.includes(subCategory));
     const matchesTags = !activeTags.length || activeTags.every((tag) => tagValues.some((value) => value.includes(tag)));
     const matchesEventTypes = !activeEventTypes.length || activeEventTypes.some((eventType) => eventTypeValues.some((value) => value.includes(eventType)));
 

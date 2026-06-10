@@ -1,7 +1,7 @@
-import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, startAfter, where, type QueryDocumentSnapshot } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, startAfter, where, type QueryDocumentSnapshot } from "firebase/firestore";
 import { CATEGORY_GROUP_OPTIONS, normalizeArtistRecord } from "@/constants/artistSystem";
 import { db } from "@/lib/firebase";
-import { FIREBASE_READ_TIMEOUT_MS, withTimeout } from "@/lib/firebaseSafe";
+import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, withTimeout } from "@/lib/firebaseSafe";
 import { normalizeRecord, isRenderSafe } from "@/services/dataNormalizer";
 
 type CacheEntry<T> = {
@@ -190,4 +190,62 @@ export function subscribeEventById(id: string, onData: (event: Record<string, an
     (snap) => onData(snap.exists() ? ({ id: snap.id, ...snap.data() } as Record<string, any>) : null),
     onError
   );
+}
+
+// ─── Event Brief Submission ───────────────────────────────────────────────────
+
+export interface EventBriefPayload {
+  eventName: string;
+  budget: number;
+  location: string;
+  eventDate: Date;
+  performanceType: string;
+  categories: string[];
+  requirements: string;
+  postedBy: string;
+  postedByName: string;
+  postedByEmail: string;
+}
+
+/**
+ * Writes a new event brief to the Firestore `events` collection.
+ * Status is set to "active" so the real-time listener in EventsPage
+ * surfaces it immediately. The read-cache is also cleared so any
+ * subsequent one-shot reads see fresh data.
+ */
+export async function postEventBrief(payload: EventBriefPayload): Promise<{ id: string }> {
+  const docRef = await withTimeout(
+    addDoc(collection(db, "events"), {
+      // Core fields (multiple aliases so BriefCard's fallback chain always finds them)
+      eventName:       payload.eventName,
+      title:           payload.eventName,
+      name:            payload.eventName,
+      budget:          payload.budget,
+      location:        payload.location,
+      city:            payload.location,
+      // Store as ISO date string; BriefCard reads it as a plain string for display
+      eventDate:       payload.eventDate.toISOString().split("T")[0],
+      date:            payload.eventDate.toISOString().split("T")[0],
+      performanceType: payload.performanceType,
+      type:            payload.performanceType,
+      categories:      payload.categories,
+      requirements:    payload.requirements,
+      // Ownership
+      postedBy:        payload.postedBy,
+      postedByName:    payload.postedByName,
+      postedByEmail:   payload.postedByEmail,
+      // "active" passes the isPublicEvent filter without admin approval
+      status:          "active",
+      // Server-side timestamps
+      createdAt:       serverTimestamp(),
+      updatedAt:       serverTimestamp(),
+    }),
+    FIREBASE_WRITE_TIMEOUT_MS,
+    "Could not post your event brief. Please check your connection and try again."
+  );
+
+  // Bust the read-cache so stale data is never served after a write
+  clearDataCache();
+
+  return { id: docRef.id };
 }

@@ -2,6 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Global Helper Functions ──────────────────────────────────────────────
     function isAuth() {
       return request.auth != null;
     }
@@ -12,10 +13,20 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.status == "active";
     }
 
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    function artistExists(artistId) {
+      return exists(/databases/$(database)/documents/artists/$(artistId));
+    }
+
     // ── events ───────────────────────────────────────────────────────────────
     match /events/{id} {
       allow read: if true;
-      allow write: if isAuth() && isAdmin();
+      allow create: if isAuth() && request.resource.data.postedBy == request.auth.uid;
+      allow update: if isAuth() && (isAdmin() || resource.data.postedBy == request.auth.uid);
+      allow delete: if isAuth() && isAdmin();
     }
 
     // Public directory metadata used by discovery and location flows.
@@ -33,20 +44,68 @@ service cloud.firestore {
     match /artists/{id} {
       allow read: if true;
       allow create: if isAuth() && (request.auth.uid == id || isAdmin());
-      allow update: if isAuth() && (request.auth.uid == id || isAdmin());
+      allow update: if isAuth() && (
+        // Admin can update anything
+        isAdmin() || 
+        // Owner can update personal profile information but cannot touch verification, status, or rating summary aggregates
+        (request.auth.uid == id 
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'verified', 'status', 'averageRating', 'totalRatings', 'ratingSum', 'rating', 'reviews', 'stats'
+          ])
+        ) ||
+        // Transactional updates to rating aggregate fields (triggered by client rating transactions)
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'name', 'profileImage', 'category', 'bio', 'portfolio', 'videos', 'socialLinks', 
+            'pricingRange', 'locationCoverageAreas', 'verified', 'status'
+          ])
+        )
+      );
+      allow delete: if isAuth() && isAdmin();
+    }
+
+    // ── artists/{id}/ratings subcollection ───────────────────────────────────
+    match /artists/{artistId}/ratings/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId) 
+        && artistExists(artistId)
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
     }
 
     // ── users ────────────────────────────────────────────────────────────────
     match /users/{uid} {
       allow read: if isAuth() && (request.auth.uid == uid || isAdmin());
-      allow write: if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow create: if isOwner(uid) && !request.resource.data.keys().hasAny(['isAdmin', 'role', 'status']);
+
+      allow update: if isAuth() && (
+        isAdmin() ||
+        (
+          request.auth.uid == uid
+          // Owners may NOT touch privilege-escalation fields
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'role', 'status'])
+          // When savedArtists is being written, it MUST be an array owned by this user
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['savedArtists'])
+            || (
+              request.resource.data.savedArtists is list
+              && request.auth.uid == uid
+            )
+          )
+        )
+      );
+
+      allow delete: if isAuth() && isAdmin();
     }
 
+    // users subcollections (legacy savedArtists docs, bookings, etc.)
     match /users/{uid}/{document=**} {
       allow read, write: if isAuth() && (request.auth.uid == uid || isAdmin());
     }
 
-    // Artist registration writes applications before admin approval.
+
+    // ── artist_applications ──────────────────────────────────────────────────
     match /artist_applications/{id} {
       allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
       allow read: if isAuth() && (resource.data.uid == request.auth.uid || isAdmin());
@@ -56,15 +115,173 @@ service cloud.firestore {
     // ── inquiries ────────────────────────────────────────────────────────────
     match /inquiries/{id} {
       allow read: if isAuth() && (resource.data.customerId == request.auth.uid || resource.data.artistId == request.auth.uid || isAdmin());
-      allow create: if isAuth();
+      allow create: if isAuth() 
+        && request.resource.data.customerId == request.auth.uid
+        && artistExists(request.resource.data.artistId);
       allow update, delete: if isAuth() && isAdmin();
     }
 
-    // ── bookings ─────────────────────────────────────────────────────────────
+    // ── bookings & artist_bookings ───────────────────────────────────────────
+    // Secures both admin panel bookings and direct artist bookings.
+    function validateBookingCommonRules(bookingId, resourceData, requestResourceData) {
+      return isAuth() && (
+        isAdmin() ||
+        (
+          (resourceData.customerId == request.auth.uid || resourceData.artistId == request.auth.uid)
+          && requestResourceData.customerId == resourceData.customerId
+          && requestResourceData.artistId == resourceData.artistId
+          && (
+            requestResourceData.status == resourceData.status || (
+              // Status transitions
+              (resourceData.status == "DRAFT" && requestResourceData.status == "PAYMENT_AUTHORIZED") ||
+              (resourceData.status == "PAYMENT_AUTHORIZED" && (requestResourceData.status == "PENDING_ARTIST_RESPONSE" || requestResourceData.status == "SOFT_HOLD_ACTIVE" || requestResourceData.status == "pending")) ||
+              (resourceData.status == "SOFT_HOLD_ACTIVE" && (requestResourceData.status == "PENDING_ARTIST_RESPONSE" || requestResourceData.status == "ARTIST_REVIEW" || requestResourceData.status == "AUTO_EXPIRED" || requestResourceData.status == "CANCELLED_BY_CLIENT")) ||
+              (resourceData.status == "PENDING_ARTIST_RESPONSE" && (requestResourceData.status == "ARTIST_REVIEW" || requestResourceData.status == "CONFIRMED" || requestResourceData.status == "REJECTED" || requestResourceData.status == "COUNTER_OFFER_SENT")) ||
+              (resourceData.status == "pending" && (requestResourceData.status == "confirmed" || requestResourceData.status == "cancelled" || requestResourceData.status == "REJECTED" || requestResourceData.status == "CONFIRMED")) ||
+              (resourceData.status == "ARTIST_REVIEW" && (requestResourceData.status == "CONFIRMED" || requestResourceData.status == "REJECTED" || requestResourceData.status == "COUNTER_OFFER_SENT")) ||
+              (resourceData.status == "COUNTER_OFFER_SENT" && requestResourceData.status == "PENDING_CLIENT_APPROVAL") ||
+              (resourceData.status == "PENDING_CLIENT_APPROVAL" && (requestResourceData.status == "CONFIRMED" || requestResourceData.status == "REJECTED" || requestResourceData.status == "CANCELLED_BY_CLIENT")) ||
+              ((resourceData.status == "CONFIRMED" || resourceData.status == "confirmed") && (requestResourceData.status == "EVENT_COMPLETED" || requestResourceData.status == "CANCELLED_BY_CLIENT" || requestResourceData.status == "CANCELLED_BY_ARTIST" || requestResourceData.status == "DISPUTE_OPENED" || requestResourceData.status == "completed" || requestResourceData.status == "cancelled")) ||
+              (resourceData.status == "EVENT_COMPLETED" && requestResourceData.status == "PAYOUT_RELEASED") ||
+              (resourceData.status == "DISPUTE_OPENED" && (requestResourceData.status == "DISPUTE_RESOLVED" || requestResourceData.status == "REFUND_PROCESSED" || requestResourceData.status == "PAYOUT_RELEASED"))
+            )
+          )
+          && (
+            request.auth.uid == resourceData.customerId || (
+              request.auth.uid == resourceData.artistId
+              && !requestResourceData.diff(resourceData).affectedKeys().hasAny([
+                'customerId', 'artistId', 'clientName', 'clientPhone', 'clientAddress', 'venueLocation', 'eventDate', 'performanceType'
+              ])
+            )
+          )
+        )
+      );
+    }
+
     match /bookings/{id} {
       allow read: if isAuth() && (resource.data.customerId == request.auth.uid || resource.data.artistId == request.auth.uid || isAdmin());
-      allow create: if isAuth() && isAdmin();
-      allow update: if isAuth() && (resource.data.artistId == request.auth.uid || isAdmin());
+      allow create: if isAuth() 
+        && request.resource.data.customerId == request.auth.uid
+        && artistExists(request.resource.data.artistId)
+        && (request.resource.data.status == "DRAFT" || request.resource.data.status == "PAYMENT_AUTHORIZED" || request.resource.data.status == "pending")
+        && request.resource.data.clientName is string
+        && request.resource.data.eventDate is string;
+      allow update: if validateBookingCommonRules(id, resource.data, request.resource.data);
+      allow delete: if isAuth() && isAdmin();
+    }
+
+    match /artist_bookings/{id} {
+      allow read: if isAuth() && (resource.data.customerId == request.auth.uid || resource.data.artistId == request.auth.uid || isAdmin());
+      allow create: if isAuth() 
+        && request.resource.data.customerId == request.auth.uid
+        && artistExists(request.resource.data.artistId)
+        && (request.resource.data.status == "DRAFT" || request.resource.data.status == "PAYMENT_AUTHORIZED" || request.resource.data.status == "pending")
+        && request.resource.data.clientName is string
+        && request.resource.data.eventDate is string;
+      allow update: if validateBookingCommonRules(id, resource.data, request.resource.data);
+      allow delete: if isAuth() && isAdmin();
+    }
+
+    // ── calendar_soft_holds ──────────────────────────────────────────────────
+    match /calendar_soft_holds/{holdId} {
+      allow read: if true; // Public check for availability conflicts
+      allow create: if isAuth()
+        && artistExists(request.resource.data.artistId)
+        && request.resource.data.bookingId is string
+        && request.resource.data.holdExpiryTime is string
+        && request.resource.data.startDateTime is string;
+      allow delete: if isAuth() && (
+        resource.data.artistId == request.auth.uid || 
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/bookings/$(resource.data.bookingId)) && get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.customerId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/artist_bookings/$(resource.data.bookingId)) && get(/databases/$(database)/documents/artist_bookings/$(resource.data.bookingId)).data.customerId == request.auth.uid)
+      );
+    }
+
+    // ── counter_offers ───────────────────────────────────────────────────────
+    match /counter_offers/{offerId} {
+      allow read: if isAuth() && (
+        resource.data.customerId == request.auth.uid || 
+        resource.data.artistId == request.auth.uid || 
+        isAdmin()
+      );
+      allow create: if isAuth()
+        && request.resource.data.artistId == request.auth.uid
+        && (
+          (exists(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)) && get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.artistId == request.auth.uid) ||
+          (exists(/databases/$(database)/documents/artist_bookings/$(request.resource.data.bookingId)) && get(/databases/$(database)/documents/artist_bookings/$(request.resource.data.bookingId)).data.artistId == request.auth.uid)
+        )
+        && request.resource.data.status == "pending";
+      allow update: if isAuth() && (
+        isAdmin() ||
+        (
+          (resource.data.customerId == request.auth.uid)
+          && resource.data.status == "pending"
+          && (request.resource.data.status == "accepted" || request.resource.data.status == "rejected")
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['bookingId', 'artistId', 'customerId', 'originalTerms', 'proposedTerms', 'reason'])
+        )
+      );
+    }
+
+    // ── disputes ─────────────────────────────────────────────────────────────
+    match /disputes/{disputeId} {
+      allow read: if isAuth() && (
+        resource.data.customerId == request.auth.uid || 
+        resource.data.artistId == request.auth.uid || 
+        isAdmin()
+      );
+      allow create: if isAuth()
+        && (
+          (exists(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)) && (
+            get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.customerId == request.auth.uid ||
+            get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.artistId == request.auth.uid
+          )) ||
+          (exists(/databases/$(database)/documents/artist_bookings/$(request.resource.data.bookingId)) && (
+            get(/databases/$(database)/documents/artist_bookings/$(request.resource.data.bookingId)).data.customerId == request.auth.uid ||
+            get(/databases/$(database)/documents/artist_bookings/$(request.resource.data.bookingId)).data.artistId == request.auth.uid
+          ))
+        )
+        && request.resource.data.status == "open"
+        && request.resource.data.reportedBy == request.auth.uid;
+      allow update: if isAuth() && isAdmin();
+      allow delete: if isAuth() && isAdmin();
+    }
+
+    // ── escrow_transactions ──────────────────────────────────────────────────
+    match /escrow_transactions/{escrowId} {
+      allow read: if isAuth() && (
+        resource.data.customerId == request.auth.uid || 
+        resource.data.artistId == request.auth.uid || 
+        isAdmin()
+      );
+      allow write: if isAuth() && isAdmin();
+    }
+
+    // ── artist_availability ──────────────────────────────────────────────────
+    match /artist_availability/{availabilityId} {
+      allow read: if true;
+      allow create: if isAuth()
+        && request.resource.data.artistId == request.auth.uid
+        && artistExists(request.resource.data.artistId);
+      allow update, delete: if isAuth() && (
+        resource.data.artistId == request.auth.uid || 
+        isAdmin()
+      );
+    }
+
+    // ── notifications ────────────────────────────────────────────────────────
+    match /notifications/{notificationId} {
+      allow create: if isAuth()
+        && artistExists(request.resource.data.artistId);
+      allow read: if isAuth() && (
+        resource.data.artistId == request.auth.uid || 
+        resource.data.recipientId == request.auth.uid || 
+        isAdmin()
+      );
+      allow update: if isAuth() && (
+        (resource.data.recipientId == request.auth.uid || resource.data.artistId == request.auth.uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+      );
       allow delete: if isAuth() && isAdmin();
     }
 
@@ -87,7 +304,79 @@ service cloud.firestore {
       allow write: if isAuth() && isAdmin();
     }
 
-    // Default deny
+    // ── admin_audit_logs ─────────────────────────────────────────────────────
+    match /admin_audit_logs/{id} {
+      allow create: if isAuth() && isAdmin();
+      allow read: if isAuth() && isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ── notification_logs ────────────────────────────────────────────────────
+    match /notification_logs/{id} {
+      allow create: if isAuth();
+      allow read: if isAuth() && isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ── eventBriefs ──────────────────────────────────────────────────────────
+    //
+    // Phase 4 — "New Requirement" event brief collection.
+    //
+    // CREATE  → Any authenticated user may post a brief, provided:
+    //           1. Their UID matches the `createdBy` field they submit (prevents
+    //              spoofing another user's identity).
+    //           2. The initial `status` is strictly "pending" (clients cannot
+    //              self-approve).
+    //
+    // READ (user) → A signed-in user may read a brief ONLY if they authored it
+    //               (`createdBy == auth.uid`).
+    //
+    // READ (admin) → If the request carries a custom claim `admin == true` the
+    //                token is treated as an administrator; all documents are
+    //                readable regardless of authorship.
+    //
+    // UPDATE (admin only) → Only admin-token holders may update documents
+    //                        (e.g. advance `status` from "pending" to "approved"
+    //                        or "rejected").  Non-admin clients have NO write
+    //                        access beyond creation.
+    //
+    // DELETE → Denied to everyone by default; admin can use the backend SDK.
+    //
+    match /eventBriefs/{briefId} {
+
+      // ── Helper: admin token claim ─────────────────────────────────────────
+      // Uses a custom Firebase Auth claim rather than a Firestore document
+      // lookup, making admin checks fast and cheap (no extra read).
+      function isBriefAdmin() {
+        return request.auth != null && request.auth.token.admin == true;
+      }
+
+      // ── CREATE ───────────────────────────────────────────────────────────
+      // Authenticated, identity-bound, pending-only creation.
+      allow create: if request.auth != null
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == "pending";
+
+      // ── READ ─────────────────────────────────────────────────────────────
+      // Author reads their own brief OR admin reads any brief.
+      allow read: if request.auth != null
+        && (
+          resource.data.createdBy == request.auth.uid
+          || isBriefAdmin()
+        );
+
+      // ── UPDATE ───────────────────────────────────────────────────────────
+      // Only admins may mutate documents (e.g. approve / reject the brief).
+      // Clients are explicitly denied any post-create write.
+      allow update: if isBriefAdmin();
+
+      // ── DELETE ───────────────────────────────────────────────────────────
+      // Denied via implicit Firestore default; admin SDK may override via
+      // server-side code.
+      allow delete: if false;
+    }
+
+    // Default deny — catches everything else
     match /{document=**} {
       allow read, write: if isAuth() && isAdmin();
     }

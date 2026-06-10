@@ -5,6 +5,8 @@ import { getUsableImageUrl } from "@/utils/fallbackImages";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BookingSummaryCards } from "@/components/artist-bookings/BookingSummaryCards";
+import { useArtistBookings } from "@/hooks/useArtistBookings";
 import { Link } from "react-router-dom";
 import {
     Eye,
@@ -24,6 +26,7 @@ import {
 
 export default function ArtistDashboard() {
     const { artistData } = useAuth();
+    const { summary, loadingBookings } = useArtistBookings();
 
     if (!artistData) return null;
 
@@ -54,7 +57,7 @@ export default function ArtistDashboard() {
     const stats = [
         { label: "Profile Views", value: artistData.stats?.profileViews || artistData.profileViews || 0, icon: Eye, color: "text-blue-500", bg: "bg-blue-500/10" },
         { label: "Rating", value: `${artistData.rating || 0} ⭐`, icon: Star, color: "text-yellow-500", bg: "bg-yellow-500/10" },
-        { label: "Total Bookings", value: artistData.stats?.totalBookings || artistData.totalBookings || 0, icon: CalendarCheck, color: "text-green-500", bg: "bg-green-500/10" },
+        { label: "Total Bookings", value: loadingBookings ? "..." : summary.pending + summary.confirmed + summary.completed, icon: CalendarCheck, color: "text-green-500", bg: "bg-green-500/10" },
         { label: "Followers", value: artistData.stats?.followers || artistData.followers || 0, icon: Users, color: "text-purple-500", bg: "bg-purple-500/10" },
     ];
 
@@ -99,6 +102,10 @@ export default function ArtistDashboard() {
                     </Card>
                 </motion.div>
             )}
+
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+                <BookingSummaryCards summary={summary} loading={loadingBookings} />
+            </motion.div>
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

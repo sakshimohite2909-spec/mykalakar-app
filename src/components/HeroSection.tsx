@@ -1,9 +1,30 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, PlayCircle } from "lucide-react";
+import { ArrowRight, PlayCircle, Loader2 } from "lucide-react";
 import { Suspense } from "react";
 import ErrorBoundary from "./ErrorBoundary";
 import FluidCanvas from "./FluidCanvas";
+
+const FluidCanvasFallback = () => (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 0,
+      pointerEvents: "none",
+      overflow: "hidden",
+      backgroundColor: "#050505",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }}
+  >
+    <div className="flex flex-col items-center gap-2 text-white/45">
+      <Loader2 className="h-6 w-6 animate-spin text-white/30" />
+      <span className="text-[10px] font-mono tracking-[0.3em] uppercase">Loading 3D Scene</span>
+    </div>
+  </div>
+);
 
 export default function HeroSection() {
   const navigate = useNavigate();
@@ -12,7 +33,7 @@ export default function HeroSection() {
     <section className="relative w-full bg-transparent overflow-hidden">
       {/* ── Continuous 3D Background (Active Canvas) ── */}
       <ErrorBoundary fallback={null}>
-        <Suspense fallback={null}>
+        <Suspense fallback={<FluidCanvasFallback />}>
           <FluidCanvas />
         </Suspense>
       </ErrorBoundary>

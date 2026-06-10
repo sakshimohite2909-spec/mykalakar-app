@@ -1,4 +1,5 @@
 import { HTMLAttributes, useEffect, useMemo, useState } from "react";
+import { FALLBACK_IMAGE } from "@/config/imageRegistry";
 import { allocateImage } from "@/utils/globalImageAllocator";
 import { getMappedImage } from "@/utils/imageMapping";
 import { getUsableImageUrl } from "@/utils/fallbackImages";
@@ -77,33 +78,7 @@ export function SmartImage({
     },
     [category, mappedCategorySrc, orientation, preferredSrc, src, stableUsageId],
   );
-  const fallback = useMemo(
-    () => {
-      if (fallbackSrc) {
-        if (isExternalUrl(fallbackSrc)) return safeSrc(fallbackSrc);
-
-        return allocateImage({
-          category: "general",
-          context: "fallback",
-          entityId: `${stableUsageId}:fallback`,
-          preferredUrl: fallbackSrc,
-          orientation,
-        }).url;
-      }
-
-      if (mappedCategorySrc) {
-        return allocateImage({
-          category,
-          context: `${stableUsageId}:mapped-fallback`,
-          entityId: `${stableUsageId}:mapped-fallback`,
-          orientation,
-        }).url;
-      }
-
-      return resolvedSrc;
-    },
-    [category, fallbackSrc, mappedCategorySrc, orientation, resolvedSrc, stableUsageId],
-  );
+  const fallback = useMemo(() => safeSrc(fallbackSrc || FALLBACK_IMAGE), [fallbackSrc]);
   const previewSrc = lowResSrc;
   const [currentSrc, setCurrentSrc] = useState(resolvedSrc);
   const [loaded, setLoaded] = useState(false);

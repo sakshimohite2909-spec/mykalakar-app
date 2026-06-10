@@ -1,5 +1,7 @@
 export const FALLBACK_IMAGE_GROUPS = {
   singersVocalists: [
+    // 4K Performers / mic close-up (primary)
+    "https://images.unsplash.com/photo-1516280440503-6c841441a10f?q=80&w=2070&auto=format&fit=crop",
     "https://images.unsplash.com/photo-1516280440504-45ea078ffa9a?auto=format&fit=crop&w=3840&q=100",
     "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=3840&q=100",
     "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=3840&q=100",
@@ -12,6 +14,9 @@ export const FALLBACK_IMAGE_GROUPS = {
     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=3840&q=100",
   ],
   dholPathak: [
+    // 4K Tabla/Dhol close-up (primary — Folk & Traditional)
+    "https://images.unsplash.com/photo-1604882749372-9bd804b40778?q=80&w=2070&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1605335191295-88544fb4af6e?q=80&w=2070&auto=format&fit=crop",
     "https://images.unsplash.com/photo-1621416894569-0f39ed31d247?auto=format&fit=crop&w=3840&q=100",
     "https://images.unsplash.com/photo-1605135897648-9366fa7a9b19?auto=format&fit=crop&w=3840&q=100",
     "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=3840&q=100",
@@ -24,10 +29,20 @@ export const FALLBACK_IMAGE_GROUPS = {
     "https://upload.wikimedia.org/wikipedia/commons/4/4b/Flashmob_Lezim_performance.jpg",
   ],
   fineArtVisualArtists: [
+    // 4K Camera lens close-up (primary — Event Services)
+    "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=2000&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1565214975484-3cfa9e56f914?q=80&w=2000&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1512496015851-a1dc8a4746b1?q=80&w=2070&auto=format&fit=crop",
     "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?auto=format&fit=crop&w=3840&q=100",
     "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?auto=format&fit=crop&w=3840&q=100",
     "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=3840&q=100",
     "https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=3840&q=100",
+  ],
+  harmoniumSpiritual: [
+    // 4K Harmonium keys close-up (primary — Spiritual & Varkari Sampraday)
+    "https://images.unsplash.com/photo-1598285526019-20412e8c2ec6?q=80&w=2000&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1542838686-37ed7a7bfdd3?q=80&w=2000&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1604085572504-a392ddf0d86a?q=80&w=2000&auto=format&fit=crop",
   ],
   birthdayEventCelebrations: [
     "https://images.unsplash.com/photo-1530103862676-de88924083a2?auto=format&fit=crop&w=3840&q=100",
@@ -48,9 +63,10 @@ const FALLBACK_KEYWORDS: Array<{ key: FallbackImageGroupKey; terms: string[] }> 
     key: "zanjPathakFolkDance",
     terms: ["zanj pathak", "zanz pathak", "lezim", "folk dance", "folk traditional", "folk and traditional", "folk & traditional"],
   },
+  { key: "harmoniumSpiritual", terms: ["harmonium", "spiritual and varkari", "spiritual varkari", "varkari sampraday", "kirtankar", "pravachan", "bhajan", "varkari"] },
   {
     key: "singersVocalists",
-    terms: ["singer", "singers", "vocalist", "vocalists", "gayak", "karaoke", "orchestra", "bhajan", "kirtan"],
+    terms: ["singer", "singers", "vocalist", "vocalists", "gayak", "karaoke", "orchestra", "kirtan"],
   },
   {
     key: "actorsTheaterPerformers",

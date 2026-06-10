@@ -24,6 +24,10 @@
   --mk-focus: 0 0 0 4px rgba(249, 115, 22, 0.16);
   --mk-radius: 8px;
   --mk-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --mk-standard-card-min: min(100%, 16.5rem);
+  --mk-standard-card-gap: 1rem;
+  --mk-standard-card-media: 9.25rem;
+  --mk-standard-card-media-mobile: 7.4rem;
 
   --app-background: var(--mk-bg);
   --bg-primary: var(--mk-bg);
@@ -165,6 +169,7 @@ h6 {
   border-bottom: 1px solid var(--mk-line) !important;
   box-shadow: var(--mk-shadow-sm) !important;
   backdrop-filter: blur(18px) saturate(170%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(170%) !important;
 }
 
 .site-nav-shell {
@@ -380,6 +385,7 @@ h6 {
   box-shadow: var(--mk-shadow-md) !important;
   padding: 0.8rem !important;
   backdrop-filter: blur(18px) saturate(170%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(170%) !important;
 }
 
 .luxury-filter-topline {
@@ -473,10 +479,13 @@ h6 {
 }
 
 .luxury-results-grid,
-.luxury-results-grid.event-grid {
+.luxury-results-grid.event-grid,
+.category-mosaic,
+.luxury-page .category-mosaic,
+.event-type-options-grid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16.5rem), 1fr)) !important;
-  gap: 1rem !important;
+  grid-template-columns: repeat(auto-fill, minmax(var(--mk-standard-card-min), 1fr)) !important;
+  gap: var(--mk-standard-card-gap) !important;
   align-items: stretch !important;
 }
 
@@ -499,29 +508,35 @@ h6 {
   box-shadow: var(--mk-shadow-md) !important;
 }
 
-.luxury-card > a {
+.luxury-card > a,
+.standard-card-surface {
   display: grid !important;
-  grid-template-rows: 9.25rem auto !important;
+  grid-template-rows: var(--mk-standard-card-media) auto !important;
   height: 100% !important;
   color: inherit !important;
+  text-decoration: none !important;
 }
 
 .luxury-event-card > a {
-  grid-template-rows: 8.75rem auto !important;
+  grid-template-rows: var(--mk-standard-card-media) auto !important;
 }
 
 .luxury-card-media,
-.luxury-event-card .luxury-card-media {
+.luxury-event-card .luxury-card-media,
+.standard-card-surface .image-wrapper {
   min-height: 0 !important;
   height: 100% !important;
   background: #f5efe8 !important;
 }
 
 .luxury-card-media .smart-image,
-.luxury-card-media img {
+.luxury-card-media img,
+.standard-card-surface .smart-image,
+.standard-card-surface img {
   height: 100% !important;
   width: 100% !important;
   object-fit: cover !important;
+  object-position: center !important;
 }
 
 .luxury-card-vignette {
@@ -594,13 +609,6 @@ h6 {
   font-size: 0.75rem !important;
 }
 
-.category-mosaic,
-.luxury-page .category-mosaic {
-  display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr)) !important;
-  gap: 1rem !important;
-}
-
 .luxury-page .category-card,
 .compact-card,
 .result-card,
@@ -614,12 +622,50 @@ h6 {
 }
 
 .luxury-page .category-card {
-  min-height: 15.5rem !important;
+  min-height: 0 !important;
+  max-height: none !important;
 }
 
 .luxury-page .category-card .image-wrapper {
-  height: 8.5rem !important;
-  min-height: 8.5rem !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+.event-option-card {
+  /* Button reset — preserves all luxury-card visual properties */
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0 !important; /* border from luxury-card base */
+  max-height: none !important;
+  padding: 0 !important;
+  text-align: left;
+  cursor: pointer;
+  /* Ensure the button itself fills the grid cell just like <article> */
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100%;
+}
+
+/* The inner surface div must mirror luxury-card > a grid */
+.event-option-card > .standard-card-surface {
+  flex: 1 1 auto;
+}
+
+/* Enforce cover+center on 4K Unsplash close-ups inside event option cards */
+.event-option-card .luxury-card-media img,
+.event-option-card .luxury-card-media .smart-image img {
+  object-fit: cover !important;
+  object-position: center top !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Override system-overrides compact-card forced height on event-option-card */
+.luxury-card.event-option-card,
+.luxury-card.event-option-card:is(.compact-card, .result-card, .option-card) {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
 }
 
 .image-wrapper {
@@ -857,14 +903,18 @@ h6 {
   }
 
   .luxury-results-grid,
-  .luxury-results-grid.event-grid {
+  .luxury-results-grid.event-grid,
+  .category-mosaic,
+  .luxury-page .category-mosaic,
+  .event-type-options-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 0.75rem !important;
   }
 
   .luxury-card > a,
-  .luxury-event-card > a {
-    grid-template-rows: 7.4rem auto !important;
+  .luxury-event-card > a,
+  .standard-card-surface {
+    grid-template-rows: var(--mk-standard-card-media-mobile) auto !important;
   }
 
   .luxury-card-body {
@@ -883,3 +933,149 @@ h6 {
     flex-direction: column !important;
   }
 }
+
+/* --- High-Density Navigation Categories Overrides (Blinkit / Amazon style) --- */
+.luxury-page .category-mosaic {
+  display: flex !important;
+  overflow-x: auto !important;
+  scroll-snap-type: x mandatory !important;
+  -webkit-overflow-scrolling: touch !important;
+  gap: 12px !important;
+  padding: 8px 4px 16px 4px !important;
+  scrollbar-width: none !important; /* Firefox */
+  grid-template-columns: none !important;
+}
+
+.luxury-page .category-mosaic::-webkit-scrollbar {
+  display: none !important; /* Safari and Chrome */
+}
+
+@media (min-width: 768px) {
+  .luxury-page .category-mosaic {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)) !important;
+    gap: 16px !important;
+    overflow-x: visible !important;
+    padding: 0 !important;
+  }
+}
+
+.luxury-page .category-card {
+  flex: 0 0 100px !important; /* Fixed width on mobile for smooth horizontal swipe */
+  scroll-snap-align: start !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  text-align: center !important;
+  transition: transform 0.22s var(--mk-ease) !important;
+}
+
+.luxury-page .category-card::before {
+  content: none !important;
+}
+
+@media (min-width: 768px) {
+  .luxury-page .category-card {
+    flex: none !important;
+  }
+}
+
+.luxury-page .category-card .image-wrapper {
+  position: relative !important;
+  width: 80px !important;
+  height: 80px !important;
+  margin: 0 auto !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(24, 18, 13, 0.08) !important;
+  background: var(--mk-bg-soft) !important;
+  box-shadow: var(--mk-shadow-sm) !important;
+  transition: transform 0.22s var(--mk-ease), box-shadow 0.22s var(--mk-ease), border-color 0.22s var(--mk-ease) !important;
+}
+
+@media (min-width: 640px) {
+  .luxury-page .category-card .image-wrapper {
+    width: 96px !important;
+    height: 96px !important;
+  }
+}
+
+.luxury-page .category-card:hover {
+  transform: translateY(-2px) !important;
+}
+
+.luxury-page .category-card:hover .image-wrapper {
+  transform: scale(1.05) !important;
+  box-shadow: var(--mk-shadow-md) !important;
+  border-color: rgba(249, 115, 22, 0.3) !important;
+}
+
+.luxury-page .category-card .image-wrapper img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+}
+
+.luxury-page .category-card .icon-badge {
+  position: absolute !important;
+  bottom: 0 !important;
+  right: 0 !important;
+  left: auto !important;
+  top: auto !important;
+  display: flex !important;
+  height: 24px !important;
+  width: 24px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  background: #ffffff !important;
+  color: var(--mk-orange) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid rgba(249, 115, 22, 0.15) !important;
+  z-index: 10 !important;
+}
+
+.luxury-page .category-card .icon-badge svg {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+/* Compact padding for text area */
+.luxury-page .category-card .card-content {
+  padding: 8px 4px 0 4px !important;
+  text-align: center !important;
+}
+
+.luxury-page .category-card h3 {
+  font-size: 0.75rem !important; /* text-xs */
+  font-weight: 800 !important;
+  color: var(--luxury-ink) !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+@media (min-width: 640px) {
+  .luxury-page .category-card h3 {
+    font-size: 0.875rem !important; /* text-sm */
+  }
+}
+
+.luxury-page .category-card p {
+  font-size: 10px !important;
+  color: var(--luxury-muted) !important;
+  margin-top: 2px !important;
+  line-height: 1.2 !important;
+}
+
+.scrollbar-none {
+  scrollbar-width: none !important;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+}
+

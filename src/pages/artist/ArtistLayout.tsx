@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,6 +9,11 @@ import {
     LayoutDashboard,
     UserCircle,
     CalendarCheck,
+    CalendarDays,
+    CalendarClock,
+    CalendarOff,
+    CheckCircle2,
+    Bell,
     Star,
     Settings,
     LogOut,
@@ -17,16 +22,30 @@ import {
     ChevronRight,
     BadgeCheck,
     Eye,
+    Loader2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const sidebarItems = [
-    { label: "Dashboard", href: "/artist/dashboard", icon: LayoutDashboard },
-    { label: "Edit Profile", href: "/artist/dashboard/profile", icon: UserCircle },
-    { label: "Bookings", href: "/artist/dashboard/bookings", icon: CalendarCheck },
-    { label: "Reviews", href: "/artist/dashboard/reviews", icon: Star },
-    { label: "Settings", href: "/artist/dashboard/settings", icon: Settings },
+    { label: "Dashboard", href: "/artist/dashboard", matches: ["/artist/dashboard", "/dashboard"], icon: LayoutDashboard },
+    { label: "My Bookings", href: "/artist/dashboard/bookings", matches: ["/artist/dashboard/bookings", "/dashboard/bookings"], icon: CalendarCheck },
+    { label: "Calendar", href: "/artist/dashboard/calendar", matches: ["/artist/dashboard/calendar", "/dashboard/calendar"], icon: CalendarDays },
+    { label: "Upcoming Events", href: "/artist/dashboard/upcoming", matches: ["/artist/dashboard/upcoming", "/dashboard/upcoming"], icon: CalendarClock },
+    { label: "Completed Events", href: "/artist/dashboard/completed", matches: ["/artist/dashboard/completed", "/dashboard/completed"], icon: CheckCircle2 },
+    { label: "Availability", href: "/artist/dashboard/availability", matches: ["/artist/dashboard/availability", "/dashboard/availability"], icon: CalendarOff },
+    { label: "Notifications", href: "/artist/dashboard/notifications", matches: ["/artist/dashboard/notifications", "/dashboard/notifications"], icon: Bell },
+    { label: "Edit Profile", href: "/artist/dashboard/profile", matches: ["/artist/dashboard/profile", "/dashboard/profile"], icon: UserCircle },
+    { label: "Reviews", href: "/artist/dashboard/reviews", matches: ["/artist/dashboard/reviews", "/dashboard/reviews"], icon: Star },
+    { label: "Settings", href: "/artist/dashboard/settings", matches: ["/artist/dashboard/settings", "/dashboard/settings"], icon: Settings },
 ];
+
+function ArtistDashboardLoader() {
+    return (
+        <div className="flex h-[400px] w-full items-center justify-center bg-transparent">
+            <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+        </div>
+    );
+}
 
 export default function ArtistLayout() {
     const { artistData, logout } = useAuth();
@@ -75,9 +94,9 @@ export default function ArtistLayout() {
                 </div>
 
                 {/* Nav Items */}
-                <nav className="flex-1 space-y-1">
+                <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
                     {sidebarItems.map((item) => {
-                        const isActive = location.pathname === item.href;
+                        const isActive = item.matches.includes(location.pathname);
                         return (
                             <Link
                                 key={item.href}
@@ -143,9 +162,9 @@ export default function ArtistLayout() {
                             </div>
                         </div>
 
-                        <nav className="flex-1 space-y-1">
+                        <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
                             {sidebarItems.map((item) => {
-                                const isActive = location.pathname === item.href;
+                                const isActive = item.matches.includes(location.pathname);
                                 return (
                                     <Link
                                         key={item.href}
@@ -179,7 +198,7 @@ export default function ArtistLayout() {
                             <Menu className="h-5 w-5" />
                         </button>
                         <h1 className="font-display font-semibold text-lg">
-                            {sidebarItems.find((i) => i.href === location.pathname)?.label || "Dashboard"}
+                            {sidebarItems.find((i) => i.matches.includes(location.pathname))?.label || "Dashboard"}
                         </h1>
                     </div>
                     <div className="flex items-center gap-3">
@@ -198,7 +217,9 @@ export default function ArtistLayout() {
 
                 {/* Page Content */}
                 <main className="flex-1 p-4 lg:p-8">
-                    <Outlet />
+                    <Suspense fallback={<ArtistDashboardLoader />}>
+                        <Outlet />
+                    </Suspense>
                 </main>
             </div>
         </div>

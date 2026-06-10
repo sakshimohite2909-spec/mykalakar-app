@@ -3,6 +3,7 @@ import {
   getArtistArtForms,
   getCategoryGroupForArtistType,
   isCategoryGroup,
+  normalizeCategoryKey,
   type CategoryGroupName,
 } from "@/constants/artistSystem";
 
@@ -18,6 +19,18 @@ export type SmartFilters = {
 
 export type FilterableArtist = Record<string, unknown>;
 export type FilterableEvent = Record<string, unknown>;
+export type FilterFacetOption = {
+  name: string;
+  count: number;
+};
+
+export type FilterFacetGroup = {
+  id: string;
+  name: string;
+  icon?: string;
+  count: number;
+  subcategories: FilterFacetOption[];
+};
 
 export const EMPTY_FILTERS: SmartFilters = {
   query: "",
@@ -60,6 +73,7 @@ const SUBCATEGORY_ALIASES: Record<string, string> = {
   bharud: "Bharud",
   "dhol pathak": "Dhol Pathak",
 };
+const NON_SPECIFIC_EVENT_TERMS = new Set(["event", "events"]);
 
 function normalize(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -78,6 +92,17 @@ function canonicalSubCategory(value: unknown) {
 
 function includesText(value: unknown, query: string) {
   return normalize(value).includes(normalize(query));
+}
+
+export function eventTypeMatches(value: unknown, query: unknown) {
+  const eventValue = normalize(value);
+  const eventQuery = normalize(query);
+  if (!eventValue || !eventQuery) return false;
+  if (NON_SPECIFIC_EVENT_TERMS.has(eventValue) || NON_SPECIFIC_EVENT_TERMS.has(eventQuery)) {
+    return eventValue === eventQuery;
+  }
+
+  return eventValue.includes(eventQuery) || eventQuery.includes(eventValue);
 }
 
 function canonicalTag(value: unknown) {
@@ -292,7 +317,7 @@ export function artistMatchesFilters(artist: FilterableArtist, filters: SmartFil
     activeSubCategories.some((active) => normalize(value) === normalize(active))
   );
   const matchesTags = !activeTags.length || activeTags.every((tag) => artistTags.some((value) => includesText(value, tag)));
-  const matchesEventTypes = !activeEventTypes.length || activeEventTypes.some((eventType) => artistEventTypes.some((value) => includesText(value, eventType)));
+  const matchesEventTypes = !activeEventTypes.length || activeEventTypes.some((eventType) => artistEventTypes.some((value) => eventTypeMatches(value, eventType)));
 
   return matchesQuery && matchesCategory && matchesSubCategory && matchesTags && matchesEventTypes;
 }
@@ -350,11 +375,106 @@ export function eventMatchesFilters(event: FilterableEvent, filters: SmartFilter
     activeSubCategories.some((active) => normalize(value) === normalize(active))
   );
   const matchesTags = !activeTags.length || activeTags.every((tag) => eventTags.some((value) => includesText(value, tag)));
-  const matchesEventTypes = !activeEventTypes.length || activeEventTypes.some((eventType) => eventTypes.some((value) => includesText(value, eventType)));
+  const matchesEventTypes = !activeEventTypes.length || activeEventTypes.some((eventType) => eventTypes.some((value) => eventTypeMatches(value, eventType)));
 
   return matchesQuery && matchesCategory && matchesSubCategory && matchesTags && matchesEventTypes;
 }
 
 export function filterEvents<T extends FilterableEvent>(events: T[], filters: SmartFilters) {
   return events.filter((event) => eventMatchesFilters(event, filters));
+}
+
+export function buildEventFilterGroups(events: FilterableEvent[], metadata = CATEGORY_GROUP_OPTIONS): FilterFacetGroup[] {
+  const metadataByName = new Map(
+    metadata.map((group, index) => [
+      normalize(group.name),
+      {
+        ...group,
+        sortOrder: typeof group.sortOrder === "number" ? group.sortOrder : index,
+      },
+    ])
+  );
+  const groups = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      icon?: string;
+      sortOrder: number;
+      firstSeen: number;
+      subcategories: Map<string, { name: string; firstSeen: number; eventIds: Set<string> }>;
+    }
+  >();
+
+  events.forEach((event, index) => {
+    const eventId = String(event.id || event.uid || event.eventId || index).trim();
+    const requiredCategories = Array.isArray(event.requiredCategories)
+      ? event.requiredCategories.map(canonicalSubCategory).filter(Boolean)
+      : [];
+    const subcategories = compactCanonicalList(
+      [
+        ...requiredCategories,
+        event.artType,
+        event.subCategory,
+        event.subcategory,
+      ],
+      canonicalSubCategory
+    );
+    const candidates = subcategories.length ? subcategories : [event.category].map(canonicalSubCategory).filter(Boolean);
+
+    candidates.forEach((subCategory) => {
+      const category = getParentCategoryForSubCategory(subCategory) || getEventCategory({ ...event, subCategory });
+      if (!category || !subCategory) return;
+
+      const categoryKey = normalize(category);
+      const metadataEntry = metadataByName.get(categoryKey);
+      if (!groups.has(categoryKey)) {
+        groups.set(categoryKey, {
+          id: metadataEntry?.id || normalizeCategoryKey(category),
+          name: category,
+          icon: metadataEntry?.icon,
+          sortOrder: metadataEntry?.sortOrder ?? Number.MAX_SAFE_INTEGER,
+          firstSeen: index,
+          subcategories: new Map(),
+        });
+      }
+
+      const group = groups.get(categoryKey)!;
+      const subCategoryKey = normalize(subCategory);
+      if (!group.subcategories.has(subCategoryKey)) {
+        group.subcategories.set(subCategoryKey, {
+          name: subCategory,
+          firstSeen: index,
+          eventIds: new Set(),
+        });
+      }
+      group.subcategories.get(subCategoryKey)!.eventIds.add(eventId);
+    });
+  });
+
+  return Array.from(groups.values())
+    .map((group) => {
+      const subcategories = Array.from(group.subcategories.values())
+        .map((subCategory) => ({
+          name: subCategory.name,
+          count: subCategory.eventIds.size,
+          firstSeen: subCategory.firstSeen,
+        }))
+        .filter((subCategory) => subCategory.count > 0)
+        .sort((a, b) => a.firstSeen - b.firstSeen)
+        .map(({ firstSeen, ...subCategory }) => subCategory);
+
+      return {
+        id: group.id,
+        name: group.name,
+        icon: group.icon,
+        count: subcategories.reduce((total, subCategory) => total + subCategory.count, 0),
+        firstSeen: group.firstSeen,
+        sortOrder: group.sortOrder,
+        subcategories,
+      };
+    })
+    .filter((group) => group.count > 0 && group.subcategories.length > 0)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.firstSeen - b.firstSeen)
+    .map(({ firstSeen, sortOrder, ...group }) => group);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, CalendarDays, Search, Sparkles, UsersRound } from "lucide-react";
 import { LayoutGroup, motion } from "framer-motion";
@@ -9,9 +9,24 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SmartImage } from "@/components/SmartImage";
 import { ImageRegistryService } from "@/services/ImageRegistryService";
 import { getActiveArtistsPage, getApprovedEvents } from "@/services/dataService";
-import { filterEvents } from "@/services/filterEngine";
+import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
+import {
+  buildEventFilterGroups,
+  filterEvents,
+  getActiveCategories,
+  getActiveEventTypes,
+  getActiveSubCategories,
+  resetSmartFilters,
+  syncSmartFilters,
+  type SmartFilters,
+} from "@/services/filterEngine";
 import { useMarketplaceFilters } from "@/hooks/useMarketplaceFilters";
-import { filterArtistCardsByLocation, filterArtistCardsForEvent } from "@/services/eventArtistFiltering";
+import {
+  buildEventRequirementGroups,
+  filterArtistCardsByLocation,
+  filterArtistCardsForEvent,
+  filterAvailableArtistCards,
+} from "@/services/eventArtistFiltering";
 import { buildArtistCards, filterArtistCards } from "@/services/marketplaceCards";
 import {
   AnimatePresence,
@@ -26,6 +41,14 @@ type ExploreTab = "artists" | "events";
 type EventRecord = Record<string, unknown>;
 
 const DEFAULT_EVENT_TYPES = ["Wedding", "Festival", "Corporate", "Spiritual", "Birthday"];
+const EVENT_NAME_BY_ID: Record<string, string> = {
+  "1": "Wedding",
+  "2": "Birthday Party",
+  "3": "Corporate Event",
+  "4": "Festival Celebration",
+  "5": "Spiritual Event",
+};
+const NON_EVENT_TYPE_PARAMS = new Set(["artist", "artists", "event", "events"]);
 
 function getHeroImage(tab: ExploreTab) {
   return ImageRegistryService.getMappedImage(tab === "events" ? "Marriage" : "Kirtankar") || ImageRegistryService.getBestImage("Kirtankar", "artist");
@@ -49,6 +72,78 @@ function compact(values: unknown[]) {
       seen.add(key);
       return true;
     });
+}
+
+function isLegacyEventTypeParam(value: string | null) {
+  const clean = String(value || "").trim().toLowerCase();
+  return Boolean(clean && !NON_EVENT_TYPE_PARAMS.has(clean));
+}
+
+function buildRouteFilters(params: URLSearchParams): SmartFilters {
+  const eventId = params.get("eventId") || "";
+  const legacyType = params.get("type");
+  return syncSmartFilters({
+    query: params.get("q") || "",
+    category: params.get("category"),
+    subCategory: params.get("subcategory"),
+    categories: compact([params.get("category"), ...splitParam(params.get("categories"))]),
+    subCategories: compact([params.get("subcategory"), ...splitParam(params.get("subcategories"))]),
+    tags: splitParam(params.get("tags")),
+    eventTypes: compact([
+      params.get("event"),
+      params.get("eventType"),
+      ...splitParam(params.get("eventTypes")),
+      isLegacyEventTypeParam(legacyType) ? legacyType : "",
+      EVENT_NAME_BY_ID[eventId],
+    ]),
+  });
+}
+
+function filterStateKey(filters: SmartFilters) {
+  return JSON.stringify({
+    query: filters.query || "",
+    categories: getActiveCategories(filters),
+    subCategories: getActiveSubCategories(filters),
+    tags: filters.tags || [],
+    eventTypes: getActiveEventTypes(filters),
+  });
+}
+
+function setSingleOrMultiple(next: URLSearchParams, singleKey: string, multipleKey: string, values: string[]) {
+  if (values.length === 1) {
+    next.set(singleKey, values[0]);
+  } else if (values.length > 1) {
+    next.set(multipleKey, values.join(","));
+  }
+}
+
+function buildSearchParams(filters: SmartFilters, context: { activeTab: ExploreTab; eventId: string; state: string; city: string }) {
+  const next = new URLSearchParams();
+  const categories = getActiveCategories(filters);
+  const subCategories = getActiveSubCategories(filters);
+  const eventTypes = getActiveEventTypes(filters);
+
+  if (context.activeTab === "events") next.set("tab", "events");
+  if (filters.query) next.set("q", filters.query);
+  setSingleOrMultiple(next, "category", "categories", categories);
+  setSingleOrMultiple(next, "subcategory", "subcategories", subCategories);
+  if (filters.tags?.length) next.set("tags", filters.tags.join(","));
+  setSingleOrMultiple(next, "eventType", "eventTypes", eventTypes);
+  if (eventTypes.length && context.eventId) next.set("eventId", context.eventId);
+  if (context.state) next.set("state", context.state);
+  if (context.city) next.set("city", context.city);
+
+  return next;
+}
+
+function withoutArtistFacetFilters(filters: SmartFilters): SmartFilters {
+  return {
+    ...filters,
+    category: null,
+    subCategory: null,
+    categories: [],
+    subCategories: [],
+  };
 }
 
 async function getInitialArtistCollection(loadAll = false) {
@@ -87,23 +182,15 @@ function ResultSkeleton({ type }: { type: ExploreTab }) {
 export default function SearchPage() {
   const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const [params, setParams] = useSearchParams();
+  const paramsKey = params.toString();
+  const resettingFiltersRef = useRef(false);
   const routeState = params.get("state") || "";
-  const routeDistrict = params.get("district") || "";
+  const routeCity = params.get("city") || params.get("district") || "";
   const routeEventId = params.get("eventId") || "";
-  const routeType = params.get("type") || "";
   const [activeTab, setActiveTab] = useState<ExploreTab>(() => (params.get("tab") === "events" ? "events" : "artists"));
-  const { filters, debouncedFilters, applyFilters, resetFilters } = useMarketplaceFilters(
-    {
-      query: params.get("q") || "",
-      category: params.get("category"),
-      subCategory: params.get("subcategory"),
-      categories: compact([params.get("category"), ...splitParam(params.get("categories"))]),
-      subCategories: compact([params.get("subcategory"), ...splitParam(params.get("subcategories"))]),
-      tags: splitParam(params.get("tags")),
-      eventTypes: compact([routeType, ...splitParam(params.get("eventTypes"))]),
-    },
-    150,
-  );
+  const routeFilters = useMemo(() => buildRouteFilters(new URLSearchParams(paramsKey)), [paramsKey]);
+  const routeFilterKey = useMemo(() => filterStateKey(routeFilters), [routeFilters]);
+  const { filters, debouncedFilters, applyFilters, resetFilters, setFilters } = useMarketplaceFilters(routeFilters, 150);
   const [artists, setArtists] = useState<Record<string, unknown>[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,25 +200,38 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const next = new URLSearchParams();
-    if (activeTab === "events") next.set("tab", "events");
-    if (filters.query) next.set("q", filters.query);
-    if (filters.category) next.set("category", filters.category);
-    if (filters.subCategory) next.set("subcategory", filters.subCategory);
-    if (filters.categories?.length) next.set("categories", filters.categories.join(","));
-    if (filters.subCategories?.length) next.set("subcategories", filters.subCategories.join(","));
-    if (filters.tags?.length) next.set("tags", filters.tags.join(","));
-    if (filters.eventTypes?.length) next.set("eventTypes", filters.eventTypes.join(","));
-    if (routeState) next.set("state", routeState);
-    if (routeDistrict) next.set("district", routeDistrict);
-    if (routeEventId) next.set("eventId", routeEventId);
-    if (routeType) next.set("type", routeType);
-    setParams(next, { replace: true });
-  }, [activeTab, filters, routeDistrict, routeEventId, routeState, routeType, setParams]);
+    if (resettingFiltersRef.current) {
+      if (!paramsKey) {
+        resettingFiltersRef.current = false;
+      } else {
+        return;
+      }
+    }
+    setFilters((current) => (filterStateKey(current) === routeFilterKey ? current : routeFilters));
+  }, [paramsKey, routeFilterKey, routeFilters, setFilters]);
+
+  useEffect(() => {
+    if (resettingFiltersRef.current) return;
+    const routeTab = new URLSearchParams(paramsKey).get("tab") === "events" ? "events" : "artists";
+    setActiveTab((current) => (current === routeTab ? current : routeTab));
+  }, [paramsKey]);
+
+  useEffect(() => {
+    if (resettingFiltersRef.current) return;
+    const next = buildSearchParams(filters, {
+      activeTab,
+      eventId: routeEventId,
+      state: routeState,
+      city: routeCity,
+    });
+    if (next.toString() !== paramsKey) {
+      setParams(next, { replace: true });
+    }
+  }, [activeTab, filters, paramsKey, routeCity, routeEventId, routeState, setParams]);
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([getInitialArtistCollection(Boolean(routeEventId)), getApprovedEvents()])
+    Promise.all([getInitialArtistCollection(true), getApprovedEvents()])
       .then(([artistPage, eventData]) => {
         if (!mounted) return;
         setArtists(artistPage.items);
@@ -151,7 +251,7 @@ export default function SearchPage() {
     return () => {
       mounted = false;
     };
-  }, [routeEventId, t]); // ADDED FOR i18n
+  }, [t]); // ADDED FOR i18n
 
   const loadMoreArtists = async () => {
     if (!hasMoreArtists || loadingMore) return;
@@ -170,37 +270,58 @@ export default function SearchPage() {
   };
 
   const artistCards = useMemo(() => buildArtistCards(artists), [artists]);
-  const filteredArtists = useMemo(() => filterArtistCards(artistCards, debouncedFilters), [artistCards, debouncedFilters]);
+  const availableArtistCards = useMemo(() => filterAvailableArtistCards(artistCards), [artistCards]);
+  const debouncedEventTypes = useMemo(() => getActiveEventTypes(debouncedFilters), [debouncedFilters]);
   const eventMatchedArtists = useMemo(
-    () => filterArtistCardsForEvent(filteredArtists, routeEventId),
-    [filteredArtists, routeEventId],
+    () => filterArtistCardsForEvent(availableArtistCards, debouncedEventTypes.length ? routeEventId : "", debouncedEventTypes[0] || ""),
+    [availableArtistCards, debouncedEventTypes, routeEventId],
   );
   const locationMatchedArtists = useMemo(
-    () => filterArtistCardsByLocation(eventMatchedArtists, routeState, routeDistrict),
-    [eventMatchedArtists, routeDistrict, routeState],
+    () => filterArtistCardsByLocation(eventMatchedArtists, routeState, routeCity),
+    [eventMatchedArtists, routeCity, routeState],
   );
-  const hasLocationContext = Boolean(routeState || routeDistrict);
-  const isLocationFallback = !routeEventId && hasLocationContext && locationMatchedArtists.length === 0 && eventMatchedArtists.length > 0;
-  const visibleArtists = isLocationFallback ? eventMatchedArtists : locationMatchedArtists;
+  const artistFacetFilters = useMemo(() => withoutArtistFacetFilters(debouncedFilters), [debouncedFilters]);
+  const artistFacetBase = useMemo(
+    () => filterArtistCards(locationMatchedArtists, artistFacetFilters),
+    [artistFacetFilters, locationMatchedArtists],
+  );
+  const categoryFacets = useMemo(
+    () => buildEventRequirementGroups(artistFacetBase, CATEGORY_GROUP_OPTIONS),
+    [artistFacetBase],
+  );
+  const visibleArtists = useMemo(
+    () => filterArtistCards(locationMatchedArtists, debouncedFilters),
+    [debouncedFilters, locationMatchedArtists],
+  );
+  const eventFacetFilters = useMemo(() => withoutArtistFacetFilters(debouncedFilters), [debouncedFilters]);
+  const eventFacetBase = useMemo(() => filterEvents(events, eventFacetFilters), [eventFacetFilters, events]);
+  const eventCategoryFacets = useMemo(() => buildEventFilterGroups(eventFacetBase), [eventFacetBase]);
   const filteredEvents = useMemo(() => filterEvents(events, debouncedFilters), [events, debouncedFilters]);
   const resultCount = activeTab === "artists" ? visibleArtists.length : filteredEvents.length;
   const tagOptions = useMemo(
     () =>
       compact([
-        ...artistCards.flatMap((artist) => artist.tags),
+        ...availableArtistCards.flatMap((artist) => artist.tags),
         ...events.flatMap((event) => [event.tags, event.keywords]),
       ]),
-    [artistCards, events],
+    [availableArtistCards, events],
   );
   const eventTypeOptions = useMemo(
     () =>
       compact([
         ...DEFAULT_EVENT_TYPES,
-        ...artistCards.flatMap((artist) => artist.eventTypes),
+        ...availableArtistCards.flatMap((artist) => artist.eventTypes),
         ...events.flatMap((event) => [event.type, event.eventType, event.eventTypes, event.occasion, event.occasionType]),
       ]),
-    [artistCards, events],
+    [availableArtistCards, events],
   );
+  const handleResetFilters = () => {
+    resettingFiltersRef.current = true;
+    resetFilters();
+    setFilters(resetSmartFilters());
+    setActiveTab("artists");
+    setParams(new URLSearchParams(), { replace: true });
+  };
 
   return (
     <div className="luxury-page explore-page min-h-screen antialiased">
@@ -269,11 +390,12 @@ export default function SearchPage() {
           <LuxuryFilterBar
             filters={filters}
             onChange={applyFilters}
-            onReset={resetFilters}
+            onReset={handleResetFilters}
             resultCount={resultCount}
             loading={loading}
             tagOptions={tagOptions}
             eventTypeOptions={eventTypeOptions}
+            categoryFacets={activeTab === "artists" ? categoryFacets : eventCategoryFacets}
           />
 
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ExploreTab)}>
@@ -287,16 +409,10 @@ export default function SearchPage() {
               </p>
             </div>
 
-            {activeTab === "artists" && isLocationFallback ? (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="luxury-notice">
-                {t("explore.locationFallback", { location: routeDistrict || routeState })} {/* ADDED FOR i18n */}
-              </motion.div>
-            ) : null}
-
             {loading ? (
               <ResultSkeleton type={activeTab} />
             ) : error ? (
-              <LuxuryEmptyState label={activeTab} onReset={resetFilters} />
+              <LuxuryEmptyState label={activeTab} onReset={handleResetFilters} />
             ) : activeTab === "artists" ? (
               visibleArtists.length > 0 ? (
                 <>
@@ -317,7 +433,7 @@ export default function SearchPage() {
                   ) : null}
                 </>
               ) : (
-                <LuxuryEmptyState label="artists" onReset={resetFilters} />
+                <LuxuryEmptyState label="artists" onReset={handleResetFilters} />
               )
             ) : filteredEvents.length > 0 ? (
               <motion.div layout className="luxury-results-grid event-grid">
@@ -328,7 +444,7 @@ export default function SearchPage() {
                 </AnimatePresence>
               </motion.div>
             ) : (
-              <LuxuryEmptyState label="events" onReset={resetFilters} />
+              <LuxuryEmptyState label="events" onReset={handleResetFilters} />
             )}
           </Tabs>
         </LayoutGroup>

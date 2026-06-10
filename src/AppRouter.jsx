@@ -5,10 +5,12 @@ import MainLayout from "@/MainLayout";
 import ArtistProtectedRoute from "@/components/ArtistProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import RouteErrorBoundary from "@/components/RouteErrorBoundary";
 
 const Index = lazy(() => import("./pages/Index"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const EventSelection = lazy(() => import("./pages/EventSelection"));
+const Events = lazy(() => import("./pages/Events"));
 const LocationSelection = lazy(() => import("./pages/LocationSelection"));
 const EventRequirements = lazy(() => import("./pages/EventRequirements"));
 const ArtistProfile = lazy(() => import("./pages/ArtistProfile"));
@@ -27,18 +29,38 @@ const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminEvents = lazy(() => import("./pages/admin/AdminEvents"));
 const AdminLocations = lazy(() => import("./pages/admin/AdminLocations"));
 const AdminBootstrap = lazy(() => import("./pages/admin/AdminBootstrap"));
+const AdminEventBriefs = lazy(() => import("./pages/admin/AdminEventBriefs"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AntiGravity = lazy(() => import("./pages/AntiGravity"));
 const ArtistLayout = lazy(() => import("./pages/artist/ArtistLayout"));
 const ArtistDashboardHome = lazy(() => import("./pages/artist/ArtistDashboardHome"));
 const ArtistEditProfile = lazy(() => import("./pages/artist/ArtistEditProfile"));
 const ArtistBookings = lazy(() => import("./pages/artist/ArtistBookings"));
+const ArtistCalendar = lazy(() => import("./pages/artist/ArtistCalendar"));
+const ArtistUpcomingEvents = lazy(() => import("./pages/artist/ArtistUpcomingEvents"));
+const ArtistCompletedEvents = lazy(() => import("./pages/artist/ArtistCompletedEvents"));
+const ArtistAvailabilityPage = lazy(() => import("./pages/artist/ArtistAvailabilityPage"));
+const ArtistNotifications = lazy(() => import("./pages/artist/ArtistNotifications"));
 const ArtistReviews = lazy(() => import("./pages/artist/ArtistReviews"));
 const ArtistSettings = lazy(() => import("./pages/artist/ArtistSettings"));
+
+const artistDashboardChildren = [
+  { index: true, element: <ArtistDashboardHome /> },
+  { path: "profile", element: <ArtistEditProfile /> },
+  { path: "bookings", element: <ArtistBookings /> },
+  { path: "calendar", element: <ArtistCalendar /> },
+  { path: "upcoming", element: <ArtistUpcomingEvents /> },
+  { path: "completed", element: <ArtistCompletedEvents /> },
+  { path: "availability", element: <ArtistAvailabilityPage /> },
+  { path: "notifications", element: <ArtistNotifications /> },
+  { path: "reviews", element: <ArtistReviews /> },
+  { path: "settings", element: <ArtistSettings /> },
+];
 
 const router = createBrowserRouter([
   {
     element: <MainLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       { index: true, element: <Index /> },
       { path: "register", element: <ArtistRegister /> },
@@ -69,7 +91,7 @@ const router = createBrowserRouter([
       { path: "explore", element: <SearchPage /> },
       { path: "artists", element: <SearchPage /> },
       { path: "search", element: <SearchPage /> },
-      { path: "events", element: <EventSelection /> },
+      { path: "events", element: <Events /> },
       { path: "event/:id", element: <EventDetails /> },
       { path: "location-select", element: <LocationSelection /> },
       { path: "event-requirements", element: <EventRequirements /> },
@@ -81,13 +103,18 @@ const router = createBrowserRouter([
             <ArtistLayout />
           </ArtistProtectedRoute>
         ),
-        children: [
-          { index: true, element: <ArtistDashboardHome /> },
-          { path: "profile", element: <ArtistEditProfile /> },
-          { path: "bookings", element: <ArtistBookings /> },
-          { path: "reviews", element: <ArtistReviews /> },
-          { path: "settings", element: <ArtistSettings /> },
-        ],
+        errorElement: <RouteErrorBoundary />,
+        children: artistDashboardChildren,
+      },
+      {
+        path: "dashboard",
+        element: (
+          <ArtistProtectedRoute>
+            <ArtistLayout />
+          </ArtistProtectedRoute>
+        ),
+        errorElement: <RouteErrorBoundary />,
+        children: artistDashboardChildren,
       },
       {
         path: "admin",
@@ -96,6 +123,7 @@ const router = createBrowserRouter([
             <AdminLayout />
           </AdminProtectedRoute>
         ),
+        errorElement: <RouteErrorBoundary />,
         children: [
           { index: true, element: <AdminDashboard /> },
           { path: "artists", element: <AdminArtists /> },
@@ -107,6 +135,7 @@ const router = createBrowserRouter([
           { path: "locations", element: <AdminLocations /> },
           { path: "settings", element: <AdminSettings /> },
           { path: "bootstrap", element: <AdminBootstrap /> },
+          { path: "event-briefs", element: <AdminEventBriefs /> },
         ],
       },
       { path: "*", element: <NotFound /> },

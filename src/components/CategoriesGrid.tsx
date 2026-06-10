@@ -85,7 +85,7 @@ export default function CategoriesGrid() {
                   className={`flex flex-col items-center justify-center p-8 rounded-[2.5rem] border transition-all group relative overflow-hidden h-64 ${colorClass.split(' ').slice(0, 2).join(' ')}`}
                 >
                   <SmartImage
-                    src=""
+                    src={cat.image || cat.imageUrl}
                     alt={cat.name}
                     usageId={`categories-grid:${cat.id || cat.name}`}
                     category={cat.name}

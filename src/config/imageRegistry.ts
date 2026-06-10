@@ -93,8 +93,31 @@ export const CATEGORY_IMAGE_MAP: Record<string, string> = {
   "Singers": "https://images.unsplash.com/photo-1520872024865-3ff2805d8bb3?auto=format&fit=crop&w=800&q=80",
 
   // --- EVENT TYPES ---
-  "Birthday": "https://images.unsplash.com/photo-1530103862676-de3c9de59a9e?auto=format&fit=crop&w=800&q=80",
-  "Marriage": "https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=800&q=80"
+  "Birthday": "https://images.unsplash.com/photo-1530103862676-de88924083a2?q=80&w=2070&auto=format&fit=crop",
+  "Birthday Party": "https://images.unsplash.com/photo-1530103862676-de88924083a2?q=80&w=2070&auto=format&fit=crop",
+  "Marriage": "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=2070&auto=format&fit=crop",
+  "Wedding": "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=2070&auto=format&fit=crop",
+  // Corporate — vintage mic close-up (stage/performers theme)
+  "Corporate": "https://images.unsplash.com/photo-1516280440503-6c841441a10f?q=80&w=2070&auto=format&fit=crop",
+  "Corporate Event": "https://images.unsplash.com/photo-1516280440503-6c841441a10f?q=80&w=2070&auto=format&fit=crop",
+  // Festival — Tabla/Dhol close-up (folk percussion)
+  "Festival": "https://images.unsplash.com/photo-1604882749372-9bd804b40778?q=80&w=2070&auto=format&fit=crop",
+  "Festival Celebration": "https://images.unsplash.com/photo-1604882749372-9bd804b40778?q=80&w=2070&auto=format&fit=crop",
+  // Spiritual — Harmonium keys close-up (visually distinct from Folk)
+  "Spiritual": "https://images.unsplash.com/photo-1598285526019-20412e8c2ec6?q=80&w=2000&auto=format&fit=crop",
+  "Spiritual Event": "https://images.unsplash.com/photo-1598285526019-20412e8c2ec6?q=80&w=2000&auto=format&fit=crop",
+
+  // --- CATEGORY GROUPS (mosaic grid) ---
+  // Performers — stage microphone close-up (4K)
+  "Performers": "https://images.unsplash.com/photo-1516280440502-6292021fb07b?auto=format&fit=crop&w=1200&q=80",
+  // Event Services — professional camera lens close-up (4K)
+  "Event Services": "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1200&q=80",
+  // Folk & Traditional Arts — traditional Maharashtrian percussion close-up (4K)
+  "Folk & Traditional Arts": "https://images.unsplash.com/photo-1605335661331-1e9680eddbec?auto=format&fit=crop&w=1200&q=80",
+  "Folk and Traditional Arts": "https://images.unsplash.com/photo-1605335661331-1e9680eddbec?auto=format&fit=crop&w=1200&q=80",
+  // Spiritual & Varkari Sampraday — spiritual cymbals/Taal close-up (4K)
+  "Spiritual & Varkari Sampraday": "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=1200&q=80",
+  "Spiritual and Varkari Sampraday": "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=1200&q=80"
 };
 
 /**

@@ -1,19 +1,28 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Users, FolderOpen, CalendarDays, UserPlus, Settings, LogOut, Menu, X, MapPin, ShieldCheck, Search, UserCircle } from "lucide-react";
-import { useState } from "react";
+import { LayoutDashboard, Users, FolderOpen, CalendarDays, UserPlus, Settings, LogOut, Menu, X, MapPin, ShieldCheck, Search, UserCircle, Loader2, FileText } from "lucide-react";
+import { useState, Suspense } from "react";
 import { cn } from "@/lib/utils";
 
 const sidebarItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Artists", href: "/admin/artists", icon: Users },
   { label: "Pending Artists", href: "/admin/pending", icon: UserPlus },
+  { label: "Event Briefs", href: "/admin/event-briefs", icon: FileText },
   { label: "Categories", href: "/admin/categories", icon: FolderOpen },
   { label: "Events", href: "/admin/events", icon: CalendarDays },
   { label: "Inquiries", href: "/admin/bookings", icon: CalendarDays },
   { label: "Locations", href: "/admin/locations", icon: MapPin },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
+
+function AdminDashboardLoader() {
+  return (
+    <div className="flex h-[400px] w-full items-center justify-center bg-transparent">
+      <Loader2 className="h-8 w-8 animate-spin text-cyan-600" />
+    </div>
+  );
+}
 
 export default function AdminLayout() {
   const location = useLocation();
@@ -116,9 +125,11 @@ export default function AdminLayout() {
           </Link>
         </header>
         <main className="flex-1 p-4 lg:p-8">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={location.pathname}>
-            <Outlet />
-          </motion.div>
+          <Suspense fallback={<AdminDashboardLoader />}>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={location.pathname}>
+              <Outlet />
+            </motion.div>
+          </Suspense>
         </main>
       </div>
     </div>

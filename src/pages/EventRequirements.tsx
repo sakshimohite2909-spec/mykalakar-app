@@ -23,6 +23,10 @@ const EVENTS = [
   { id: "5", name: "Spiritual Event", icon: "🪔", description: "Kirtan, bhajan, pravachan, varkari groups, and devotional stage support" },
 ];
 
+function normalize(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
 export default function EventRequirements() {
   const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const navigate = useNavigate();
@@ -33,9 +37,17 @@ export default function EventRequirements() {
   const [artistsLoading, setArtistsLoading] = useState(true);
 
   const eventId = searchParams.get("eventId") || "";
-  const district = searchParams.get("district") || "";
+  const eventType = searchParams.get("eventType") || searchParams.get("event") || "";
+  const city = searchParams.get("city") || searchParams.get("district") || "";
   const state = searchParams.get("state") || "";
-  const selectedEvent = EVENTS.find((event) => event.id === eventId);
+  const selectedEvent =
+    EVENTS.find((event) => event.id === eventId) ||
+    EVENTS.find((event) => {
+      const eventName = normalize(event.name);
+      const typeName = normalize(eventType);
+      return Boolean(typeName && (eventName === typeName || eventName.includes(typeName) || typeName.includes(eventName)));
+    });
+  const selectedEventType = eventType || selectedEvent?.name || "";
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setReady(true), 150);
@@ -76,12 +88,12 @@ export default function EventRequirements() {
 
   const artistCards = useMemo(() => buildArtistCards(artists), [artists]);
   const eventMatchedArtists = useMemo(
-    () => filterArtistCardsForEvent(artistCards, eventId, selectedEvent?.name),
-    [artistCards, eventId, selectedEvent?.name]
+    () => filterArtistCardsForEvent(artistCards, selectedEvent?.id || eventId, selectedEventType),
+    [artistCards, eventId, selectedEvent?.id, selectedEventType]
   );
   const locationMatchedArtists = useMemo(
-    () => filterArtistCardsByLocation(eventMatchedArtists, state, district),
-    [district, eventMatchedArtists, state]
+    () => filterArtistCardsByLocation(eventMatchedArtists, state, city),
+    [city, eventMatchedArtists, state]
   );
   const requirementGroups = useMemo(
     () => buildEventRequirementGroups(locationMatchedArtists, categoryGroups),
@@ -92,9 +104,10 @@ export default function EventRequirements() {
     const params = new URLSearchParams();
     if (categoryName) params.set("category", categoryName);
     if (subCategory) params.set("subcategory", subCategory);
-    if (district) params.set("district", district);
+    if (city) params.set("city", city);
     if (state) params.set("state", state);
-    if (eventId) params.set("eventId", eventId);
+    if (selectedEvent?.id || eventId) params.set("eventId", selectedEvent?.id || eventId);
+    if (selectedEventType) params.set("eventType", selectedEventType);
     return `/artists?${params.toString()}`;
   };
 
@@ -133,7 +146,7 @@ export default function EventRequirements() {
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-widest text-orange-600">{t("requirements.eyebrow")}</p> {/* ADDED FOR i18n */}
             <h1 className="mt-1 text-3xl font-extrabold leading-tight text-stone-950 md:text-[40px]">
-              {t("requirements.title", { event: getArtLabel(t, selectedEvent.name), location: district || t("location.yourArea") })} {/* ADDED FOR i18n */}
+              {t("requirements.title", { event: getArtLabel(t, selectedEvent.name), location: city || t("location.yourArea") })} {/* ADDED FOR i18n */}
             </h1>
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-stone-600">
               {t(`requirements.event.${selectedEvent.id}.description`)} {t("requirements.subtitle")} {/* ADDED FOR i18n */}

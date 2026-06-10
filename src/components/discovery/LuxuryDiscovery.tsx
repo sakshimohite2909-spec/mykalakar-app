@@ -14,7 +14,6 @@ import {
   Star,
   X,
 } from "lucide-react";
-import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
 import { cn } from "@/lib/utils";
 import { SmartImage } from "@/components/SmartImage";
 import {
@@ -23,7 +22,7 @@ import {
   getActiveSubCategories,
   getActiveTags,
   getEventCategory,
-  getInjectedSubcategories,
+  type FilterFacetGroup,
   type SmartFilters,
 } from "@/services/filterEngine";
 import { formatDate, safeString } from "@/services/dataNormalizer";
@@ -43,6 +42,7 @@ type LuxuryFilterBarProps = {
   placeholder?: string;
   tagOptions?: string[];
   eventTypeOptions?: string[];
+  categoryFacets?: FilterFacetGroup[];
 };
 
 const chipMotion = {
@@ -68,6 +68,10 @@ function compact(values: string[]) {
     seen.add(key);
     return true;
   });
+}
+
+function normalizeKey(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function FilterPill({
@@ -114,6 +118,7 @@ export function LuxuryFilterBar({
   placeholder,
   tagOptions = [],
   eventTypeOptions = [],
+  categoryFacets: providedCategoryFacets,
 }: LuxuryFilterBarProps) {
   const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const searchPlaceholder = placeholder || t("filters.searchPlaceholder"); // ADDED FOR i18n
@@ -121,13 +126,30 @@ export function LuxuryFilterBar({
   const activeSubCategories = getActiveSubCategories(filters);
   const activeTags = getActiveTags(filters);
   const activeEventTypes = getActiveEventTypes(filters);
-  const subcategories = getInjectedSubcategories(filters);
+  const categoryFacets = (providedCategoryFacets ?? []).filter(
+    (group) => group.count > 0
+  );
+  const activeCategoryKeys = new Set(activeCategories.map(normalizeKey));
+  const subCategoryFacets = categoryFacets
+    .filter((group) => !activeCategoryKeys.size || activeCategoryKeys.has(normalizeKey(group.name)))
+    .flatMap((group) =>
+      group.subcategories
+        .filter((subCategory) => subCategory.count > 0)
+        .map((subCategory) => ({
+          ...subCategory,
+          category: group.name,
+        }))
+    );
+  const subCategoryParentByKey = new Map(
+    subCategoryFacets.map((subCategory) => [normalizeKey(subCategory.name), subCategory.category])
+  );
 
   const toggleCategory = (category: string) => {
     const nextCategories = toggleValue(activeCategories, category);
     const nextSubCategories = activeSubCategories.filter((subCategory) => {
-      const parent = CATEGORY_GROUP_OPTIONS.find((group) => group.subcategories.includes(subCategory))?.name;
-      return !parent || nextCategories.includes(parent);
+      if (!nextCategories.length) return false;
+      const parent = subCategoryParentByKey.get(normalizeKey(subCategory));
+      return !parent || nextCategories.some((item) => normalizeKey(item) === normalizeKey(parent));
     });
     onChange({
       category: nextCategories[0] || null,
@@ -137,9 +159,15 @@ export function LuxuryFilterBar({
     });
   };
 
-  const toggleSubCategory = (subCategory: string) => {
+  const toggleSubCategory = (subCategory: string, parentCategory?: string) => {
     const nextSubCategories = toggleValue(activeSubCategories, subCategory);
+    const nextCategories =
+      parentCategory && !activeCategories.some((category) => normalizeKey(category) === normalizeKey(parentCategory))
+        ? [...activeCategories, parentCategory]
+        : activeCategories;
     onChange({
+      category: nextCategories[0] || null,
+      categories: nextCategories,
       subCategory: nextSubCategories[0] || null,
       subCategories: nextSubCategories,
     });
@@ -180,20 +208,25 @@ export function LuxuryFilterBar({
         <FilterPill active={!activeCategories.length && !activeSubCategories.length} onClick={onReset}>
           {t("filters.all")} {/* ADDED FOR i18n */}
         </FilterPill>
-        {CATEGORY_GROUP_OPTIONS.map((group) => (
+        {categoryFacets.map((group) => (
           <FilterPill key={group.id} active={activeCategories.includes(group.name)} onClick={() => toggleCategory(group.name)}>
             <span>{getArtLabel(t, group.name)}</span> {/* ADDED FOR i18n */}
-            <em>{formatNumber(group.subcategories.length)}</em> {/* ADDED FOR i18n */}
+            <em>{formatNumber(group.count)}</em> {/* ADDED FOR i18n */}
           </FilterPill>
         ))}
       </div>
 
       <AnimatePresence initial={false}>
-        {subcategories.length ? (
+        {subCategoryFacets.length ? (
           <motion.div layout className="luxury-chip-row secondary" aria-label={t("filters.subcategories")} {...chipMotion}> {/* ADDED FOR i18n */}
-            {subcategories.map((subCategory) => (
-              <FilterPill key={subCategory} active={activeSubCategories.includes(subCategory)} onClick={() => toggleSubCategory(subCategory)}>
-                {getArtLabel(t, subCategory)} {/* ADDED FOR i18n */}
+            {subCategoryFacets.map((subCategory) => (
+              <FilterPill
+                key={`${subCategory.category}:${subCategory.name}`}
+                active={activeSubCategories.includes(subCategory.name)}
+                onClick={() => toggleSubCategory(subCategory.name, subCategory.category)}
+              >
+                {getArtLabel(t, subCategory.name)} {/* ADDED FOR i18n */}
+                <em>{formatNumber(subCategory.count)}</em> {/* ADDED FOR i18n */}
               </FilterPill>
             ))}
           </motion.div>

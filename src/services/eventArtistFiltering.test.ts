@@ -94,4 +94,48 @@ describe("event artist filtering", () => {
     expect(filterArtistCardsForEvent(cards, "3").map((item) => item.artistId)).toEqual(["corporate", "all"]);
     expect(filterArtistCardsForEvent(cards, "2").map((item) => item.artistId)).toEqual(["birthday", "all"]);
   });
+
+  it("builds category totals from real subcategory counts and excludes unavailable artists", () => {
+    const cards = [
+      card({ cardId: "asha-singer", artistId: "asha", category: "Performers", subCategory: "Singers" }),
+      card({ cardId: "asha-dj", artistId: "asha", category: "Performers", subCategory: "DJs" }),
+      card({
+        cardId: "busy-magician",
+        artistId: "busy",
+        category: "Performers",
+        subCategory: "Magicians",
+        artist: { availability: "busy", status: "active" },
+      }),
+    ];
+
+    const groups = buildEventRequirementGroups(cards, [{ name: "Performers", icon: "stage" }]);
+
+    expect(groups).toEqual([
+      {
+        id: "performers",
+        name: "Performers",
+        icon: "stage",
+        count: 2,
+        subcategories: [
+          { name: "Singers", count: 1 },
+          { name: "DJs", count: 1 },
+        ],
+      },
+    ]);
+  });
+
+  it("normalizes legacy service categories before aggregating facets", () => {
+    const groups = buildEventRequirementGroups([
+      card({ cardId: "legacy-singer", artistId: "legacy", category: "Music", subCategory: "Singer" }),
+    ]).map(({ icon, ...group }) => group);
+
+    expect(groups).toEqual([
+      {
+        id: "performers",
+        name: "Performers",
+        count: 1,
+        subcategories: [{ name: "Singers", count: 1 }],
+      },
+    ]);
+  });
 });

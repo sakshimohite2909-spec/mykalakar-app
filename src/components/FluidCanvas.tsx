@@ -174,8 +174,20 @@ export default function FluidCanvas() {
       ease: "none",
     });
 
+    const handleResize = () => {
+      ScrollTrigger.refresh();
+    };
+    window.addEventListener("resize", handleResize);
+
+    // Refresh after a small delay in case late layout shifts happen during hydration
+    const timeoutId = setTimeout(() => {
+      ScrollTrigger.refresh();
+    }, 1000);
+
     return () => {
       tl.kill();
+      window.removeEventListener("resize", handleResize);
+      clearTimeout(timeoutId);
       ScrollTrigger.getAll().forEach(s => s.kill());
     };
   }, []);

@@ -68,6 +68,7 @@ export const INDIAN_BANK_OPTIONS = [
   "India Post Payments Bank",
   "Airtel Payments Bank",
   "Paytm Payments Bank",
+  "Other",
 ];
 
 const MONTHS = [

@@ -102,12 +102,20 @@ export function normalizeArtistType(value: unknown): string {
   return match || raw;
 }
 
+const CATEGORY_IMAGES: Record<string, string> = {
+  "Performers": "https://images.unsplash.com/photo-1516280440502-6292021fb07b?auto=format&fit=crop&w=1200&q=80",
+  "Event Services": "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1200&q=80",
+  "Folk & Traditional Arts": "https://images.unsplash.com/photo-1605335661331-1e9680eddbec?auto=format&fit=crop&w=1200&q=80",
+  "Spiritual & Varkari Sampraday": "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=1200&q=80",
+};
+
 export const CATEGORY_GROUP_OPTIONS = Object.entries(CATEGORY_STRUCTURE).map(([name, data], index) => ({
   id: normalizeCategoryKey(name),
   name,
   icon: data.icon,
   slug: normalizeCategoryKey(name),
-  image: `/categories/${normalizeCategoryKey(name)}.png`,
+  image: CATEGORY_IMAGES[name] || `/categories/${normalizeCategoryKey(name)}.png`,
+  imageUrl: CATEGORY_IMAGES[name] || `/categories/${normalizeCategoryKey(name)}.png`,
   subcategories: [...data.subcategories],
   count: 0,
   sortOrder: index + 1,
