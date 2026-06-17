@@ -28,7 +28,7 @@ import { getUsableImageUrl } from "@/utils/fallbackImages";
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { currentUser, artistData, userProfile, userRole, logout } = useAuth();
+  const { currentUser, artistData, userProfile, userRole, isAdmin, logout } = useAuth();
   const { language, languages, setLanguage, t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
@@ -86,8 +86,8 @@ export default function Navbar() {
   const canViewArtistProfile = Boolean(
     artistData && (artistData.status === "active" || artistData.status === "approved"),
   );
-  const dashboardPath = userRole === "admin" ? "/admin" : userRole === "artist" ? "/artist/dashboard" : "/profile";
-  const dashboardLabel = userRole === "admin" ? t("nav.adminConsole") : userRole === "artist" ? t("nav.artistDashboard") : t("nav.myProfile");
+  const dashboardPath = userRole === "artist" ? "/artist/dashboard" : "/profile";
+  const dashboardLabel = userRole === "artist" ? t("nav.artistDashboard") : t("nav.myProfile");
   const showDashboardLink = dashboardPath !== "/profile";
 
   const navLinks = useMemo(
@@ -215,9 +215,15 @@ export default function Navbar() {
                     {t("nav.viewPublicPage")}
                   </DropdownMenuItem>
                 ) : null}
+                {isAdmin && (
+                  <DropdownMenuItem className="cursor-pointer rounded-xl py-2.5 font-semibold" onClick={() => navigate("/admin")}>
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    {t("nav.adminConsole") || "Admin Console"}
+                  </DropdownMenuItem>
+                )}
                 {showDashboardLink ? (
                   <DropdownMenuItem className="cursor-pointer rounded-xl py-2.5 font-semibold" onClick={() => navigate(dashboardPath)}>
-                    {userRole === "admin" ? <ShieldCheck className="mr-2 h-4 w-4" /> : <LayoutDashboard className="mr-2 h-4 w-4" />}
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
                     {dashboardLabel}
                   </DropdownMenuItem>
                 ) : null}

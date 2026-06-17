@@ -56,6 +56,7 @@ import {
   subscribeArtistAvailability,
 } from "@/services/artistBookingService";
 import type { BookingEvent, ArtistAvailabilityBlock, BookingStatus } from "@/types/booking";
+import ArtistNotFound from "@/pages/ArtistNotFound";
 
 function compactLocation(artist: Record<string, any>) {
   return [artist.district || artist.city, artist.state].filter(Boolean).join(", ") || artist.location || "Maharashtra";
@@ -642,18 +643,7 @@ export default function ArtistProfile() {
   }
 
   if (!artist) {
-    return (
-      <div className="profile-page min-h-screen bg-[#FAFAFA]">
-        <Navbar />
-        <main className="page-shell container-shell flex min-h-[70vh] flex-col items-center justify-center text-center">
-          <h1 className="text-2xl font-extrabold text-stone-950">{t("artist.notFoundTitle")}</h1> {/* ADDED FOR i18n */}
-          <p className="mt-2 max-w-sm text-sm font-semibold leading-6 text-stone-500">{t("artist.notFoundText")}</p> {/* ADDED FOR i18n */}
-          <Link to="/artists" className="mt-5 inline-flex h-10 items-center rounded-full bg-stone-950 px-5 text-xs font-extrabold text-white">
-            {t("artist.backToArtists")} {/* ADDED FOR i18n */}
-          </Link>
-        </main>
-      </div>
-    );
+    return <ArtistNotFound />;
   }
 
   const primaryCategory = profileCategories[0];

@@ -42,6 +42,7 @@ import {
 import { collection, doc, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
+import { compressImageUpload } from "@/utils/imageCompression";
 import { FIREBASE_UPLOAD_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -56,6 +57,8 @@ import {
 } from "@/lib/phoneUtils";
 import { useI18n } from "@/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
+import { validateVerhoeff } from "@/utils/verhoeff";
 import {
   DateOfBirthSelect,
   INDIAN_BANK_OPTIONS,
@@ -94,20 +97,17 @@ const artCategoryOptions = [...ARTIST_TYPES];
 const fullNameRule = z
   .string()
   .min(3, "Full name must be at least 3 characters.")
-  .regex(/^[a-zA-Z\s]*$/, "Full name can contain letters and spaces only.");
+  .regex(/^[a-zA-Z\s.\-'\u00C0-\u017F]*$/, "Full name can contain letters, spaces, periods, hyphens, and apostrophes.");
 
 const usernameRule = z
   .string()
   .min(4, "Username must be at least 4 characters.")
-  .regex(/^[a-z0-9_]*$/, "Username can contain lowercase letters, numbers, and underscores only. No spaces.");
+  .regex(/^\S*$/, "Username cannot contain spaces.");
 
 const passwordRule = z
   .string()
   .min(8, "Password must be at least 8 characters.")
-  .regex(/[A-Z]/, "Password must contain at least one uppercase letter.")
-  .regex(/[a-z]/, "Password must contain at least one lowercase letter.")
-  .regex(/\d/, "Password must contain at least one number.")
-  .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character.");
+  .regex(/(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])/, "Password must contain at least one uppercase letter, one number, and one special character.");
 
 const mobileRule = z
   .string()
@@ -128,9 +128,13 @@ const optionalPhoneRule = z
 
 const aadharRule = z.preprocess(
   (value) => String(value ?? "").replace(/\s/g, ""),
-  z.string().regex(/^\d{12}$/, "Aadhar number must be exactly 12 digits.")
+  z
+    .string()
+    .length(12, "Aadhaar number must be exactly 12 digits.")
+    .regex(/^\d{12}$/, "Aadhaar number must contain digits only.")
+    .refine(validateVerhoeff, "Invalid Aadhaar checksum. Please re-enter your number.")
 );
-const bankNameRule = z.string().min(2, "Bank name must be at least 2 characters.");
+const bankNameRule = z.string().min(1, "Bank name is required.");
 const ifscRule = z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "IFSC code must strictly match Indian IFSC format.");
 const accountRule = z
   .string()
@@ -166,7 +170,16 @@ const artistRegistrationSchema = z
     bankName: bankNameRule,
     ifscCode: ifscRule,
     accountNumber: accountRule,
-    portfolioUrl: z.string().optional(),
+    confirmAccountNumber: z.string().min(1, "Please confirm your account number."),
+    portfolioUrl: z
+      .union([
+        z.string().regex(
+          /^(https?:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+$/,
+          "Must be a valid YouTube URL (e.g. youtube.com/watch?v=...)"
+        ),
+        z.literal(""),
+      ])
+      .optional(),
     hasAssistant: z.boolean(),
     assistantName: z.string().optional(),
     assistantContact: z.string().optional(),
@@ -175,6 +188,10 @@ const artistRegistrationSchema = z
   .refine((values) => values.password === values.confirmPassword, {
     message: "Passwords do not match.",
     path: ["confirmPassword"],
+  })
+  .refine((values) => values.accountNumber === values.confirmAccountNumber, {
+    message: "Account numbers do not match. Please re-enter.",
+    path: ["confirmAccountNumber"],
   });
 
 const userRegistrationSchema = z
@@ -218,6 +235,7 @@ const artistDefaults: ArtistRegistrationValues = {
   bankName: "",
   ifscCode: "",
   accountNumber: "",
+  confirmAccountNumber: "",
   portfolioUrl: "",
   hasAssistant: false,
   assistantName: "",
@@ -270,10 +288,6 @@ function getAgeLabel(dob: string) {
   return `${Math.max(age, 0)} Years Old`;
 }
 
-function syntheticEmail(username: string) {
-  return `${username.toLowerCase().trim()}@mykalakar.app`;
-}
-
 function sanitizeStorageFileName(fileName: string) {
   const safeName = String(fileName || "artist-image")
     .trim()
@@ -307,12 +321,15 @@ async function uploadArtistRegistrationImage(uid: string, file: File, folder: st
   const validation = validateImageFile(file, true);
   if (!validation.valid) throw new Error(validation.message);
 
-  const safeFileName = sanitizeStorageFileName(file.name);
+  // Compress image before uploading — shrinks 15MB PNGs to < 1MB
+  const compressedFile = await compressImageUpload(file);
+
+  const safeFileName = sanitizeStorageFileName(compressedFile.name);
   const storagePath = `artists/${uid}/${folder}/${Date.now()}-${safeFileName}`;
   const storageRef = ref(storage, storagePath);
   const snapshot = await withTimeout(
-    uploadBytes(storageRef, file, {
-      contentType: file.type,
+    uploadBytes(storageRef, compressedFile, {
+      contentType: compressedFile.type,
       customMetadata: {
         artistId: uid,
         uploadPurpose: folder,
@@ -427,14 +444,16 @@ function PasswordField({
   onToggle: () => void;
   placeholder: string;
 }) {
+  const inputId = label.replace(/\s+/g, '-').toLowerCase() + '-password';
   return (
     <div>
-      <label className="mb-1.5 flex items-center gap-2 text-sm font-bold text-slate-700">
+      <label htmlFor={inputId} className="mb-1.5 flex items-center gap-2 text-sm font-bold text-slate-700">
         <Lock className="h-4 w-4 text-orange-500" />
         {label}
       </label>
       <div className="relative">
         <input
+          id={inputId}
           type={show ? "text" : "password"}
           value={value}
           onBlur={onBlur}
@@ -582,8 +601,9 @@ function ArtCategoryCard({
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <div>
-          <label className="mb-1.5 block text-sm font-bold text-slate-700">Solo Performance</label>
+          <label htmlFor={`solo-price-${index}`} className="mb-1.5 block text-sm font-bold text-slate-700">Solo Performance</label>
           <input
+            id={`solo-price-${index}`}
             value={art.soloPrice}
             onChange={(event) => update("soloPrice", digitsOnly(event.target.value, 8))}
             inputMode="numeric"
@@ -592,8 +612,9 @@ function ArtCategoryCard({
           />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-bold text-slate-700">Duo Performance</label>
+          <label htmlFor={`duo-price-${index}`} className="mb-1.5 block text-sm font-bold text-slate-700">Duo Performance</label>
           <input
+            id={`duo-price-${index}`}
             value={art.duoPrice}
             onChange={(event) => update("duoPrice", digitsOnly(event.target.value, 8))}
             inputMode="numeric"
@@ -602,8 +623,9 @@ function ArtCategoryCard({
           />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-bold text-slate-700">Team Performance</label>
+          <label htmlFor={`team-price-${index}`} className="mb-1.5 block text-sm font-bold text-slate-700">Team Performance</label>
           <input
+            id={`team-price-${index}`}
             value={art.teamPrice}
             onChange={(event) => update("teamPrice", digitsOnly(event.target.value, 8))}
             inputMode="numeric"
@@ -675,7 +697,9 @@ const PortfolioLinksEditor = memo(function PortfolioLinksEditor({
                 YouTube
               </div>
 
+              <label htmlFor={`youtube-link-${index}`} className="sr-only">YouTube Link {index + 1}</label>
               <input
+                id={`youtube-link-${index}`}
                 type="url"
                 inputMode="url"
                 value={link.url}
@@ -767,6 +791,10 @@ function FileDrop({
   onChange: (file: File | null) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [altText, setAltText] = useState("");
+  const inputId = label.replace(/\s+/g, '-').toLowerCase() + '-file';
+  const altId = label.replace(/\s+/g, '-').toLowerCase() + '-alt';
+
   const toneClass =
     tone === "blue"
       ? "border-blue-200 bg-blue-50/40 text-blue-500 hover:border-blue-400"
@@ -781,10 +809,10 @@ function FileDrop({
 
   return (
     <div>
-      <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">
+      <label htmlFor={inputId} className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">
         {label} {required ? <span className="text-red-500">*</span> : null}
       </label>
-      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleChange} />
+      <input id={inputId} ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleChange} />
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -792,7 +820,7 @@ function FileDrop({
       >
         {preview ? (
           <>
-            <img src={preview} alt={`${label} preview`} className="absolute inset-0 h-full w-full object-cover" />
+            <img src={preview} alt={altText || `${label} preview`} className="absolute inset-0 h-full w-full object-cover" />
             <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-sm font-black text-white opacity-0 transition hover:opacity-100">
               Change image
             </span>
@@ -806,6 +834,22 @@ function FileDrop({
           </>
         )}
       </button>
+      {file && (
+        <div className="mt-3">
+          <label htmlFor={altId} className="mb-1 block text-xs font-bold text-slate-700">
+            Image Description (Alt Text) <span className="text-red-500">*</span>
+          </label>
+          <input
+            id={altId}
+            type="text"
+            value={altText}
+            onChange={(e) => setAltText(e.target.value)}
+            placeholder={`Describe the ${label.toLowerCase()}`}
+            className="input-premium w-full px-3 py-2 text-sm"
+            required
+          />
+        </div>
+      )}
       {helperText ? <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{helperText}</p> : null}
     </div>
   );
@@ -898,7 +942,7 @@ export default function ArtistRegister() {
   // "Other" bank name free-text state
   const [customBankName, setCustomBankName] = useState("");
   const errorRef = useRef<HTMLDivElement>(null);
-  const { register: authRegister, logout } = useAuth();
+  const { register: authRegister } = useAuth();
   const navigate = useNavigate();
 
   const artistForm = useForm<ArtistRegistrationValues>({
@@ -1154,9 +1198,11 @@ export default function ArtistRegister() {
     setLoadingRole("artist");
 
     try {
-      const normalizedUsername = values.username.toLowerCase().trim();
-      const email = syntheticEmail(normalizedUsername);
-      const authResult = await authRegister(email, values.password);
+      const rawUsername = values.username.trim().toLowerCase();
+      const sdkEmail = rawUsername.includes("@") ? rawUsername : `${rawUsername}@mykalakar.app`;
+      const normalizedUsername = rawUsername;
+      const email = sdkEmail;
+      const authResult = await authRegister(sdkEmail, values.password);
 
       if (!authResult.success) {
         toast({ variant: "destructive", title: "Registration failed", description: authResult.message });
@@ -1389,14 +1435,25 @@ export default function ArtistRegister() {
         FIREBASE_WRITE_TIMEOUT_MS,
         "Could not submit your artist application."
       );
-      await logout().catch((logoutError) => console.warn("Logout after artist registration failed:", logoutError));
+      // Session is intentionally kept alive after successful registration.
+      // The user is redirected to the pending-review screen so they can
+      // see their application status without needing to log in again.
       toast({
         title: "Registration submitted",
         description: "Your artist profile and media assets are saved for admin review.",
       });
-      navigate("/login?role=artist");
+      navigate("/pending-review");
     } catch (error) {
       logFirebaseError(error, "Artist Registration Submission");
+      if (auth.currentUser) {
+        console.warn("Rolling back Auth user registration due to metadata write failure...");
+        try {
+          const { deleteUser } = await import("firebase/auth");
+          await deleteUser(auth.currentUser);
+        } catch (deleteError) {
+          console.error("Failed to delete user during registration rollback:", deleteError);
+        }
+      }
       toast({
         variant: "destructive",
         title: "Registration failed",
@@ -1411,9 +1468,11 @@ export default function ArtistRegister() {
   const submitUser = async (values: UserRegistrationValues) => {
     setLoadingRole("user");
     try {
-      const normalizedUsername = values.username.toLowerCase().trim();
-      const email = syntheticEmail(normalizedUsername);
-      const authResult = await authRegister(email, values.password);
+      const rawUsername = values.username.trim().toLowerCase();
+      const sdkEmail = rawUsername.includes("@") ? rawUsername : `${rawUsername}@mykalakar.app`;
+      const normalizedUsername = rawUsername;
+      const email = sdkEmail;
+      const authResult = await authRegister(sdkEmail, values.password);
 
       if (!authResult.success) {
         toast({ variant: "destructive", title: "Registration failed", description: authResult.message });
@@ -1442,6 +1501,15 @@ export default function ArtistRegister() {
       navigate("/profile");
     } catch (error) {
       logFirebaseError(error, "User Registration Submission");
+      if (auth.currentUser) {
+        console.warn("Rolling back Auth user registration due to metadata write failure...");
+        try {
+          const { deleteUser } = await import("firebase/auth");
+          await deleteUser(auth.currentUser);
+        } catch (deleteError) {
+          console.error("Failed to delete user during registration rollback:", deleteError);
+        }
+      }
       toast({
         variant: "destructive",
         title: "Registration failed",
@@ -1541,16 +1609,19 @@ export default function ArtistRegister() {
                       name="password"
                       control={artistForm.control}
                       render={({ field }) => (
-                        <PasswordField
-                          label="Password *"
-                          value={field.value}
-                          onChange={field.onChange}
-                          onBlur={field.onBlur}
-                          error={artistForm.formState.errors.password?.message}
-                          show={showPassword}
-                          onToggle={() => setShowPassword((current) => !current)}
-                          placeholder="Min 8 characters"
-                        />
+                        <div className="md:col-span-1">
+                          <PasswordField
+                            label="Password *"
+                            value={field.value}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            error={artistForm.formState.errors.password?.message}
+                            show={showPassword}
+                            onToggle={() => setShowPassword((current) => !current)}
+                            placeholder="Min 8 characters"
+                          />
+                          <PasswordStrengthMeter password={field.value} />
+                        </div>
                       )}
                     />
                     <Controller
@@ -2013,12 +2084,39 @@ export default function ArtistRegister() {
                           inputMode="numeric"
                           value={field.value}
                           onBlur={field.onBlur}
-                          onChange={(event) => field.onChange(digitsOnly(event.target.value, 18))}
+                          onChange={(event) => field.onChange(event.target.value.replace(/[^\d]/g, "").slice(0, 18))}
+                          onKeyPress={(event) => {
+                            if (!/[0-9]/.test(event.key)) {
+                              event.preventDefault();
+                            }
+                          }}
                           placeholder="Enter account number"
                           maxLength={18}
+                          minLength={9}
                           className={`${inputClass} ${artistForm.formState.errors.accountNumber ? errorInputClass : ""}`}
                         />
                         <FieldError message={artistForm.formState.errors.accountNumber?.message} />
+                      </div>
+                    )}
+                  />
+                  {/* Confirm Account Number — prevents copy-paste errors */}
+                  <Controller
+                    name="confirmAccountNumber"
+                    control={artistForm.control}
+                    render={({ field }) => (
+                      <div className="md:col-span-2">
+                        <label className="mb-1.5 block text-sm font-bold text-slate-700">Confirm Account Number *</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={field.value}
+                          onBlur={field.onBlur}
+                          onChange={(event) => field.onChange(event.target.value.replace(/[^\d]/g, "").slice(0, 18))}
+                          placeholder="Re-enter account number"
+                          maxLength={18}
+                          className={`${inputClass} ${artistForm.formState.errors.confirmAccountNumber ? errorInputClass : ""}`}
+                        />
+                        <FieldError message={artistForm.formState.errors.confirmAccountNumber?.message} />
                       </div>
                     )}
                   />
@@ -2095,7 +2193,7 @@ export default function ArtistRegister() {
                     error={userForm.formState.errors.fullName?.message}
                     placeholder="Enter your name"
                   />
-                  <TextField
+                   <TextField
                     label="Username *"
                     name="username"
                     register={userForm.register}

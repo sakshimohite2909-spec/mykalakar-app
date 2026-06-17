@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Poppins:wght@600;700;800;900&family=Noto+Sans+Devanagari:wght@400;500;600;700;800&display=swap');
+/* Google Fonts are now loaded via <link> in index.html with preconnect + display=swap for optimal FCP. */
 
 @tailwind base;
 @tailwind components;
@@ -247,3 +247,13 @@
   box-shadow: 0 0 0 3px rgba(226, 92, 29, 0.15);
 }
 
+
+
+/* Admin Button Standardized Interactions */
+.admin-layout button {
+  transition: all 300ms ease !important;
+}
+.admin-layout button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.1) !important;
+}

@@ -13,6 +13,7 @@ import { approveArtist, rejectArtist, approveAdminRequest, rejectAdminRequest } 
 import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
 import { imageRegistry } from "@/services/ImageRegistryService";
 import { getUsableImageUrl } from "@/utils/fallbackImages";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ── Lazy YouTube Thumbnail ──────────────────────────────────────────────────
 function YoutubePreview({ url }: { url: string }) {
@@ -274,11 +275,14 @@ function AdminRequestCard({ r, onApprove, onReject }: { r: any; onApprove: (id: 
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function AdminPending() {
+  const { currentUser, isAdmin } = useAuth();
   const [pendingArtists, setPendingArtists] = useState<any[]>([]);
   const [pendingAdmins, setPendingAdmins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!currentUser || !isAdmin) return;
+    
     // Artist applications listener
     const qArtists = query(
       collection(db, "artist_applications"),
@@ -308,7 +312,7 @@ export default function AdminPending() {
     });
 
     return () => { unsubArtists(); unsubAdmins(); };
-  }, []);
+  }, [currentUser, isAdmin]);
 
   const handleApproveArtist = useCallback(async (id: string) => {
     try {

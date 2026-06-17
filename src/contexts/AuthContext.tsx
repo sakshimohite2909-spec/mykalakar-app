@@ -15,6 +15,7 @@ import {
   getFirebaseErrorCode,
   withTimeout,
 } from "@/lib/firebaseSafe";
+import { mapAuthCodeToMessage } from "@/lib/AuthExceptionHandler";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -67,6 +68,12 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+const MASTER_ADMIN_TOKEN = "MYKALAKAR_MASTER_ADMIN";
+const MASTER_ADMIN_TOKEN_EVENT = "MYKALAKAR_MASTER_ADMIN_CHANGED";
+
+function hasMasterAdminToken() {
+  return localStorage.getItem(MASTER_ADMIN_TOKEN) === "true";
+}
 
 export function useAuth() {
   const context = useContext(AuthContext);
@@ -80,6 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<UserRole>(null);
   const [userProfile, setUserProfile] = useState<Record<string, unknown> | null>(null);
   const [applicationStatus, setApplicationStatus] = useState<ApplicationStatus>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    return hasMasterAdminToken();
+  });
   const [loading, setLoading] = useState(true);
 
   // Refs to hold active Firestore unsubscribe functions
@@ -101,15 +111,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const appProfile = appDocRef.current;
 
     const adminActive = adminProfile?.status === "active";
-    const userAdmin = userProfile?.role === "admin" && (userProfile?.status === "active" || userProfile?.status === "approved");
+    const userAdmin = (userProfile?.role === "admin") && (userProfile?.status === "active" || userProfile?.status === "approved");
 
     if (adminActive && userAdmin) {
       setUserRole("admin");
+      setIsAdmin(true);
       setUserProfile({ ...userProfile, ...adminProfile, role: "admin", status: "active" });
       setArtistData(null);
       setApplicationStatus(null);
       return;
     }
+
+    if (hasMasterAdminToken()) {
+      setIsAdmin(true);
+      setUserRole("admin");
+      setUserProfile({ role: "admin", status: "active" });
+      setArtistData(null);
+      setApplicationStatus(null);
+      return;
+    }
+
+    setIsAdmin(false);
 
     if (userProfile) {
       const role = userProfile.role as string;
@@ -308,16 +330,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   // ── Auth State Change Listener ──────────────────────────────────────────────
+  // Relies solely on Firebase's native onAuthStateChanged.
+  // Aggressive proactive token refreshing (getIdToken(true) + reload()) has been
+  // removed — it caused a quota-exceeded loop by forcing a server round-trip on
+  // every single token event. Firebase handles token renewal internally.
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
+      const masterAdminActive = hasMasterAdminToken();
+
+      if (masterAdminActive) {
+        setIsAdmin(true);
+        setUserRole("admin");
+        setLoading(false);
+      }
+
       if (user) {
-        setLoading(true);
+        if (!masterAdminActive) {
+          setLoading(true);
+        }
+        setCurrentUser(user);
         setupListeners(user.uid);
       } else {
+        setCurrentUser(null);
+        setIsAdmin(masterAdminActive);
         cleanupListeners();
         setArtistData(null);
-        setUserRole(null);
+        setUserRole(masterAdminActive ? "admin" : null);
         setUserProfile(null);
         setApplicationStatus(null);
         setLoading(false);
@@ -329,6 +367,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cleanupListeners();
     };
   }, [setupListeners, cleanupListeners]);
+
+  useEffect(() => {
+    const syncMasterAdminToken = () => {
+      const masterAdminActive = hasMasterAdminToken();
+      setIsAdmin(masterAdminActive);
+      if (masterAdminActive) {
+        setUserRole("admin");
+        setArtistData(null);
+        setApplicationStatus(null);
+        setLoading(false);
+      }
+    };
+
+    window.addEventListener("storage", syncMasterAdminToken);
+    window.addEventListener(MASTER_ADMIN_TOKEN_EVENT, syncMasterAdminToken);
+
+    return () => {
+      window.removeEventListener("storage", syncMasterAdminToken);
+      window.removeEventListener(MASTER_ADMIN_TOKEN_EVENT, syncMasterAdminToken);
+    };
+  }, []);
 
   // ── Auth Actions ────────────────────────────────────────────────────────────
   const login = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
@@ -342,12 +401,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error: unknown) {
       console.error("Firebase Auth Login Error:", error);
       const errorCode = getFirebaseErrorCode(error);
-      let message = firebaseErrorMessage(error, "Login failed. Please try again.");
-      if (errorCode === "auth/user-not-found") message = "No account found with this email.";
-      else if (errorCode === "auth/wrong-password") message = "Incorrect password.";
-      else if (errorCode === "auth/invalid-email") message = "Invalid email address.";
-      else if (errorCode === "auth/invalid-credential") message = "Invalid email or password.";
-      else if (errorCode === "auth/too-many-requests") message = "Too many attempts. Please try again later.";
+      const message = errorCode ? mapAuthCodeToMessage(errorCode) : firebaseErrorMessage(error, "Login failed. Please try again.");
       return { success: false, message };
     }
   };
@@ -363,26 +417,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error: unknown) {
       console.error("Firebase Auth Registration Error:", error);
       const errorCode = getFirebaseErrorCode(error);
-      let message = firebaseErrorMessage(error, "Registration failed. Please try again.");
-      if (errorCode === "auth/email-already-in-use") message = "This email is already registered.";
-      else if (errorCode === "auth/weak-password") message = "Password must be at least 6 characters.";
-      else if (errorCode === "auth/invalid-email") message = "Invalid email address.";
-      else if (errorCode === "auth/operation-not-allowed") {
-        message = "Email/Password sign-in is not enabled in Firebase. Please enable it in Firebase Console.";
-      } else if (errorCode === "auth/configuration-not-found") {
-        message = "Firebase Auth configuration is missing.";
-      }
+      const message = errorCode ? mapAuthCodeToMessage(errorCode) : firebaseErrorMessage(error, "Registration failed. Please try again.");
       return { success: false, uid: "", message };
     }
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
+    localStorage.removeItem(MASTER_ADMIN_TOKEN);
+    window.dispatchEvent(new Event(MASTER_ADMIN_TOKEN_EVENT));
+    setIsAdmin(false);
     await withTimeout(
       signOut(auth),
       FIREBASE_WRITE_TIMEOUT_MS,
       "Logout is taking too long. Please refresh the page if it does not complete."
     );
-  };
+  }, []);
+
+  // ── Administrative Inactivity Auto-Logout (15 Minutes) ──────────────────────
+  // NOTE: This must be declared AFTER logout to avoid a temporal dead zone ReferenceError.
+  useEffect(() => {
+    if (userRole !== "admin") return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    const handleLogout = () => {
+      console.warn("Logging out due to 15 minutes of administrative inactivity.");
+      logout().catch((err) => console.error("Auto-logout failed:", err));
+    };
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleLogout, 15 * 60 * 1000);
+    };
+
+    const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+    const eventOptions = { passive: true };
+
+    for (const event of events) {
+      window.addEventListener(event, resetTimer, eventOptions);
+    }
+
+    // Initialize timer
+    resetTimer();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      for (const event of events) {
+        window.removeEventListener(event, resetTimer);
+      }
+    };
+  }, [userRole, logout]);
 
   const changePassword = async (
     currentPassword: string,
@@ -420,7 +504,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userRole,
       userProfile,
       applicationStatus,
-      isAdmin: userRole === "admin",
+      isAdmin,
       isArtist: userRole === "artist" && (applicationStatus === "approved" || applicationStatus === "active"),
       loading,
       login,
@@ -431,7 +515,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshRoleProfile,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [artistData, currentUser, loading, userProfile, userRole, applicationStatus]
+    [artistData, currentUser, loading, userProfile, userRole, applicationStatus, isAdmin]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

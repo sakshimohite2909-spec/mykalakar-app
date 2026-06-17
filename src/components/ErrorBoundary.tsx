@@ -1,5 +1,4 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
-import { Link } from "react-router-dom";
 import { AlertCircle, RefreshCw, Home } from "lucide-react";
 
 interface Props {
@@ -53,13 +52,13 @@ export default class ErrorBoundary extends Component<Props, State> {
                 <RefreshCw className="h-4 w-4" /> Reload Platform
               </button>
               
-              <Link
-                to="/"
+              <a
+                href="/"
                 onClick={() => this.setState({ hasError: false, error: undefined })}
                 className="w-full flex items-center justify-center gap-2 h-14 rounded-2xl bg-white border border-stone-200 text-stone-950 font-black uppercase tracking-widest text-xs hover:bg-stone-50 transition-colors active:scale-95"
               >
                 <Home className="h-4 w-4" /> Return to Home
-              </Link>
+              </a>
             </div>
           </div>
         </div>

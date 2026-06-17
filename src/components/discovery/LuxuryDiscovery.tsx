@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import type React from "react";
+import React, { forwardRef } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -283,62 +283,65 @@ export function LuxuryFilterBar({
   );
 }
 
-export function LuxuryArtistCard({ artist, index }: { artist: ArtistCardViewModel; index: number }) {
-  const { formatNumber, t } = useI18n(); // ADDED FOR i18n
-  const categoryLabel = getArtLabel(t, artist.category); // ADDED FOR i18n
-  const subCategoryLabel = getArtLabel(t, artist.subCategory); // ADDED FOR i18n
-  const ratingLabel = artist.reviews > 0 ? `${artist.rating.toFixed(1)} (${formatNumber(artist.reviews)})` : t("artist.noRatingsYet"); // ADDED FOR i18n
-  return (
-    <motion.article
-      layout
-      initial={{ opacity: 0, y: 28, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 18, scale: 0.98 }}
-      transition={{ duration: 0.45, delay: Math.min(index * 0.035, 0.2), ease: [0.16, 1, 0.3, 1] }}
-      className="luxury-card luxury-artist-card group"
-    >
-      <Link to={`/artist/${artist.artistId}`} aria-label={t("artist.viewAria", { name: artist.name })}> {/* ADDED FOR i18n */}
-        <div className="luxury-card-media">
-          <SmartImage
-            src={artist.image}
-            alt={artist.name || artist.subCategory}
-            usageId={`luxury-artist:${artist.cardId}`}
-            category={artist.subCategory || artist.category}
-            orientation="landscape"
-            priority={index < 6}
-            aspectRatio="aspect-auto"
-            sizes="(max-width: 720px) 100vw, (max-width: 1180px) 33vw, 260px"
-            containerClassName="h-full w-full transition duration-700 group-hover:scale-[1.04]"
-          />
-          <div className="luxury-card-vignette" />
-          <span className="luxury-card-rating">
-            <Star className="h-3.5 w-3.5 fill-current" />
-            {ratingLabel}
-          </span>
-        </div>
-        <div className="luxury-card-body">
-          <div className="luxury-card-kicker">
-            <span>{categoryLabel}</span> {/* ADDED FOR i18n */}
-            {artist.verified ? <BadgeCheck className="h-4 w-4" /> : null}
-          </div>
-          <div className="luxury-card-title-row">
-            <h3>{artist.name || t("artist.premiumArtist")}</h3> {/* ADDED FOR i18n */}
-            <ArrowUpRight className="h-5 w-5" />
-          </div>
-          <p className="luxury-card-subtitle">{subCategoryLabel}</p> {/* ADDED FOR i18n */}
-          <p className="luxury-card-description">{artist.bio}</p>
-          <div className="luxury-card-meta">
-            <span>
-              <MapPin className="h-3.5 w-3.5" />
-              {artist.location}
+export const LuxuryArtistCard = forwardRef<HTMLElement, { artist: ArtistCardViewModel; index: number }>(
+  function LuxuryArtistCard({ artist, index }, ref) {
+    const { formatNumber, t } = useI18n(); // ADDED FOR i18n
+    const categoryLabel = getArtLabel(t, artist.category); // ADDED FOR i18n
+    const subCategoryLabel = getArtLabel(t, artist.subCategory); // ADDED FOR i18n
+    const ratingLabel = artist.reviews > 0 ? `${artist.rating.toFixed(1)} (${formatNumber(artist.reviews)})` : t("artist.noRatingsYet"); // ADDED FOR i18n
+    return (
+      <motion.article
+        ref={ref as React.RefObject<HTMLElement>}
+        layout
+        initial={{ opacity: 0, y: 28, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 18, scale: 0.98 }}
+        transition={{ duration: 0.45, delay: Math.min(index * 0.035, 0.2), ease: [0.16, 1, 0.3, 1] }}
+        className="luxury-card luxury-artist-card group"
+      >
+        <Link to={`/artist/${artist.artistId}`} aria-label={t("artist.viewAria", { name: artist.name })}> {/* ADDED FOR i18n */}
+          <div className="luxury-card-media">
+            <SmartImage
+              src={artist.image}
+              alt={artist.name || artist.subCategory}
+              usageId={`luxury-artist:${artist.cardId}`}
+              category={artist.subCategory || artist.category}
+              orientation="landscape"
+              priority={index < 6}
+              aspectRatio="aspect-auto"
+              sizes="(max-width: 720px) 100vw, (max-width: 1180px) 33vw, 260px"
+              containerClassName="h-full w-full transition duration-700 group-hover:scale-[1.04]"
+            />
+            <div className="luxury-card-vignette" />
+            <span className="luxury-card-rating">
+              <Star className="h-3.5 w-3.5 fill-current" />
+              {ratingLabel}
             </span>
-            <strong>{artist.priceRange}</strong>
           </div>
-        </div>
-      </Link>
-    </motion.article>
-  );
-}
+          <div className="luxury-card-body">
+            <div className="luxury-card-kicker">
+              <span>{categoryLabel}</span> {/* ADDED FOR i18n */}
+              {artist.verified ? <BadgeCheck className="h-4 w-4" /> : null}
+            </div>
+            <div className="luxury-card-title-row">
+              <h3>{artist.name || t("artist.premiumArtist")}</h3> {/* ADDED FOR i18n */}
+              <ArrowUpRight className="h-5 w-5" />
+            </div>
+            <p className="luxury-card-subtitle">{subCategoryLabel}</p> {/* ADDED FOR i18n */}
+            <p className="luxury-card-description">{artist.bio}</p>
+            <div className="luxury-card-meta">
+              <span>
+                <MapPin className="h-3.5 w-3.5" />
+                {artist.location}
+              </span>
+              <strong>{artist.priceRange}</strong>
+            </div>
+          </div>
+        </Link>
+      </motion.article>
+    );
+  }
+);
 
 export function LuxuryEventCard({ event, index }: { event: EventCardRecord; index: number }) {
   const { t } = useI18n(); // ADDED FOR i18n
@@ -413,11 +416,17 @@ export function LuxuryEmptyState({ label, onReset }: { label: string; onReset: (
       animate={{ opacity: 1, y: 0 }}
       className="luxury-empty-state"
     >
-      <Sparkles className="h-8 w-8" />
-      <h2>{t("empty.discoveryTitle", { label: t(`explore.tabs.${label}`) })}</h2> {/* ADDED FOR i18n */}
-      <p>{t("empty.discoveryText")}</p> {/* ADDED FOR i18n */}
-      <button type="button" onClick={onReset}>
-        {t("filters.reset")} {/* ADDED FOR i18n */}
+      <Sparkles className="h-8 w-8 text-orange-600 mb-2" />
+      <h2>{t("empty.discoveryTitle", { label: t(`explore.tabs.${label}`) }) || "No matches found"}</h2>
+      <p className="max-w-md mx-auto text-sm text-slate-500 mt-2 mb-4 leading-relaxed">
+        {t("empty.discoveryText") || "We couldn't find any results matching your search terms or active filters. Try checking your spelling or selecting other category combinations."}
+      </p>
+      <button
+        type="button"
+        onClick={onReset}
+        className="inline-flex h-11 items-center gap-2 rounded-full bg-stone-950 px-5 text-sm font-bold text-white transition hover:bg-orange-600 active:scale-[0.98]"
+      >
+        Reset Search Query & Clear Filters
         <RefreshCw className="h-4 w-4" />
       </button>
     </motion.div>

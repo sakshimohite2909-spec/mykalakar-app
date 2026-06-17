@@ -6,6 +6,7 @@ import ArtistProtectedRoute from "@/components/ArtistProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RouteErrorBoundary from "@/components/RouteErrorBoundary";
+import { ROUTES } from "@/constants/routes.constants";
 
 const Index = lazy(() => import("./pages/Index"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
@@ -17,6 +18,7 @@ const ArtistProfile = lazy(() => import("./pages/ArtistProfile"));
 const EventDetails = lazy(() => import("./pages/EventDetails"));
 const ArtistRegister = lazy(() => import("./pages/ArtistRegister"));
 const ArtistLogin = lazy(() => import("./pages/ArtistLogin"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const UserProfile = lazy(() => import("./pages/UserProfile"));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -71,6 +73,7 @@ const router = createBrowserRouter([
       { path: "artist-login", element: <ArtistLogin /> },
       { path: "admin-login", element: <ArtistLogin /> },
       { path: "user-login", element: <ArtistLogin /> },
+      { path: "forgot-password", element: <ForgotPassword /> },
       {
         path: "profile",
         element: (
@@ -126,19 +129,20 @@ const router = createBrowserRouter([
         errorElement: <RouteErrorBoundary />,
         children: [
           { index: true, element: <AdminDashboard /> },
-          { path: "artists", element: <AdminArtists /> },
-          { path: "artist/:id", element: <AdminArtistDashboard /> },
-          { path: "pending", element: <AdminPending /> },
-          { path: "categories", element: <AdminCategories /> },
-          { path: "events", element: <AdminEvents /> },
-          { path: "bookings", element: <AdminBookings /> },
-          { path: "locations", element: <AdminLocations /> },
-          { path: "settings", element: <AdminSettings /> },
-          { path: "bootstrap", element: <AdminBootstrap /> },
-          { path: "event-briefs", element: <AdminEventBriefs /> },
+          { path: "dashboard", element: <AdminDashboard /> },
+          { path: ROUTES.ADMIN_ARTISTS, element: <AdminArtists /> },
+          { path: ROUTES.ADMIN_ARTIST_DETAIL(":id"), element: <AdminArtistDashboard /> },
+          { path: ROUTES.ADMIN_PENDING, element: <AdminPending /> },
+          { path: ROUTES.ADMIN_CATEGORIES, element: <AdminCategories /> },
+          { path: ROUTES.ADMIN_EVENTS, element: <AdminEvents /> },
+          { path: ROUTES.ADMIN_BOOKINGS, element: <AdminBookings /> },
+          { path: ROUTES.ADMIN_LOCATIONS, element: <AdminLocations /> },
+          { path: ROUTES.ADMIN_SETTINGS, element: <AdminSettings /> },
+          { path: ROUTES.ADMIN_BOOTSTRAP, element: <AdminBootstrap /> },
+          { path: ROUTES.ADMIN_EVENT_BRIEFS, element: <AdminEventBriefs /> },
         ],
       },
-      { path: "*", element: <NotFound /> },
+      { path: ROUTES.NOT_FOUND, element: <NotFound /> },
     ],
   },
 ]);

@@ -149,7 +149,7 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
         updatedAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, "events"), payload);
+      await addDoc(collection(db, "eventBriefs"), payload);
 
       setSuccess(true);
       toast({
@@ -450,8 +450,8 @@ function EventsInner() {
   useEffect(() => {
     setLoading(true);
     const q = query(
-      collection(db, "events"),
-      where("status", "==", "approved")
+      collection(db, "eventBriefs"),
+      where("status", "==", "active")
     );
     const unsubscribe = onSnapshot(
       q,

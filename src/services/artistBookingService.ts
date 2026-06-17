@@ -305,28 +305,59 @@ export async function createArtistBooking(input: CreateBookingInput) {
   bookingPayload.slaStartTime = now;
   bookingPayload.slaDeadlineTime = slaDeadline;
 
+  // 1. Perform availability check completely before initiating the transaction block
+  const availability = await checkArtistAvailability(
+    input.artistId,
+    input.eventDate,
+    input.eventStartTime,
+    input.eventEndTime
+  );
+  if (!availability.available) {
+    throw new Error(availability.reason || "The selected time slot is no longer available.");
+  }
+
   const newBookingRef = doc(collection(db, BOOKING_COLLECTION));
   bookingPayload.id = newBookingRef.id;
 
   const artistRef = doc(db, "artists", input.artistId);
+  const reservationRef = doc(db, "booking_reservations", `${input.artistId}_${normalizeDateOnly(input.eventDate)}`);
 
   await withTimeout(
     runTransaction(db, async (transaction) => {
       // 1. Transactional read of the artist profile to lock it and serialize writes
       await transaction.get(artistRef);
 
-      // 2. Perform availability check inside transaction block
-      const availability = await checkArtistAvailability(
-        input.artistId,
-        input.eventDate,
-        input.eventStartTime,
-        input.eventEndTime
-      );
-      if (!availability.available) {
-        throw new Error(availability.reason || "The selected time slot is no longer available.");
+      // 2. Perform direct get on reservation ledger to assert lock safety and prevent race conditions
+      const reservationSnap = await transaction.get(reservationRef);
+
+      // 3. Write/update reservation ledger inside transaction to serialize concurrent bookings
+      if (!reservationSnap.exists()) {
+        transaction.set(reservationRef, {
+          artistId: input.artistId,
+          reservationDate: normalizeDateOnly(input.eventDate),
+          holds: [bookingPayload.id],
+          customerIds: [input.customerId || ""],
+          updatedAt: now,
+        });
+      } else {
+        const resData = reservationSnap.data() || {};
+        const holds = resData.holds || [];
+        const customerIds = resData.customerIds || [];
+        if (!holds.includes(bookingPayload.id)) {
+          holds.push(bookingPayload.id);
+        }
+        const custId = input.customerId || "";
+        if (custId && !customerIds.includes(custId)) {
+          customerIds.push(custId);
+        }
+        transaction.update(reservationRef, {
+          holds,
+          customerIds,
+          updatedAt: now,
+        });
       }
 
-      // 3. Write booking document and update artist lock
+      // 4. Write booking document and update artist lock
       transaction.set(newBookingRef, sanitizePayload(bookingPayload));
       transaction.set(artistRef, { lastBookingTimestamp: now }, { merge: true });
     }),

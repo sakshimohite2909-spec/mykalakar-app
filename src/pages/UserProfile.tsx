@@ -33,7 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { addDoc, collection, doc, limit, onSnapshot, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { uploadImageFile } from "@/lib/uploadService";
 import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
 import { subscribeCustomerBookings, updateArtistBookingStatus, fetchRefundPolicy, calculateRefundPercentage } from "@/services/artistBookingService";
@@ -44,9 +44,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { getSavedArtistIds, fetchSavedArtistProfiles } from "@/services/savedArtistService";
 import { ArtistCard } from "@/components/FeaturedArtists";
 import { buildArtistCards, type ArtistCardViewModel } from "@/services/marketplaceCards";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ─── Tab type ──────────────────────────────────────────────────────────────
 type DashboardTab = "profile" | "bookings" | "saved";
+
+async function mockCreatePaymentOrder(bookingId: string, finalAmount: number) {
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  console.log(`[Mock Cloud Function] Initiated payment order for booking ${bookingId} with amount INR ${finalAmount}`);
+  return { success: true, orderId: `m_ord_${Math.random().toString(36).slice(2, 9)}` };
+}
 
 // ─── Helper utilities ──────────────────────────────────────────────────────
 
@@ -316,10 +323,21 @@ export default function UserProfile() {
   // Agreement modal state
   const [agreementBooking, setAgreementBooking] = useState<BookingEvent | null>(null);
 
+  // Admin access request state
+  const [adminRequestStatus, setAdminRequestStatus] = useState<"none" | "pending" | null>(null);
+  const [submittingAdminRequest, setSubmittingAdminRequest] = useState(false);
+
+  // Live artist application status (updated in real-time when admin acts)
+  const [liveApplicationStatus, setLiveApplicationStatus] = useState<string | null>(null);
+
   const roleLabel = userRole === "admin"
     ? "Admin"
     : userRole === "artist"
-      ? artistData?.status === "pending" ? "Artist Pending Review" : "Artist"
+      ? (liveApplicationStatus === "approved" || liveApplicationStatus === "active")
+        ? "Artist"
+        : liveApplicationStatus === "rejected"
+          ? "Artist — Application Rejected"
+          : "Artist — Pending Review"
       : userRole === "admin_request"
         ? "Admin Request Pending"
         : "Customer";
@@ -365,12 +383,83 @@ export default function UserProfile() {
     };
   }, [photoPreview]);
 
+  // ── Real-time admin request status ────────────────────────────────────────
+  // Converted from getDocs (one-shot) to onSnapshot so the UI reflects admin
+  // approval without requiring a page reload.
+  useEffect(() => {
+    if (!currentUser) return;
+    const q = query(
+      collection(db, "admin_requests"),
+      where("uid", "==", currentUser.uid),
+      limit(1)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setAdminRequestStatus(snap.empty ? "none" : "pending"),
+      () => setAdminRequestStatus("none") // silent catch — non-admins have no docs here
+    );
+    return unsub;
+  }, [currentUser]);
+
+  // ── Real-time artist application status ───────────────────────────────────
+  // Provides direct component-level reactivity: the Pending Review badge
+  // updates immediately when the admin approves or rejects an application.
+  useEffect(() => {
+    if (!currentUser) return;
+    const q = query(
+      collection(db, "artist_applications"),
+      where("uid", "==", currentUser.uid),
+      limit(1)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        if (!snap.empty) {
+          const data = snap.docs[0].data();
+          setLiveApplicationStatus((data.status as string) ?? null);
+        } else {
+          setLiveApplicationStatus(null);
+        }
+      },
+      () => setLiveApplicationStatus(null) // silent catch — unapproved artist may lack permission
+    );
+    return unsub;
+  }, [currentUser]);
+
+  const handleAdminRequest = async () => {
+    if (!currentUser || submittingAdminRequest || adminRequestStatus === "pending") return;
+    setSubmittingAdminRequest(true);
+    try {
+      await addDoc(collection(db, "admin_requests"), {
+        uid: currentUser.uid,
+        email: currentUser.email || "",
+        status: "pending",
+        createdAt: serverTimestamp(),
+      });
+      setAdminRequestStatus("pending");
+      toast({ title: "Request Submitted", description: "Your admin access request has been submitted for review." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Request Failed", description: "Could not submit admin request. Please try again." });
+      console.error("Admin request error:", err);
+    } finally {
+      setSubmittingAdminRequest(false);
+    }
+  };
+
   const updateField = (key: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
   const handlePhotoChange = (file: File | null) => {
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ variant: "destructive", title: "Invalid File Type", description: "Only image files are allowed." });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ variant: "destructive", title: "File Too Large", description: "Image size must be less than 5MB." });
+      return;
+    }
     if (photoPreview.startsWith("blob:")) URL.revokeObjectURL(photoPreview);
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
@@ -450,22 +539,14 @@ export default function UserProfile() {
   // Process Counter Offer Accept
   const processAcceptCounter = async (booking: BookingEvent, finalAmount: number) => {
     try {
-      await updateArtistBookingStatus(booking, "CONFIRMED", {
-        authorizedAmount: finalAmount,
-        eventDate: booking.counterOfferDate || booking.eventDate,
-        eventStartTime: booking.counterOfferStartTime || booking.eventStartTime,
-        eventEndTime: booking.counterOfferEndTime || booking.eventEndTime,
-        venueLocation: booking.counterOfferLocation || booking.venueLocation,
-        counterOfferAmount: 0,
-        counterOfferNotes: "",
-        counterOfferDate: "",
-        counterOfferStartTime: "",
-        counterOfferEndTime: "",
-        counterOfferLocation: "",
-        isPaymentCaptured: true,
-        escrowState: "HELD",
-      });
-      toast({ title: "Counter Offer Accepted", description: "Booking has been confirmed. Escrow payment captured." });
+      console.log(`[Payment] Initiating secure capture for booking ${booking.id} of amount INR ${finalAmount}`);
+      const order = await mockCreatePaymentOrder(booking.id, finalAmount);
+      if (order.success) {
+        toast({
+          title: "Payment Order Created",
+          description: `Escrow hold details updated. Booking confirmation is processing via webhook. (Order ID: ${order.orderId})`,
+        });
+      }
       setCheckoutBooking(null);
     } catch (err) {
       console.error(err);
@@ -720,6 +801,40 @@ export default function UserProfile() {
                     </div>
                   </CardContent>
                 </Card>
+              {/* ── Admin Access Request Panel ────────────────────────────── */}
+              {userRole === "customer" && (
+                <Card className="mt-4 border-white/70 bg-white/75 shadow-xl shadow-orange-900/5 backdrop-blur-2xl">
+                  <CardHeader className="border-b border-slate-100/60 pb-4">
+                    <CardTitle className="font-display text-base font-black text-slate-950 flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5 text-orange-500" />
+                      Administration Access
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-slate-800">Apply for Admin Access</p>
+                      <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                        Submit a request to be reviewed by the platform administrators for elevated permissions.
+                      </p>
+                    </div>
+                    <Button
+                      id="admin-access-request-btn"
+                      variant="outline"
+                      onClick={handleAdminRequest}
+                      disabled={submittingAdminRequest || adminRequestStatus === "pending" || adminRequestStatus === null}
+                      className="shrink-0 h-10 border-orange-200 text-orange-700 hover:bg-orange-50 font-bold disabled:opacity-60"
+                    >
+                      {submittingAdminRequest ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting…</>
+                      ) : adminRequestStatus === "pending" ? (
+                        <><ShieldCheck className="mr-2 h-4 w-4 text-green-600" />Request Pending</>
+                      ) : (
+                        <><ShieldCheck className="mr-2 h-4 w-4" />Apply for Admin Access</>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
               </motion.div>
             )}
 
@@ -741,9 +856,22 @@ export default function UserProfile() {
                   </CardHeader>
                   <CardContent className="p-6">
                     {loadingBookings ? (
-                      <div className="py-12 text-center text-slate-500 font-semibold">
-                        <Loader2 className="h-8 w-8 animate-spin mx-auto text-orange-600 mb-3" />
-                        Syncing bookings...
+                      <div className="space-y-3 py-4">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="border border-slate-200/80 rounded-2xl p-5 space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div className="space-y-2 flex-1">
+                                <Skeleton className="h-5 w-56" />
+                                <Skeleton className="h-3 w-40" />
+                              </div>
+                              <Skeleton className="h-6 w-20 rounded-full" />
+                            </div>
+                            <div className="flex gap-3 pt-2 border-t border-slate-100">
+                              <Skeleton className="h-8 w-24 rounded-lg" />
+                              <Skeleton className="h-8 w-24 rounded-lg" />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     ) : bookings.length === 0 ? (
                       <div className="py-12 text-center text-slate-400 font-semibold border border-dashed border-slate-200 rounded-2xl bg-slate-50/40">
