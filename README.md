@@ -210,11 +210,6 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 
 ---
 
-## 💬 Support
-
-For business inquiries, investor relations, or technical support:
-- **Email:** [PLACEHOLDER_EMAIL]
-- **Website:** [PLACEHOLDER_WEBSITE]
 
 <div align="center">
   <sub>Built with precision and passion.</sub>
