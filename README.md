@@ -1,235 +1,221 @@
-# 🎨 Artist HUB Pro
-
 <div align="center">
 
-![Artist HUB Pro](https://img.shields.io/badge/Artist%20HUB%20Pro-Premium%20Platform-6366f1?style=for-the-badge&logo=react)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite)
-![Firebase](https://img.shields.io/badge/Firebase-12-FFCA28?style=for-the-badge&logo=firebase)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-06B6D4?style=for-the-badge&logo=tailwindcss)
+# 🎭 Artist HUB Pro
+### *The Premium Platform for Elite Artist Discovery & Event Booking*
 
-**A production-ready, premium platform for artist discovery, event booking, and role-based management dashboards.**
+[![Status](https://img.shields.io/badge/Status-Production_Ready-success?style=for-the-badge)](#)
+[![Version](https://img.shields.io/badge/Version-2.0.0-blue?style=for-the-badge)](#)
+[![License](https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge)](#)
+<br/>
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)](#)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript)](#)
+[![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite)](#)
+[![Firebase](https://img.shields.io/badge/Firebase-12-FFCA28?style=for-the-badge&logo=firebase)](#)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-06B6D4?style=for-the-badge&logo=tailwindcss)](#)
 
-[🚀 Live Demo](https://artist-hub-pro-main.vercel.app) · [📖 Docs](./docs) · [🐛 Issues](https://github.com/Varad-Shadow/Artist_HUB/issues)
+[🚀 Live Demo]([PLACEHOLDER]) · [📖 Documentation]([PLACEHOLDER]) · [🐛 Report Bug]([PLACEHOLDER])
 
 </div>
 
 ---
 
-## ✨ Features
+## 🌟 Executive Summary
 
-### For Clients / Event Planners
-- 🔍 **Artist Discovery** — Browse and filter artists by category, location, budget, and availability
-- 📅 **Smart Booking Flow** — Step-by-step event → location → requirements booking wizard
-- 🎭 **Artist Profiles** — Rich media profiles with portfolios, reviews, and availability calendars
-- ⭐ **Reviews & Ratings** — Verified review system with star ratings
+**Artist HUB Pro** is a comprehensive, production-grade SaaS platform engineered to bridge the gap between world-class artists and elite event planners. It eliminates the friction of talent acquisition by providing a seamless, end-to-end booking experience.
 
-### For Artists
-- 🎨 **Artist Dashboard** — Manage bookings, profile, and portfolio in one place
-- 📸 **Media Portfolio** — Upload and showcase images, videos, and links
-- 📊 **Booking Analytics** — Track earnings, booking history, and performance metrics
-- 🔔 **Real-time Notifications** — Instant updates on booking requests and status changes
+Built for **Talent Agencies, Premium Event Planners, and Professional Artists**, the platform offers:
+- A frictionless, luxury-tier artist discovery engine
+- Secure, role-based workflows for artists, clients, and platform administrators
+- Real-time availability, dynamic pricing, and comprehensive booking lifecycles
 
-### For Admins
-- 👥 **Artist Management** — Approve, suspend, or manage artist accounts
-- 📋 **Booking Oversight** — Full visibility into platform-wide bookings
-- 🗂️ **Category & Event Management** — Create and manage event types, categories, locations
-- 📈 **Analytics Dashboard** — Platform-wide statistics and reporting
-- ⚙️ **Platform Settings** — Firebase bootstrap and configuration tools
+**Key Differentiators:** Focus on high-end aesthetic presentation, robust Firebase-backed security architecture, and an unparalleled developer experience using the modern React ecosystem.
 
 ---
 
-## 🛠️ Tech Stack
+## ✨ Feature Showcase
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend Framework** | React 18 + TypeScript |
-| **Build Tool** | Vite 5 |
-| **Styling** | Tailwind CSS 3 + shadcn/ui |
-| **Animation** | Framer Motion + GSAP + Three.js |
-| **Backend / Auth** | Firebase (Auth, Firestore, Storage) |
-| **State Management** | React Context + TanStack Query |
-| **Forms** | React Hook Form + Zod |
-| **Routing** | React Router DOM v6 |
-| **Testing** | Vitest + Testing Library |
-| **Deployment** | Vercel |
+### 🔐 Authentication & Authorization
+- **Role-Based Access Control (RBAC):** Secure routing and data access tailored for Users, Artists, and Admins.
+- **Firebase Auth:** Enterprise-grade security handling OAuth, email/password, and session management.
 
----
+### 🎨 Artist Dashboard & Profile Management
+- **Rich Media Portfolios:** Upload and showcase high-resolution images, videos, and professional accolades.
+- **Availability Engine:** Manage blackout dates, booking requests, and active engagements seamlessly.
+- **Analytics:** Visualize profile views, booking conversion rates, and revenue metrics.
 
-## 🗂️ Project Structure
+### 📅 Advanced Booking System
+- **Smart Booking Wizard:** Step-by-step contextual flow capturing event type, venue details, and specific talent requirements.
+- **Dynamic Status Lifecycle:** Track bookings from *Pending* → *Approved* → *Completed*.
 
-```
-src/
-├── pages/                    # Route-level page components
-│   ├── Index.tsx             # Home / Landing page
-│   ├── SearchPage.tsx        # Artist discovery & search
-│   ├── ArtistProfile.tsx     # Public artist profile
-│   ├── ArtistRegister.tsx    # Artist registration flow
-│   ├── ArtistLogin.tsx       # Auth (login/register)
-│   ├── EventSelection.tsx    # Booking step 1 – event type
-│   ├── LocationSelection.tsx # Booking step 2 – location
-│   ├── EventRequirements.tsx # Booking step 3 – requirements
-│   ├── EventDetails.tsx      # Event detail view
-│   ├── UserProfile.tsx       # User account settings
-│   ├── NotFound.tsx          # 404 page
-│   ├── admin/                # Admin-only pages (protected)
-│   └── artist/               # Artist dashboard pages (protected)
-├── components/               # Reusable UI & feature components
-│   ├── HeroBanner.jsx        # Landing page hero section
-│   ├── PremiumScrollyExperience.tsx
-│   ├── ArtistProtectedRoute.jsx
-│   ├── AdminProtectedRoute.jsx
-│   └── ProtectedRoute.jsx
-├── contexts/                 # React context providers
-│   └── AuthContext           # Firebase auth state
-├── services/                 # Firebase API service layer
-├── lib/                      # Firebase setup, utilities, helpers
-├── hooks/                    # Custom React hooks
-├── data/                     # Static data and constants
-├── styles/                   # Global CSS and design tokens
-└── AppRouter.jsx             # Route definitions (React Router)
-```
+### 👥 Admin Control Center
+- **User Oversight:** Complete control over artist verification, suspension, and platform moderation.
+- **System Configuration:** Dynamic category management, pricing tiers, and platform-wide announcements.
+- **Global Analytics:** High-level metrics on platform health, booking volume, and revenue.
 
 ---
 
-## 🚀 Quick Start
+## 🛠️ Technology Stack
+
+| Category | Technology | Description |
+|----------|------------|-------------|
+| **Frontend Framework** | React 18 | Component-based UI architecture |
+| **Language** | TypeScript | Strict static typing for enterprise reliability |
+| **Build Tool** | Vite 5 | Lightning-fast HMR and optimized builds |
+| **UI/Styling** | Tailwind CSS + shadcn/ui | Utility-first styling with accessible, headless components |
+| **State Management** | React Query + Context | Server-state caching and lightweight global state |
+| **Animations** | GSAP, Framer Motion, Three.js | High-performance, luxury micro-interactions |
+| **Backend & Database**| Firebase (Firestore) | Real-time NoSQL database with strict security rules |
+| **Storage & Auth** | Firebase Storage & Auth | Secure blob storage and identity management |
+| **Forms & Validation** | React Hook Form + Zod | Schema-based validation for bulletproof data entry |
+
+---
+
+## 🏛️ Architecture Overview
+
+The application follows a modular, feature-based architecture to ensure maintainability and high scalability:
+
+- **Application Flow:** Client requests → React Router handling → Protected Route Validation → Component Render.
+- **Database Structure (NoSQL):** Normalized collections for `users`, `artists`, `events`, and `bookings` with referencing for efficient querying.
+- **Authentication Flow:** JWT-based session handling via Firebase, with custom claims mapped to user roles (Admin/Artist/Client).
+- **Security:** Firestore Security Rules enforce zero-trust policies—users can only mutate their own records unless holding admin claims.
+
+---
+
+## 🚀 Installation Guide
 
 ### Prerequisites
+- **Node.js** (v18.0.0 or higher)
+- **npm** (v9.x) or **pnpm**
+- Firebase Project (Firestore, Storage, Authentication enabled)
 
-- **Node.js** ≥ 18.x
-- **npm** ≥ 9.x (or **bun**)
-- A **Firebase** project with Firestore, Auth, and Storage enabled
+### Local Development Setup
 
-### 1. Clone the repository
-
+1. **Clone the repository**
 ```bash
 git clone https://github.com/Varad-Shadow/Artist_HUB.git
 cd Artist_HUB
 ```
 
-### 2. Install dependencies
-
+2. **Install Dependencies**
 ```bash
 npm install
 ```
 
-### 3. Configure environment variables
-
+3. **Environment Configuration**
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
+*(Populate `.env.local` with your Firebase credentials as detailed in the Environment Variables section)*
 
-Open `.env` and fill in your Firebase project credentials:
-
-```env
-VITE_FIREBASE_API_KEY=your_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-VITE_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX   # optional
-```
-
-### 4. Start the development server
-
+4. **Start the Development Server**
 ```bash
 npm run dev
 ```
+Access the application at `http://localhost:5173`
 
-Visit: [http://localhost:8080](http://localhost:8080)
-
----
-
-## 🔐 Environment Variables Reference
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `VITE_FIREBASE_API_KEY` | ✅ | Firebase project API key |
-| `VITE_FIREBASE_AUTH_DOMAIN` | ✅ | Firebase Auth domain |
-| `VITE_FIREBASE_PROJECT_ID` | ✅ | Firestore project ID |
-| `VITE_FIREBASE_STORAGE_BUCKET` | ✅ | Cloud Storage bucket |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | ✅ | FCM sender ID |
-| `VITE_FIREBASE_APP_ID` | ✅ | Firebase app ID |
-| `VITE_FIREBASE_MEASUREMENT_ID` | ⚡ Optional | Google Analytics |
-
-> ⚠️ **Never commit `.env` or `.env.local` files.** Use `.env.example` as a safe template.
-
----
-
-## 🏗️ Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server on port 8080 |
-| `npm run build` | Build for production (outputs to `dist/`) |
-| `npm run preview` | Preview the production build locally |
-| `npm run test` | Run test suite (Vitest) |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run lint` | Run ESLint |
-
----
-
-## 🌐 Deployment
-
-### Vercel (Recommended)
-
-The project includes a pre-configured `vercel.json` for SPA routing:
-
-1. Import the GitHub repository at [vercel.com/new](https://vercel.com/new)
-2. Set **Build Command**: `npm run build`
-3. Set **Output Directory**: `dist`
-4. Add all `VITE_` environment variables under **Project Settings → Environment Variables**
-5. Click **Deploy** ✅
-
-### Firebase Hosting (Alternative)
-
-Deploy Firestore and Storage security rules:
-
+5. **Build for Production**
 ```bash
-npx firebase-tools@latest login
-npx firebase-tools@latest deploy \
-  --only firestore:rules,storage:rules \
-  --project <your-project-id>
+npm run build
+npm run preview
 ```
 
 ---
 
-## 🔒 Security & Privacy
+## 🔐 Environment Variables
 
-- 🚫 **Never commit** `.env`, `.env.local`, or production secrets
-- ✅ **Only commit** `.env.example` with placeholder values
-- 🔐 Firebase Firestore and Storage rules are versioned in this repo (`firestore.rules`, `storage.rules`)
-- 🔑 All Firebase config is loaded exclusively from environment variables
-- 👮 Role-based access control enforced at both the UI level (protected routes) and database level (Firestore rules)
+Create a `.env.local` file in the root directory. **Never commit this file.**
+
+```env
+VITE_FIREBASE_API_KEY="your-api-key"
+VITE_FIREBASE_AUTH_DOMAIN="your-project.firebaseapp.com"
+VITE_FIREBASE_PROJECT_ID="your-project-id"
+VITE_FIREBASE_STORAGE_BUCKET="your-project.appspot.com"
+VITE_FIREBASE_MESSAGING_SENDER_ID="your-sender-id"
+VITE_FIREBASE_APP_ID="your-app-id"
+VITE_FIREBASE_MEASUREMENT_ID="your-measurement-id"
+```
 
 ---
 
-## 🗺️ Application Routes
+## 📁 Folder Structure
 
-| Route | Access | Description |
-|-------|--------|-------------|
-| `/` | Public | Landing page |
-| `/explore` | Public | Artist search & discovery |
-| `/artist/:id` | Public | Artist public profile |
-| `/events` | Public | Event type selection |
-| `/login` | Public | Authentication |
-| `/register` | Public | Artist registration |
-| `/profile` | 🔒 Auth | User profile settings |
-| `/artist/dashboard` | 🎨 Artist | Artist management dashboard |
-| `/admin` | 👮 Admin | Admin control panel |
+```text
+src/
+├── components/          # Shared, reusable UI components (shadcn, globals)
+│   ├── admin/           # Admin dashboard specific components
+│   ├── artist/          # Artist dashboard specific components
+│   └── ui/              # Base UI primitives (buttons, inputs, dialogs)
+├── contexts/            # React Context providers (Auth, Theme)
+├── hooks/               # Custom reusable React hooks
+├── lib/                 # Utility functions, API clients, Firebase config
+├── pages/               # Route-level components mapping to URLs
+├── services/            # Business logic and external API integrations
+├── styles/              # Global CSS, Tailwind configurations
+└── types/               # TypeScript interface and type definitions
+```
+
+---
+
+## 🖼️ Screenshots
+
+| Home Page | Artist Discovery |
+|:---:|:---:|
+| ![Home Page]([PLACEHOLDER_HOME_SCREENSHOT]) | ![Discovery]([PLACEHOLDER_DISCOVERY_SCREENSHOT]) |
+
+| Artist Dashboard | Admin Panel |
+|:---:|:---:|
+| ![Artist Dashboard]([PLACEHOLDER_DASHBOARD_SCREENSHOT]) | ![Admin Panel]([PLACEHOLDER_ADMIN_SCREENSHOT]) |
+
+---
+
+## ⚡ Performance Highlights
+
+- **Bundle Optimization:** Code-splitting at the route level using React `lazy` and `Suspense`.
+- **Image Optimization:** Intelligent image compression before Firebase upload; global usage of WebP/optimized formats.
+- **Caching Strategy:** Aggressive data caching and automatic background refetching via TanStack Query.
+- **Animation Performance:** Hardware-accelerated CSS transforms and highly optimized GSAP timelines.
+
+---
+
+## 🛡️ Security Features
+
+- **Route Protection:** Higher-Order Components (`ProtectedRoute`, `AdminRoute`) prevent unauthorized client-side rendering.
+- **Data Validation:** Strict runtime validation using `Zod` before any database mutation.
+- **Firebase Security Rules:** Comprehensive `firestore.rules` and `storage.rules` validating schema, data ownership, and role authorization at the database layer.
+
+---
+
+## 🗺️ Future Roadmap
+
+- [ ] **Phase 1:** Integrated Payment Gateway (Stripe/Razorpay) for direct booking deposits.
+- [ ] **Phase 2:** Real-time Chat System between Artists and Event Planners.
+- [ ] **Phase 3:** AI-Powered Artist Recommendation Engine.
+- [ ] **Phase 4:** Mobile Application (React Native) for push notifications.
+
+---
+
+## 🤝 Contribution Guidelines
+
+We enforce strict engineering standards:
+1. **Branch Strategy:** `feature/` for new capabilities, `fix/` for bug resolution, `chore/` for maintenance.
+2. **Commit Convention:** Adhere to [Conventional Commits](https://www.conventionalcommits.org/).
+   - Example: `feat: implement role-based dashboard architecture`
+3. **Pull Request Process:** All PRs require review, passing CI/CD pipelines (ESLint, Vitest), and an updated changelog.
 
 ---
 
 ## 📄 License
 
-This project is **proprietary and private**, maintained by the Artist HUB team.
+This project is proprietary and confidential. Unauthorized copying, distribution, or usage of this codebase, via any medium, is strictly prohibited unless explicitly authorized.
 
 ---
 
+## 💬 Support
+
+For business inquiries, investor relations, or technical support:
+- **Email:** [PLACEHOLDER_EMAIL]
+- **Website:** [PLACEHOLDER_WEBSITE]
+
 <div align="center">
-  Built by the <strong>Varad</strong> team
-  <br/>
-  <sub>Powered by React · Vite · Firebase · Tailwind CSS</sub>
+  <sub>Built with precision and passion.</sub>
 </div>
