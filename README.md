@@ -156,17 +156,6 @@ src/
 
 ---
 
-## 🖼️ Screenshots
-
-| Home Page | Artist Discovery |
-|:---:|:---:|
-| ![Home Page]([PLACEHOLDER_HOME_SCREENSHOT]) | ![Discovery]([PLACEHOLDER_DISCOVERY_SCREENSHOT]) |
-
-| Artist Dashboard | Admin Panel |
-|:---:|:---:|
-| ![Artist Dashboard]([PLACEHOLDER_DASHBOARD_SCREENSHOT]) | ![Admin Panel]([PLACEHOLDER_ADMIN_SCREENSHOT]) |
-
----
 
 ## ⚡ Performance Highlights
 
