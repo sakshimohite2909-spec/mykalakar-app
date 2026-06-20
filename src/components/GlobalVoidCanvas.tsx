@@ -32,7 +32,7 @@ function ElegantCrystal({ isAuthPage = false, isHomePage = false }: { isAuthPage
       meshRef.current.rotation.z = THREE.MathUtils.damp(meshRef.current.rotation.z, targetZ, 4, delta);
       
       // Target position
-      let finalY = targetY;
+      const finalY = targetY;
       let finalX = isHomePage ? 2.35 : 0;
 
       if (isAuthPage) {
