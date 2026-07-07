@@ -1,0 +1,101 @@
+/* Mobile Responsive Global Adjustments */
+
+/* Base Viewport & Touch Optimization */
+html, body {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  max-width: 100%;
+  overflow-wrap: break-word; /* ADDED FOR i18n */
+}
+
+@media (max-width: 768px) {
+  /* Prevent horizontal overflow on mobile */
+  body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  /* Optimize container padding */
+  .container {
+    padding-inline: var(--space-4);
+  }
+
+  /* Typography Scaling */
+  h1 { font-size: 2.25rem !important; }
+  h2 { font-size: 1.875rem !important; }
+  h3 { font-size: 1.5rem !important; }
+
+  /* Increase touch target sizes for better UX */
+  button, 
+  [role="button"],
+  a.btn-premium {
+    min-height: 48px;
+    padding-block: 0.75rem;
+  }
+
+  /* Better spacing for stacked elements */
+  .section {
+    margin-top: var(--space-5);
+  }
+
+  .stack > * + * {
+    margin-top: var(--space-3);
+  }
+
+  /* Refine card padding on small screens */
+  .card-premium,
+  .form-subcard {
+    padding: var(--space-4) !important;
+  }
+
+  /* Ensure modals take appropriate screen space but don't overflow */
+  .modal-content {
+    width: calc(100% - 2rem) !important;
+    margin: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+
+  .language-switcher-menu {
+    max-width: min(92vw, 18rem); /* ADDED FOR i18n */
+  }
+
+  .mobile-menu-action {
+    min-width: 0; /* ADDED FOR i18n */
+    white-space: normal; /* ADDED FOR i18n */
+    text-align: center; /* ADDED FOR i18n */
+    line-height: 1.2; /* ADDED FOR i18n */
+  }
+
+  .bottom-nav-item span,
+  .bottom-nav-scan span {
+    max-width: 100%; /* ADDED FOR i18n */
+    line-height: 1.1; /* ADDED FOR i18n */
+    overflow-wrap: break-word; /* ADDED FOR i18n */
+  }
+}
+
+/* Horizontal scrolling helper for mobile */
+.mobile-scroll-row {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  gap: var(--space-4);
+  padding-bottom: var(--space-2);
+}
+
+.mobile-scroll-row > * {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+}
+
+/* Hide scrollbar for clean horizontal scrolls */
+.mobile-scroll-row::-webkit-scrollbar {
+  display: none;
+}
+.mobile-scroll-row {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

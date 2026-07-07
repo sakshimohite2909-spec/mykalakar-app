@@ -1,0 +1,65 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper: Verify user is signed in
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Helper: Verify user owns the specific asset folder
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Helper: Check admin status by checking the Firestore database directly (Fixes Issue #8)
+    function isAdmin() {
+      return signedIn() && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+
+    // Helper: Validate acceptable media formats including WebP and GIF (Fixes Issue #10)
+    function isValidImage() {
+      return request.resource.contentType.matches('image/jpeg') ||
+             request.resource.contentType.matches('image/png') ||
+             request.resource.contentType.matches('image/webp') ||
+             request.resource.contentType.matches('image/gif');
+    }
+
+    // Helper: Ensure file sizes do not exceed 5MB limits
+    function isValidSize() {
+      return request.resource.size <= 5 * 1024 * 1024;
+    }
+
+    // ── ARTIST PROFILE ASSETS PATHS (Fixes Issues #4 & #5) ───────────────────
+    match /artists/{uid}/profile/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(uid) && isValidImage() && isValidSize();
+    }
+
+    match /artists/{uid}/cover/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(uid) && isValidImage() && isValidSize();
+    }
+
+    match /artists/{uid}/gallery/{fileName=**} {
+      allow read: if true;
+      allow write: if isOwner(uid) && isValidImage() && isValidSize();
+    }
+
+    match /artists/{uid}/identity/{fileName=**} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isOwner(uid) && isValidSize(); // PDF or image documentation
+    }
+
+    // ── GLOBAL USER PROFILE PATHS ────────────────────────────────────────────
+    match /users/{uid}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isOwner(uid) && isValidSize();
+    }
+
+    // ── ADMIN ONLY OVERRIDES ─────────────────────────────────────────────────
+    match /{allFiles=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
