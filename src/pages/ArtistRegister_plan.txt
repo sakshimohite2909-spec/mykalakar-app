@@ -1,5 +1,0 @@
-import { type ArtistRegistrationValues } from "./ArtistRegister";
-import { CATEGORY_STRUCTURE, normalizeCategoryKey } from "@/constants/artistSystem";
-
-// I'll update the ArtistRegister file directly in the next step.
-// For now, I'm just planning the changes.
