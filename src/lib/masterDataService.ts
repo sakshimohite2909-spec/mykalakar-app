@@ -167,12 +167,12 @@ export async function seedAllMasterData(
   {
     const batch = writeBatch(db);
     let count = 0;
-    for (const [groupName, types] of Object.entries(CATEGORY_GROUPS)) {
+    for (const [groupName, groupData] of Object.entries(CATEGORY_GROUPS)) {
       const id = normalizeCategoryKey(groupName).replace(/\s/g, "-");
       batch.set(mdRef("category_groups", id), {
         name: groupName,
         icon: CATEGORY_GROUP_ICONS[groupName as CategoryGroupName] ?? "✨",
-        categories: [...types],
+        categories: [...groupData.subcategories],
         isActive: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -187,8 +187,8 @@ export async function seedAllMasterData(
   {
     const batch = writeBatch(db);
     let count = 0;
-    for (const [groupName, types] of Object.entries(CATEGORY_GROUPS)) {
-      for (const typeName of types) {
+    for (const [groupName, groupData] of Object.entries(CATEGORY_GROUPS)) {
+      for (const typeName of groupData.subcategories) {
         const id = normalizeCategoryKey(typeName).replace(/\s/g, "-");
         batch.set(mdRef("categories", id), {
           name: typeName,
