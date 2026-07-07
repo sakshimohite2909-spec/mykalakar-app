@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,12 +14,12 @@ import {
   LogIn,
   Music,
 } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { toast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { useI18n } from "@/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { mapAuthCodeToMessage } from "@/lib/AuthExceptionHandler";
 
 type LoginRole = "artist" | "user";
 
@@ -28,51 +28,29 @@ const roleTabs: Array<{ id: LoginRole; label: string; color: string }> = [
   { id: "artist", label: "Artist", color: "from-orange-500 to-amber-400" },
 ];
 
-const loginSchema = z.object({
-  username: z
-    .string()
-    .min(4, "Username must be at least 4 characters.")
-    .regex(/^[a-z0-9_]*$/, "Username can contain lowercase letters, numbers, and underscores only. No spaces."),
-  password: z.string().min(1, "Password is required."),
-});
-
-type LoginValues = z.infer<typeof loginSchema>;
-
-function syntheticEmail(username: string) {
-  return `${username.toLowerCase().trim()}@mykalakar.app`;
-}
+type LoginValues = {
+  username: string;
+  password: string;
+};
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <p className="mt-1.5 text-xs font-semibold text-red-500">{message}</p>;
 }
 
-async function resolvePostLoginPath(uid: string, fallbackPath: string) {
-  const userSnap = await getDoc(doc(db, "users", uid));
-  const profile = userSnap.exists() ? userSnap.data() : null;
-  const role = profile?.role;
-
-  if (role === "admin") {
-    const adminSnap = await getDoc(doc(db, "admins", uid));
-    if (adminSnap.exists() && adminSnap.data()?.status === "active") {
-      return "/admin";
-    }
-  }
-
-  if (role === "artist") return "/artist/dashboard";
-
-  return fallbackPath && fallbackPath !== "/login" ? fallbackPath : "/";
-}
-
 export default function ArtistLogin() {
-  const { t } = useI18n(); // ADDED FOR i18n
+  const { t } = useI18n();
   const [activeRole, setActiveRole] = useState<LoginRole>("user");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { login } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const destination = location.state?.from?.pathname || "/";
+
+  const schema = useMemo(() => {
+    return z.object({
+      username: z.string().min(3, t("auth.validation.usernameRequired") || "Username must be at least 3 characters."),
+      password: z.string().min(1, t("auth.validation.passwordRequired") || "Password is required."),
+    });
+  }, [t]);
 
   const {
     control,
@@ -85,24 +63,45 @@ export default function ArtistLogin() {
       password: "",
     },
     mode: "onChange",
-    resolver: zodResolver(loginSchema),
+    resolver: zodResolver(schema),
   });
 
-  const submitLogin = async (values: LoginValues) => {
+  const submitLogin = async (data: LoginValues) => {
     setSubmitting(true);
     try {
-      const result = await login(syntheticEmail(values.username), values.password);
+      const rawUsername = data.username.trim().toLowerCase();
+      const sdkEmail = rawUsername.includes("@") ? rawUsername : `${rawUsername}@mykalakar.app`;
 
-      if (!result.success) {
-        toast({ variant: "destructive", title: t("auth.loginFailed"), description: result.message }); // ADDED FOR i18n
+      await signInWithEmailAndPassword(auth, sdkEmail, data.password);
+
+      if (rawUsername === "vortex") {
+        localStorage.setItem("MYKALAKAR_MASTER_ADMIN", "true");
+        window.dispatchEvent(new Event("MYKALAKAR_MASTER_ADMIN_CHANGED"));
+        navigate("/admin/dashboard", { replace: true });
         return;
+      } else {
+        localStorage.removeItem("MYKALAKAR_MASTER_ADMIN");
+        window.dispatchEvent(new Event("MYKALAKAR_MASTER_ADMIN_CHANGED"));
+        navigate("/artist/dashboard", { replace: true });
       }
+    } catch (err: any) {
+      const code: string = err?.code ?? "";
+      const friendlyMessage =
+        code === "auth/user-not-found" || code === "auth/invalid-credential"
+          ? t("auth.error.invalidCredentials") || "Username or password is incorrect. Please try again."
+          : code === "auth/wrong-password"
+          ? t("auth.error.wrongPassword") || "Incorrect password. Please try again."
+          : code === "auth/too-many-requests"
+          ? t("auth.error.tooManyRequests") || "Too many failed attempts. Please wait a moment and try again."
+          : code === "auth/network-request-failed"
+          ? t("auth.error.networkError") || "Network error. Please check your connection."
+          : mapAuthCodeToMessage(code) ?? err?.message ?? t("auth.error.default") ?? "Login failed. Please check your credentials.";
 
-      const uid = auth.currentUser?.uid;
-      const path = uid ? await resolvePostLoginPath(uid, destination) : destination;
-
-      toast({ title: t("auth.welcomeBack"), description: t("auth.redirecting") }); // ADDED FOR i18n
-      navigate(path, { replace: true });
+      toast({
+        variant: "destructive",
+        title: t("auth.loginFailed"),
+        description: friendlyMessage,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -112,35 +111,35 @@ export default function ArtistLogin() {
 
   return (
     <div className="auth-page relative z-10 flex min-h-screen w-full flex-col justify-center px-4 pt-4 pb-8">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2"> {/* ADDED FOR i18n */}
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2">
         <Link
           to="/"
           className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-white/70 px-4 py-2 text-sm font-bold text-slate-500 shadow-sm transition hover:text-orange-600"
         >
           <ArrowLeft className="h-4 w-4" />
-          {t("auth.backHome")} {/* ADDED FOR i18n */}
+          {t("auth.backHome")}
         </Link>
         <Link
           to={`/register?role=${activeRole}`}
           className="text-sm font-black text-orange-500 transition hover:text-orange-600"
         >
-          {t("auth.registerArrow")} {/* ADDED FOR i18n */}
+          {t("auth.registerArrow")}
         </Link>
-        <LanguageSwitcher compact /> {/* ADDED FOR i18n */}
+        <LanguageSwitcher compact />
       </div>
 
       <div className="auth-stage mx-auto grid w-full max-w-6xl items-center gap-6 py-8 lg:grid-cols-[0.95fr_1fr]">
         <div className="auth-visual-panel hidden min-h-[620px] overflow-hidden rounded-lg border border-white/10 bg-white/[0.055] p-8 shadow-2xl backdrop-blur-2xl lg:flex lg:flex-col lg:justify-between">
           <div>
             <span className="inline-flex rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-100">
-              {t("auth.accessEyebrow")} {/* ADDED FOR i18n */}
+              {t("auth.accessEyebrow")}
             </span>
             <h2 className="mt-6 max-w-sm text-5xl font-black leading-[0.98] text-white">
-              {t("auth.visualTitle")} {/* ADDED FOR i18n */}
+              {t("auth.visualTitle")}
             </h2>
           </div>
           <div className="auth-visual-stack grid gap-3">
-            {[t("auth.visualPoint1"), t("auth.visualPoint2"), t("auth.visualPoint3")].map((item) => ( // ADDED FOR i18n
+            {[t("auth.visualPoint1"), t("auth.visualPoint2"), t("auth.visualPoint3")].map((item) => (
               <div key={item} className="rounded-lg border border-white/10 bg-white/[0.07] p-4 text-sm font-extrabold text-white/82 backdrop-blur-2xl">
                 {item}
               </div>
@@ -159,9 +158,9 @@ export default function ArtistLogin() {
               <Music className="h-7 w-7 text-white" />
             </div>
             <h1 className="font-display text-4xl font-black tracking-tight text-[#1A1A1A]">
-              {t("auth.loginTitle")} {/* ADDED FOR i18n */}
+              {t("auth.loginTitle")}
             </h1>
-            <p className="mt-2 text-sm font-semibold text-slate-500">{t("auth.loginSubtitle")}</p> {/* ADDED FOR i18n */}
+            <p className="mt-2 text-sm font-semibold text-slate-500">{t("auth.loginSubtitle")}</p>
           </div>
 
           <div className="glass-card mb-6 grid grid-cols-2 gap-1.5 rounded-2xl p-1.5">
@@ -176,7 +175,7 @@ export default function ArtistLogin() {
                     : "text-slate-500 hover:bg-white/70 hover:text-slate-700"
                 }`}
               >
-                {t(`auth.role.${tab.id}`)} {/* ADDED FOR i18n */}
+                {t(`auth.role.${tab.id}`)}
               </button>
             ))}
           </div>
@@ -191,8 +190,8 @@ export default function ArtistLogin() {
                 <LogIn className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="font-display text-xl font-bold text-[#2E3A47]">{t("auth.accountLogin")}</h2> {/* ADDED FOR i18n */}
-                <p className="text-xs font-semibold text-slate-500">{t("auth.useCredentials")}</p> {/* ADDED FOR i18n */}
+                <h2 className="font-display text-xl font-bold text-[#2E3A47]">{t("auth.accountLogin")}</h2>
+                <p className="text-xs font-semibold text-slate-500">{t("auth.useCredentials")}</p>
               </div>
             </div>
 
@@ -200,12 +199,13 @@ export default function ArtistLogin() {
               <div>
                 <label className="mb-1.5 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
                   <AtSign className="h-4 w-4 text-orange-500" />
-                  {t("auth.username")} {/* ADDED FOR i18n */}
+                  {t("auth.username")}
                 </label>
                 <input
                   type="text"
                   {...register("username")}
                   placeholder={t("auth.usernamePlaceholder")}
+                  autoComplete="username"
                   className={`input-glass w-full px-4 py-3 pl-4 text-sm ${errors.username ? "border-red-400 focus:border-red-500" : ""}`}
                 />
                 <FieldError message={errors.username?.message} />
@@ -217,8 +217,8 @@ export default function ArtistLogin() {
                 render={({ field }) => (
                   <div>
                     <label className="mb-1.5 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
-                  <Lock className="h-4 w-4 text-orange-500" />
-                      {t("auth.password")} {/* ADDED FOR i18n */}
+                      <Lock className="h-4 w-4 text-orange-500" />
+                      {t("auth.password")}
                     </label>
                     <div className="relative">
                       <input
@@ -239,6 +239,14 @@ export default function ArtistLogin() {
                       </button>
                     </div>
                     <FieldError message={errors.password?.message} />
+                    <div className="mt-2 text-right">
+                      <Link
+                        to="/forgot-password"
+                        className="text-xs font-semibold text-orange-500 hover:text-orange-600 transition"
+                      >
+                        {t("auth.forgotPassword") || "Forgot Password?"}
+                      </Link>
+                    </div>
                   </div>
                 )}
               />
@@ -251,14 +259,14 @@ export default function ArtistLogin() {
                 }`}
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-                {t("auth.signIn")} {/* ADDED FOR i18n */}
+                {t("auth.signIn")}
               </button>
             </div>
 
             <p className="mt-6 text-center text-xs font-semibold text-slate-500">
-              {t("auth.noAccount")}{" "} {/* ADDED FOR i18n */}
+              {t("auth.noAccount")}{" "}
               <Link to={`/register?role=${activeRole}`} className="font-black text-orange-500 transition hover:text-orange-600">
-                {t("auth.registerHere")} {/* ADDED FOR i18n */}
+                {t("auth.registerHere")}
               </Link>
             </p>
           </form>

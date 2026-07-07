@@ -81,7 +81,7 @@ function SlaCountdown({ deadline }: { deadline?: string }) {
 import { cn } from "@/lib/utils";
 
 export default function AdminDashboard() {
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin } = useAuth();
   const [counts, setCounts] = useState({
     totalArtists: 0,
     pendingArtists: 0,
@@ -100,6 +100,7 @@ export default function AdminDashboard() {
   const [syncing, setSyncing] = useState(true);
 
   useEffect(() => {
+    if (!currentUser || !isAdmin) return;
     const unsubs: (() => void)[] = [];
     setSyncing(true);
 
@@ -172,7 +173,7 @@ export default function AdminDashboard() {
     } catch (e) { console.warn(e); }
 
     return () => unsubs.forEach(u => u());
-  }, []);
+  }, [currentUser, isAdmin]);
 
   // ── Block / Unblock Client ────────────────────────────────────────────────
   const handleToggleClientStatus = async (client: any) => {

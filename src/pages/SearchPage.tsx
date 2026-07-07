@@ -147,7 +147,8 @@ function withoutArtistFacetFilters(filters: SmartFilters): SmartFilters {
 }
 
 async function getInitialArtistCollection(loadAll = false) {
-  const firstPage = await getActiveArtistsPage(50);
+  const pageSize = loadAll ? 250 : 50;
+  const firstPage = await getActiveArtistsPage(pageSize);
   const items = [...(firstPage.items as Record<string, unknown>[])];
   let cursor = firstPage.nextCursor;
   let hasMore = firstPage.hasMore;
@@ -439,7 +440,7 @@ export default function SearchPage() {
               <motion.div layout className="luxury-results-grid event-grid">
                 <AnimatePresence mode="popLayout">
                   {filteredEvents.map((event, index) => (
-                    <LuxuryEventCard key={event.id} event={event} index={index} />
+                    <LuxuryEventCard key={String(event.id || index)} event={event} index={index} />
                   ))}
                 </AnimatePresence>
               </motion.div>

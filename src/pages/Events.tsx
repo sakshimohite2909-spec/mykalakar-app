@@ -39,6 +39,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { ImageRegistryService } from "@/services/ImageRegistryService";
+import { useI18n } from "@/i18n/I18nProvider";
 
 const PERFORMANCE_TYPES = [
   "Singer",
@@ -59,6 +60,7 @@ interface NewBriefModalProps {
 function NewBriefModal({ open, onClose }: NewBriefModalProps) {
   const { currentUser } = useAuth();
   const { categories } = useCategories();
+  const { t } = useI18n();
   const [eventName, setEventName] = useState("");
   const [totalBudget, setTotalBudget] = useState("");
   const [location, setLocation] = useState("");
@@ -104,16 +106,16 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
     if (!currentUser) {
       toast({
         variant: "destructive",
-        title: "Sign in required",
-        description: "Please log in to submit an event brief.",
+        title: t("events.toast.signinRequired"),
+        description: t("events.toast.signinRequiredText"),
       });
       return;
     }
 
     setSubmitting(true);
     toast({
-      title: "📋 Submitting brief…",
-      description: "Connecting to MyKalaakar database.",
+      title: t("events.toast.submitting"),
+      description: t("events.toast.connecting"),
     });
 
     try {
@@ -149,12 +151,12 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
         updatedAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, "events"), payload);
+      await addDoc(collection(db, "eventBriefs"), payload);
 
       setSuccess(true);
       toast({
-        title: "Brief submitted successfully! 🎉",
-        description: "Your requirement has been submitted and is pending admin approval.",
+        title: t("events.toast.success"),
+        description: t("events.toast.successText"),
       });
       setTimeout(() => {
         handleClose();
@@ -163,8 +165,8 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
       console.error("Firebase write error:", err);
       toast({
         variant: "destructive",
-        title: "Submission failed ⚠️",
-        description: err?.message || "Could not save event to database.",
+        title: t("events.toast.failed"),
+        description: err?.message || t("events.toast.failedText"),
       });
     } finally {
       setSubmitting(false);
@@ -199,7 +201,7 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
             <div className="flex items-center justify-between pb-4 border-b border-stone-100">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-[#E25C1D]" />
-                <h3 className="text-base font-extrabold text-stone-900">Post a New Requirement</h3>
+                <h3 className="text-base font-extrabold text-stone-900">{t("events.modal.title")}</h3>
               </div>
               <button
                 type="button"
@@ -215,9 +217,9 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 border border-emerald-250">
                   <CheckCircle2 className="h-10 w-10 text-emerald-500 animate-bounce" />
                 </div>
-                <h4 className="mt-4 text-lg font-black text-stone-900">Brief Submitted!</h4>
+                <h4 className="mt-4 text-lg font-black text-stone-900">{t("events.modal.successTitle")}</h4>
                 <p className="mt-1 text-xs font-semibold text-stone-550 max-w-xs">
-                  Your event requirement has been successfully created and submitted for admin review.
+                  {t("events.modal.successText")}
                 </p>
               </div>
             ) : (
@@ -225,12 +227,12 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
                 {/* Event Name */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                    Event Name <span className="text-[#E25C1D]">*</span>
+                    {t("events.modal.eventName")} <span className="text-[#E25C1D]">*</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Wedding Reception Performance"
+                    placeholder={t("events.modal.eventNamePlaceholder")}
                     value={eventName}
                     onChange={(e) => setEventName(e.target.value)}
                     className="w-full h-10 rounded-xl border border-stone-200 bg-white/50 px-3.5 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition"
@@ -241,7 +243,7 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                      Total Budget (₹) <span className="text-[#E25C1D]">*</span>
+                      {t("events.modal.totalBudget")} <span className="text-[#E25C1D]">*</span>
                     </label>
                     <div className="relative flex items-center">
                       <span className="absolute left-3.5 text-xs font-bold text-stone-500">₹</span>
@@ -249,7 +251,7 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
                         type="number"
                         required
                         min="0"
-                        placeholder="50000"
+                        placeholder={t("events.modal.totalBudgetPlaceholder")}
                         value={totalBudget}
                         onChange={(e) => setTotalBudget(e.target.value)}
                         className="w-full h-10 rounded-xl border border-stone-200 bg-white/50 pl-7 pr-3.5 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition"
@@ -259,14 +261,14 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                      Event Location <span className="text-[#E25C1D]">*</span>
+                      {t("events.modal.location")} <span className="text-[#E25C1D]">*</span>
                     </label>
                     <div className="relative flex items-center">
                       <MapPin className="absolute left-3.5 h-3.5 w-3.5 text-stone-400" />
                       <input
                         type="text"
                         required
-                        placeholder="e.g. Pune, Maharashtra"
+                        placeholder={t("events.modal.locationPlaceholder")}
                         value={location}
                         onChange={(e) => setLocation(e.target.value)}
                         className="w-full h-10 rounded-xl border border-stone-200 bg-white/50 pl-9 pr-3.5 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition"
@@ -279,7 +281,7 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                      Event Date <span className="text-[#E25C1D]">*</span>
+                      {t("events.modal.date")} <span className="text-[#E25C1D]">*</span>
                     </label>
                     <div className="relative flex items-center">
                       <Calendar className="absolute left-3.5 h-3.5 w-3.5 text-stone-450" />
@@ -295,7 +297,7 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                      Performance Type <span className="text-[#E25C1D]">*</span>
+                      {t("events.modal.performanceType")} <span className="text-[#E25C1D]">*</span>
                     </label>
                     <div className="relative flex items-center">
                       <Mic2 className="absolute left-3.5 h-3.5 w-3.5 text-stone-450" />
@@ -305,7 +307,7 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
                         onChange={(e) => setPerformanceType(e.target.value)}
                         className="w-full h-10 rounded-xl border border-stone-200 bg-white/50 pl-9 pr-3.5 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition cursor-pointer"
                       >
-                        <option value="">Select type…</option>
+                        <option value="">{t("events.modal.selectType")}</option>
                         {PERFORMANCE_TYPES.map((type) => (
                           <option key={type} value={type}>
                             {type}
@@ -320,7 +322,7 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
                 <div className="flex flex-col gap-1.5 pt-1">
                   <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
                     <Tag className="h-3.5 w-3.5 text-[#E25C1D]" />
-                    Event Categories (Select tag chips)
+                    {t("events.modal.categories")}
                   </label>
                   <div className="space-y-3 mt-1.5 max-h-[160px] overflow-y-auto border border-stone-100/80 rounded-2xl p-3 bg-stone-50/50">
                     {categories.map((group) => (
@@ -356,12 +358,12 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
                     <ClipboardList className="h-3.5 w-3.5 text-[#E25C1D]" />
-                    Professional Requirements <span className="text-[#E25C1D]">*</span>
+                    {t("events.modal.requirements")} <span className="text-[#E25C1D]">*</span>
                   </label>
                   <textarea
                     rows={3}
                     required
-                    placeholder="Describe your event requirements..."
+                    placeholder={t("events.modal.requirementsPlaceholder")}
                     value={requirements}
                     onChange={(e) => setRequirements(e.target.value)}
                     className="w-full rounded-xl border border-stone-200 bg-white/50 p-3 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition resize-none leading-relaxed"
@@ -377,12 +379,12 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
                   {submitting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Submitting Brief…
+                      {t("events.modal.submitting")}
                     </>
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4" />
-                      Submit Event Brief
+                      {t("events.modal.submit")}
                     </>
                   )}
                 </button>
@@ -437,6 +439,7 @@ function EventsSkeleton() {
 function EventsInner() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [events, setEvents] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(true);
@@ -450,7 +453,7 @@ function EventsInner() {
   useEffect(() => {
     setLoading(true);
     const q = query(
-      collection(db, "events"),
+      collection(db, "eventBriefs"),
       where("status", "==", "approved")
     );
     const unsubscribe = onSnapshot(
@@ -479,8 +482,8 @@ function EventsInner() {
         console.error("Firestore onSnapshot error:", error);
         toast({
           variant: "destructive",
-          title: "Database connection issue",
-          description: "Stale data may be displayed. Retrying.",
+          title: t("events.toast.dbIssue"),
+          description: t("events.toast.dbIssueText"),
         });
         setLoading(false);
       }
@@ -494,8 +497,8 @@ function EventsInner() {
   const handleCreateBriefClick = () => {
     if (!currentUser) {
       toast({
-        title: "Authentication Required",
-        description: "Please sign in or register to create event briefs.",
+        title: t("events.toast.authRequired"),
+        description: t("events.toast.authRequiredText"),
       });
       navigate("/login");
       return;
@@ -514,13 +517,13 @@ function EventsInner() {
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
           <div className="max-w-2xl">
             <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#E25C1D]">
-              <Sparkles className="h-3 w-3" /> Event Marketplace
+              <Sparkles className="h-3 w-3" /> {t("events.hero.badge")}
             </span>
             <h1 className="mt-4 text-3xl font-extrabold text-stone-900 tracking-tight sm:text-5xl leading-tight">
-              Live Briefs & Quick Event Setup
+              {t("events.hero.title")}
             </h1>
             <p className="mt-4 text-sm font-semibold text-stone-500 leading-relaxed max-w-xl">
-              Create event requirements and connect with verified artists. Browse live event briefs or setup a quick brief for performers across India.
+              {t("events.hero.subtitle")}
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3">
@@ -530,13 +533,13 @@ function EventsInner() {
                 className="inline-flex h-11 items-center gap-2 rounded-full bg-[#E25C1D] hover:bg-[#c94e17] px-6 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-orange-500/20 hover:shadow-orange-500/35 transition active:scale-[0.98]"
               >
                 <Plus className="h-4 w-4" />
-                + Create Event Brief
+                {t("events.hero.createButton")}
               </button>
               <Link
                 to="/artists"
                 className="inline-flex h-11 items-center gap-1.5 rounded-full border border-stone-200 hover:border-stone-300 bg-white px-5 text-xs font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-[0.98]"
               >
-                Explore All
+                {t("events.hero.exploreAll")}
                 <ArrowRight className="h-4 w-4 text-stone-400" />
               </Link>
             </div>
@@ -555,10 +558,10 @@ function EventsInner() {
         <div className="absolute bottom-8 left-8 right-8 md:bottom-12 md:left-12 z-10">
           <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 md:p-8 max-w-2xl shadow-xl">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E25C1D] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white mb-4">
-              <Sparkles className="h-3 w-3" /> Featured Experience
+              <Sparkles className="h-3 w-3" /> {t("events.hero.featuredExperience")}
             </span>
             <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight drop-shadow-sm">
-              Discover Extraordinary Live Performances
+              {t("events.hero.featuredTitle")}
             </h2>
           </div>
         </div>
@@ -633,7 +636,7 @@ function EventsInner() {
                         className="w-full h-full object-cover object-center group-hover:scale-103 transition duration-700"
                       />
                       <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm shadow-sm rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#E25C1D] border border-orange-50">
-                        {ev?.performanceType || "Performance"}
+                        {ev?.performanceType || t("events.card.performance")}
                       </span>
                     </div>
 
@@ -648,10 +651,10 @@ function EventsInner() {
                       <div className="inline-flex items-center gap-1 rounded-xl bg-orange-50/50 border border-orange-100/50 px-3 py-1.5 w-fit mt-1">
                         <IndianRupee className="h-4 w-4 text-[#E25C1D]" />
                         <span className="text-lg font-black text-[#E25C1D]">
-                          {budgetVal > 0 ? budgetVal.toLocaleString("en-IN") : "Flexible"}
+                          {budgetVal > 0 ? budgetVal.toLocaleString("en-IN") : t("events.card.flexible")}
                         </span>
                         <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wide ml-1 select-none">
-                          Budget
+                          {t("events.card.budget")}
                         </span>
                       </div>
 
@@ -697,17 +700,17 @@ function EventsInner() {
             </div>
             <div>
               <h3 className="text-2xl font-extrabold text-stone-900 tracking-tight drop-shadow-sm">
-                No Live Events Currently
+                {t("events.empty.title")}
               </h3>
               <p className="mt-2 text-sm font-semibold text-stone-500 max-w-md mx-auto leading-relaxed">
-                We're brewing up extraordinary new experiences. Check back shortly, or post a new event brief to summon our premier artists.
+                {t("events.empty.text")}
               </p>
             </div>
             <button
               onClick={() => setIsModalOpen(true)}
               className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#E25C1D] px-6 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-md transition hover:bg-[#EA580C] hover:shadow-lg active:scale-95"
             >
-              Post an Event Brief
+              {t("events.empty.button")}
             </button>
           </motion.div>
         )}

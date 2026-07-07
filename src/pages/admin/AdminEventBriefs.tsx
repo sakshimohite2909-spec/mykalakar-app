@@ -280,7 +280,7 @@ export default function AdminEventBriefs() {
   // ── Real-time subscription ───────────────────────────────────────────────
   useEffect(() => {
     const q = query(
-      collection(db, "events"),
+      collection(db, "eventBriefs"),
       where("status", "==", "pending"),
       orderBy("createdAt", "asc")
     );
@@ -308,7 +308,7 @@ export default function AdminEventBriefs() {
   const handleApprove = async (briefId: string) => {
     setProcessingId(briefId);
     try {
-      await updateDoc(doc(db, "events", briefId), {
+      await updateDoc(doc(db, "eventBriefs", briefId), {
         status: "approved",
         approvedBy: currentUser?.uid ?? "admin",
         approvedAt: serverTimestamp(),
@@ -333,7 +333,7 @@ export default function AdminEventBriefs() {
   const handleReject = async (briefId: string) => {
     setProcessingId(briefId);
     try {
-      await updateDoc(doc(db, "events", briefId), {
+      await updateDoc(doc(db, "eventBriefs", briefId), {
         status: "rejected",
         rejectedBy: currentUser?.uid ?? "admin",
         rejectedAt: serverTimestamp(),

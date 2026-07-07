@@ -24,7 +24,7 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
         {languages.map((item) => (
           <DropdownMenuItem
             key={item.code}
-            onClick={() => setLanguage(item.code as Language)}
+            onSelect={() => setLanguage(item.code as Language)}
             aria-current={item.code === language ? "true" : undefined}
             lang={languageToLocale(item.code)}
             className={`cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold ${

@@ -58,6 +58,12 @@ export default function ArtistCalendar({ artistId, currentUser: propUser }: Arti
   useEffect(() => {
     if (!artistId) return;
 
+    if (!isPrivileged) {
+      setLiveBookings([]);
+      setLoading(false);
+      return;
+    }
+
     const bookingsQuery = query(
       collection(db, "bookings"),
       where("artistId", "==", artistId)
@@ -79,6 +85,15 @@ export default function ArtistCalendar({ artistId, currentUser: propUser }: Arti
       }
     );
 
+    return () => {
+      unsubscribeBookings();
+    };
+  }, [artistId, isPrivileged]);
+
+  // Real-time Availability block synchronization
+  useEffect(() => {
+    if (!artistId) return;
+
     const availabilityQuery = query(
       collection(db, "artist_availability"),
       where("artistId", "==", artistId)
@@ -99,7 +114,6 @@ export default function ArtistCalendar({ artistId, currentUser: propUser }: Arti
     );
 
     return () => {
-      unsubscribeBookings();
       unsubscribeAvailability();
     };
   }, [artistId]);
@@ -201,7 +215,9 @@ export default function ArtistCalendar({ artistId, currentUser: propUser }: Arti
               const dateBookings = liveBookings.filter(
                 (b) => b.eventDate === dateId && b.status !== "CANCELLED_BY_ARTIST" && b.status !== "REJECTED"
               );
-              const isDayBlocked = availabilityBlocks.some((b) => b.blockedDate === dateId);
+              const availabilityBlock = availabilityBlocks.find((b) => b.blockedDate === dateId);
+              const isDayBlocked = availabilityBlock && availabilityBlock.reason !== "Booked";
+              const isDayBooked = availabilityBlock && availabilityBlock.reason === "Booked";
               const isSelected = selectedDate === dateId;
               const isCurrentDay = isToday(date);
 
@@ -230,7 +246,7 @@ export default function ArtistCalendar({ artistId, currentUser: propUser }: Arti
                     >
                       {format(date, "d")}
                     </span>
-                    {dateBookings.length > 0 && (
+                    {(dateBookings.length > 0 || isDayBooked) && (
                       <span className="h-1.5 w-1.5 rounded-full bg-[#E25C1D]" />
                     )}
                   </div>
@@ -241,7 +257,7 @@ export default function ArtistCalendar({ artistId, currentUser: propUser }: Arti
                       <span className="block text-[8px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-100 rounded px-1 py-0.5 text-center truncate">
                         Blocked
                       </span>
-                    ) : dateBookings.length > 0 ? (
+                    ) : (dateBookings.length > 0 || isDayBooked) ? (
                       isPrivileged ? (
                         /* Admin/Artist View (Detailed) */
                         <div className="space-y-0.5">
@@ -258,6 +274,11 @@ export default function ArtistCalendar({ artistId, currentUser: propUser }: Arti
                             <span className="block text-[7px] text-stone-400 font-extrabold text-right">
                               +{dateBookings.length - 1} more
                             </span>
+                          )}
+                          {dateBookings.length === 0 && isDayBooked && (
+                            <div className="rounded bg-stone-100 border border-stone-200 px-1 py-0.5 text-[8px] font-black text-stone-400 text-center uppercase tracking-wide truncate relative overflow-hidden flex items-center justify-center">
+                              Unavailable
+                            </div>
                           )}
                         </div>
                       ) : (
@@ -300,12 +321,30 @@ export default function ArtistCalendar({ artistId, currentUser: propUser }: Arti
                 const blockedBlock = availabilityBlocks.find((b) => b.blockedDate === selectedDate);
 
                 if (blockedBlock) {
+                  const isBooked = blockedBlock.reason === "Booked";
                   return (
-                    <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-4 text-center my-auto">
-                      <Ban className="mx-auto mb-2.5 h-6 w-6 text-rose-500" />
-                      <h4 className="text-sm font-extrabold text-rose-950">Date Blocked</h4>
-                      <p className="mt-1 text-xs text-rose-600 font-semibold leading-relaxed">
-                        {blockedBlock.reason || "Unavailable to accept inquiries"}
+                    <div className={cn(
+                      "rounded-xl p-4 text-center my-auto border",
+                      isBooked 
+                        ? "border-stone-150 bg-stone-50"
+                        : "border-rose-100 bg-rose-50/60"
+                    )}>
+                      {isBooked ? (
+                        <ShieldAlert className="mx-auto mb-2.5 h-6 w-6 text-stone-400" />
+                      ) : (
+                        <Ban className="mx-auto mb-2.5 h-6 w-6 text-rose-500" />
+                      )}
+                      <h4 className={cn(
+                        "text-sm font-extrabold",
+                        isBooked ? "text-stone-900" : "text-rose-950"
+                      )}>
+                        {isBooked ? "Slot Unavailable" : "Date Blocked"}
+                      </h4>
+                      <p className={cn(
+                        "mt-1 text-xs font-semibold leading-relaxed",
+                        isBooked ? "text-stone-500" : "text-rose-600"
+                      )}>
+                        {isBooked ? "A private booking is scheduled on this date." : (blockedBlock.reason || "Unavailable to accept inquiries")}
                       </p>
                     </div>
                   );

@@ -1,5 +1,5 @@
-export const FIREBASE_READ_TIMEOUT_MS = 12000;
-export const FIREBASE_WRITE_TIMEOUT_MS = 20000;
+export const FIREBASE_READ_TIMEOUT_MS = 30000;
+export const FIREBASE_WRITE_TIMEOUT_MS = 30000;
 export const FIREBASE_UPLOAD_TIMEOUT_MS = 45000;
 
 export const sanitizePayload = (payload: any) =>

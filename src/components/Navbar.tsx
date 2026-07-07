@@ -20,6 +20,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { languageToLocale, type Language, useI18n } from "@/i18n/I18nProvider";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { SmartImage } from "@/components/SmartImage";
 import { STATIC_IMAGES, imageRegistry } from "@/services/ImageRegistryService";
 import { getInitials } from "@/services/dataNormalizer";
@@ -28,7 +29,7 @@ import { getUsableImageUrl } from "@/utils/fallbackImages";
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { currentUser, artistData, userProfile, userRole, logout } = useAuth();
+  const { currentUser, artistData, userProfile, userRole, isAdmin, logout } = useAuth();
   const { language, languages, setLanguage, t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
@@ -70,7 +71,7 @@ export default function Navbar() {
       : "";
   const fallbackArtistPhoto = artistData
     ? imageRegistry.getUniqueImage({
-        category: artistData.subcategory || artistData.artForm || artistData.category || "Performers",
+        category: (artistData.subcategory as string) || (artistData.artForm as string) || (artistData.category as string) || "Performers",
         type: "artist",
         key: artistData.uid || artistData.id || artistData.name || "navbar-artist",
       })
@@ -86,8 +87,8 @@ export default function Navbar() {
   const canViewArtistProfile = Boolean(
     artistData && (artistData.status === "active" || artistData.status === "approved"),
   );
-  const dashboardPath = userRole === "admin" ? "/admin" : userRole === "artist" ? "/artist/dashboard" : "/profile";
-  const dashboardLabel = userRole === "admin" ? t("nav.adminConsole") : userRole === "artist" ? t("nav.artistDashboard") : t("nav.myProfile");
+  const dashboardPath = userRole === "artist" ? "/artist/dashboard" : "/profile";
+  const dashboardLabel = userRole === "artist" ? t("nav.artistDashboard") : t("nav.myProfile");
   const showDashboardLink = dashboardPath !== "/profile";
 
   const navLinks = useMemo(
@@ -107,39 +108,6 @@ export default function Navbar() {
     return location.pathname === href;
   };
 
-  const currentLanguage = languages.find((item) => item.code === language)?.label ?? "English";
-
-  const LanguageSwitcher = ({ compact = false }: { compact?: boolean }) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={`nav-icon-button language-switcher-trigger ${compact ? "w-11 px-0" : "px-3"}`} // ADDED FOR i18n
-          aria-label={t("nav.languageWithCurrent", { language: currentLanguage })} // ADDED FOR i18n
-          title={t("nav.languageWithCurrent", { language: currentLanguage })} // ADDED FOR i18n
-        >
-          <Globe2 className="h-4 w-4" />
-          {!compact && <span>{currentLanguage}</span>}
-          {!compact && <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" aria-label={t("nav.changeLanguage")} className="language-switcher-menu rounded-2xl border-orange-100/80 bg-[#fffaf2]/95 p-2 shadow-xl backdrop-blur-xl"> {/* ADDED FOR i18n */}
-        {languages.map((item) => (
-          <DropdownMenuItem
-            key={item.code}
-            onClick={() => setLanguage(item.code as Language)}
-            aria-current={item.code === language ? "true" : undefined} // ADDED FOR i18n
-            lang={languageToLocale(item.code)} // ADDED FOR i18n
-            className={`cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold ${
-              item.code === language ? "bg-orange-100 text-orange-700" : "text-stone-700"
-            }`}
-          >
-            {item.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 
   return (
     <header className="site-header fixed top-0 inset-x-0 w-full h-20 flex items-center justify-between z-40 bg-white/70 backdrop-blur-md px-3 md:px-4">
@@ -215,9 +183,15 @@ export default function Navbar() {
                     {t("nav.viewPublicPage")}
                   </DropdownMenuItem>
                 ) : null}
+                {isAdmin && (
+                  <DropdownMenuItem className="cursor-pointer rounded-xl py-2.5 font-semibold" onClick={() => navigate("/admin")}>
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    {t("nav.adminConsole") || "Admin Console"}
+                  </DropdownMenuItem>
+                )}
                 {showDashboardLink ? (
                   <DropdownMenuItem className="cursor-pointer rounded-xl py-2.5 font-semibold" onClick={() => navigate(dashboardPath)}>
-                    {userRole === "admin" ? <ShieldCheck className="mr-2 h-4 w-4" /> : <LayoutDashboard className="mr-2 h-4 w-4" />}
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
                     {dashboardLabel}
                   </DropdownMenuItem>
                 ) : null}

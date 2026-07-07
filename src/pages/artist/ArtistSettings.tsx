@@ -124,22 +124,42 @@ export default function ArtistSettings() {
 
                             <div>
                                 <Label>New Password</Label>
-                                <Input
-                                    type={showPasswords ? "text" : "password"}
-                                    value={newPassword}
-                                    onChange={(e) => setNewPassword(e.target.value)}
-                                    placeholder="Enter new password (min 6 chars)"
-                                />
+                                <div className="relative">
+                                    <Input
+                                        type={showPasswords ? "text" : "password"}
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        placeholder="Enter new password (min 6 chars)"
+                                        className="pr-10"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPasswords(!showPasswords)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                                    >
+                                        {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                </div>
                             </div>
 
                             <div>
                                 <Label>Confirm New Password</Label>
-                                <Input
-                                    type={showPasswords ? "text" : "password"}
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    placeholder="Confirm new password"
-                                />
+                                <div className="relative">
+                                    <Input
+                                        type={showPasswords ? "text" : "password"}
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        placeholder="Confirm new password"
+                                        className="pr-10"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPasswords(!showPasswords)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                                    >
+                                        {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                </div>
                             </div>
 
                             <Button

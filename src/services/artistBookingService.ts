@@ -252,6 +252,13 @@ export async function checkArtistAvailability(
 ) {
   const normalizedDate = normalizeDateOnly(eventDate);
 
+  console.log("checkArtistAvailability input params:", {
+    artistId,
+    selectedDate: normalizedDate,
+    startTime: eventStartTime || "unspecified",
+    endTime: eventEndTime || "unspecified",
+  });
+
   // 1. Check blocked dates
   const blockQuery = query(
     collection(db, AVAILABILITY_COLLECTION),
@@ -260,7 +267,16 @@ export async function checkArtistAvailability(
   );
   const blockSnap = await getDocs(blockQuery);
   if (!blockSnap.empty) {
-    return { available: false, reason: "The artist has blocked this date for events." };
+    const blockData = blockSnap.docs[0].data();
+    const isBooked = blockData.reason === "Booked";
+    const reason = isBooked
+      ? "The artist is already booked on this date."
+      : (blockData.reason || "The artist has blocked this date for events.");
+    console.log("checkArtistAvailability result: Artist unavailable due to block:", {
+      reason,
+      blockData
+    });
+    return { available: false, reason };
   }
 
   // 2. Check bookings on the same date
@@ -269,8 +285,15 @@ export async function checkArtistAvailability(
     where("artistId", "==", artistId),
     where("eventDate", "==", normalizedDate)
   );
-  const bookingSnap = await getDocs(bookingQuery);
-  const bookings = bookingSnap.docs.map((doc) => normalizeBooking(doc.id, doc.data()));
+
+  let bookings: BookingEvent[] = [];
+  try {
+    const bookingSnap = await getDocs(bookingQuery);
+    bookings = bookingSnap.docs.map((doc) => normalizeBooking(doc.id, doc.data()));
+    console.log("checkArtistAvailability fetched bookings:", bookings);
+  } catch (error) {
+    console.warn("Could not fetch bookings from Firestore (likely due to security rules):", error);
+  }
   
   const now = new Date().toISOString();
   for (const booking of bookings) {
@@ -283,14 +306,20 @@ export async function checkArtistAvailability(
     if (isConfirmed || isHoldActive) {
       if (checkTimeOverlap(eventStartTime, eventEndTime, booking.eventStartTime, booking.eventEndTime)) {
         const statusText = isConfirmed ? "confirmed booking" : "pending hold";
+        const reason = `The artist already has a ${statusText} on this date at that time (${booking.eventStartTime || "All Day"} - ${booking.eventEndTime || "All Day"}).`;
+        console.log("checkArtistAvailability result: Time overlap conflict detected:", {
+          booking,
+          reason,
+        });
         return {
           available: false,
-          reason: `The artist already has a ${statusText} on this date at that time (${booking.eventStartTime || "All Day"} - ${booking.eventEndTime || "All Day"}).`
+          reason
         };
       }
     }
   }
 
+  console.log("checkArtistAvailability result: Artist is available.");
   return { available: true };
 }
 
@@ -305,28 +334,59 @@ export async function createArtistBooking(input: CreateBookingInput) {
   bookingPayload.slaStartTime = now;
   bookingPayload.slaDeadlineTime = slaDeadline;
 
+  // 1. Perform availability check completely before initiating the transaction block
+  const availability = await checkArtistAvailability(
+    input.artistId,
+    input.eventDate,
+    input.eventStartTime,
+    input.eventEndTime
+  );
+  if (!availability.available) {
+    throw new Error(availability.reason || "The selected time slot is no longer available.");
+  }
+
   const newBookingRef = doc(collection(db, BOOKING_COLLECTION));
   bookingPayload.id = newBookingRef.id;
 
   const artistRef = doc(db, "artists", input.artistId);
+  const reservationRef = doc(db, "booking_reservations", `${input.artistId}_${normalizeDateOnly(input.eventDate)}`);
 
   await withTimeout(
     runTransaction(db, async (transaction) => {
       // 1. Transactional read of the artist profile to lock it and serialize writes
       await transaction.get(artistRef);
 
-      // 2. Perform availability check inside transaction block
-      const availability = await checkArtistAvailability(
-        input.artistId,
-        input.eventDate,
-        input.eventStartTime,
-        input.eventEndTime
-      );
-      if (!availability.available) {
-        throw new Error(availability.reason || "The selected time slot is no longer available.");
+      // 2. Perform direct get on reservation ledger to assert lock safety and prevent race conditions
+      const reservationSnap = await transaction.get(reservationRef);
+
+      // 3. Write/update reservation ledger inside transaction to serialize concurrent bookings
+      if (!reservationSnap.exists()) {
+        transaction.set(reservationRef, {
+          artistId: input.artistId,
+          reservationDate: normalizeDateOnly(input.eventDate),
+          holds: [bookingPayload.id],
+          customerIds: [input.customerId || ""],
+          updatedAt: now,
+        });
+      } else {
+        const resData = reservationSnap.data() || {};
+        const holds = resData.holds || [];
+        const customerIds = resData.customerIds || [];
+        if (!holds.includes(bookingPayload.id)) {
+          holds.push(bookingPayload.id);
+        }
+        const custId = input.customerId || "";
+        if (custId && !customerIds.includes(custId)) {
+          customerIds.push(custId);
+        }
+        transaction.update(reservationRef, {
+          holds,
+          customerIds,
+          updatedAt: now,
+        });
       }
 
-      // 3. Write booking document and update artist lock
+      // 4. Write booking document and update artist lock
       transaction.set(newBookingRef, sanitizePayload(bookingPayload));
       transaction.set(artistRef, { lastBookingTimestamp: now }, { merge: true });
     }),

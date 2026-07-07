@@ -56,14 +56,13 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId,
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [availabilityResult, setAvailabilityResult] = useState<{ available: boolean; reason?: string } | null>(null);
 
-  // Gateway state
-  const [gateway, setGateway] = useState<"stripe" | "razorpay" | "paypal" | "adyen">("stripe");
+  // Gateway state — only Razorpay supported
+  const [gateway] = useState<"razorpay">("razorpay");
   const [paymentDetails, setPaymentDetails] = useState({
     cardholderName: "",
     cardNumber: "",
     expiryDate: "",
     cvv: "",
-    paypalEmail: "",
   });
 
   // Pre-fill date when provided
@@ -83,15 +82,14 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId,
         cardNumber: "",
         expiryDate: "",
         cvv: "",
-        paypalEmail: "",
       });
       // Pre-fill user profile info if logged in
       setFormData(prev => ({
         ...prev,
-        customerName: prev.customerName || userProfile?.name || currentUser?.displayName || "",
+        customerName: prev.customerName || (userProfile?.name as string) || currentUser?.displayName || "",
         customerEmail: prev.customerEmail || currentUser?.email || "",
-        customerPhone: prev.customerPhone || userProfile?.phone || "",
-        clientWhatsapp: prev.clientWhatsapp || userProfile?.phone || "",
+        customerPhone: prev.customerPhone || (userProfile?.phone as string) || "",
+        clientWhatsapp: prev.clientWhatsapp || (userProfile?.phone as string) || "",
       }));
     }
   }, [open, currentUser, userProfile]);
@@ -117,7 +115,19 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId,
     setCheckingAvailability(true);
     setAvailabilityResult(null);
     try {
-      const result = await checkArtistAvailability(artistId, formData.eventDate);
+      console.log("runAvailabilityCheck calling checkArtistAvailability with:", {
+        artistId,
+        eventDate: formData.eventDate,
+        eventStartTime: formData.eventStartTime,
+        eventEndTime: formData.eventEndTime,
+      });
+      const result = await checkArtistAvailability(
+        artistId,
+        formData.eventDate,
+        formData.eventStartTime,
+        formData.eventEndTime
+      );
+      console.log("runAvailabilityCheck result:", result);
       setAvailabilityResult(result);
       if (result.available) {
         setStep(2);
@@ -129,7 +139,7 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId,
         });
       }
     } catch (err) {
-      console.error(err);
+      console.error("runAvailabilityCheck error:", err);
       toast({ variant: "destructive", title: "Verification failed", description: "Could not verify artist availability." });
     } finally {
       setCheckingAvailability(false);
@@ -144,17 +154,10 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId,
       return;
     }
 
-    // Extra validation for Payment Details
-    if (gateway === "paypal") {
-      if (!paymentDetails.paypalEmail) {
-        toast({ variant: "destructive", title: "PayPal account required", description: "Please enter your PayPal email." });
-        return;
-      }
-    } else {
-      if (!paymentDetails.cardNumber || !paymentDetails.expiryDate || !paymentDetails.cvv) {
-        toast({ variant: "destructive", title: "Card details required", description: "Please complete all credit card fields." });
-        return;
-      }
+    // Extra validation for Razorpay card details
+    if (!paymentDetails.cardNumber || !paymentDetails.expiryDate || !paymentDetails.cvv) {
+      toast({ variant: "destructive", title: "Card details required", description: "Please complete all credit card fields." });
+      return;
     }
 
     setLoading(true);
@@ -371,87 +374,63 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId,
                 </div>
               </div>
 
-              {/* Gateway Selector */}
+              {/* Gateway — Razorpay only */}
               <div className="space-y-2">
-                <Label className="text-stone-900 font-extrabold">Choose Payout Gateways</Label>
-                <div className="grid grid-cols-4 gap-2">
-                  {(["stripe", "razorpay", "paypal", "adyen"] as const).map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setGateway(g)}
-                      className={`py-3 px-1 rounded-xl border text-center font-bold text-xs uppercase transition-all duration-200 ${gateway === g ? "border-[#FF6B00] bg-[#FF6B00]/10 text-[#FF6B00] shadow-sm" : "border-slate-200 hover:border-slate-400 bg-white"}`}
-                    >
-                      {g}
-                    </button>
-                  ))}
+                <Label className="text-stone-900 font-extrabold">Payment Gateway</Label>
+                <div className="py-3 px-4 rounded-xl border border-[#FF6B00] bg-[#FF6B00]/10 text-[#FF6B00] font-black text-sm uppercase text-center tracking-wider">
+                  Razorpay
                 </div>
               </div>
 
-              {/* Gateway Simulator Panel */}
+              {/* Razorpay Card Form */}
               <div className="border border-slate-200 rounded-xl bg-slate-50/60 p-4">
                 <h4 className="text-xs font-black uppercase tracking-wider text-stone-400 mb-3 flex items-center gap-1.5">
                   <CreditCard className="h-4 w-4 text-stone-500" />
-                  Simulated {gateway.toUpperCase()} Gateway
+                  Simulated Razorpay Gateway
                 </h4>
 
-                {gateway === "paypal" ? (
-                  <div className="space-y-3">
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>Cardholder Name</Label>
+                    <Input
+                      value={paymentDetails.cardholderName}
+                      onChange={(e) => setPaymentDetails(prev => ({ ...prev, cardholderName: e.target.value }))}
+                      placeholder="Johnathan Doe"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Credit Card Number</Label>
+                    <Input
+                      value={paymentDetails.cardNumber}
+                      onChange={(e) => setPaymentDetails(prev => ({ ...prev, cardNumber: e.target.value.replace(/\D/g, "").slice(0, 16) }))}
+                      placeholder="4111 2222 3333 4444"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <Label>PayPal Email Account</Label>
+                      <Label>Expiration Date</Label>
                       <Input
-                        type="email"
-                        value={paymentDetails.paypalEmail}
-                        onChange={(e) => setPaymentDetails(prev => ({ ...prev, paypalEmail: e.target.value }))}
-                        placeholder="your-paypal@example.com"
+                        value={paymentDetails.expiryDate}
+                        onChange={(e) => setPaymentDetails(prev => ({ ...prev, expiryDate: e.target.value }))}
+                        placeholder="MM/YY"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>CVV / CVC</Label>
+                      <Input
+                        value={paymentDetails.cvv}
+                        type="password"
+                        maxLength={3}
+                        onChange={(e) => setPaymentDetails(prev => ({ ...prev, cvv: e.target.value.replace(/\D/g, "") }))}
+                        placeholder="***"
                         required
                       />
                     </div>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <Label>Cardholder Name</Label>
-                      <Input
-                        value={paymentDetails.cardholderName}
-                        onChange={(e) => setPaymentDetails(prev => ({ ...prev, cardholderName: e.target.value }))}
-                        placeholder="Johnathan Doe"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Credit Card Number</Label>
-                      <Input
-                        value={paymentDetails.cardNumber}
-                        onChange={(e) => setPaymentDetails(prev => ({ ...prev, cardNumber: e.target.value.replace(/\D/g, "").slice(0, 16) }))}
-                        placeholder="4111 2222 3333 4444"
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label>Expiration Date</Label>
-                        <Input
-                          value={paymentDetails.expiryDate}
-                          onChange={(e) => setPaymentDetails(prev => ({ ...prev, expiryDate: e.target.value }))}
-                          placeholder="MM/YY"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>CVV / CVC</Label>
-                        <Input
-                          value={paymentDetails.cvv}
-                          type="password"
-                          maxLength={3}
-                          onChange={(e) => setPaymentDetails(prev => ({ ...prev, cvv: e.target.value.replace(/\D/g, "") }))}
-                          placeholder="***"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
+                </div>
 
                 <div className="mt-4 border-t border-slate-200/80 pt-3 flex items-center justify-between text-xs text-stone-600 font-semibold">
                   <span>Authorized Hold Amount:</span>

@@ -14,6 +14,7 @@ import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, with
 import { getArtistArtForms } from "@/constants/artistSystem";
 import { getYoutubeVideoId } from "@/lib/youtube";
 import { updateUnifiedArtistProfile } from "@/services/UnifiedProfileService";
+import { compressImageUpload } from "@/utils/imageCompression";
 import {
     DateOfBirthSelect,
     INDIAN_BANK_OPTIONS,
@@ -35,6 +36,7 @@ import {
     Building2,
     Phone,
 } from "lucide-react";
+import { NavigationBlocker } from "@/components/NavigationBlocker";
 
 const BIO_MAX_LENGTH = 1000;
 
@@ -42,6 +44,7 @@ export default function ArtistEditProfile() {
     const { artistData, refreshArtistData } = useAuth();
     const [loading, setLoading] = useState(false);
     const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
+    const [isDirty, setIsDirty] = useState(false);
 
     // Form state - pre-filled from existing data
     const [formData, setFormData] = useState({
@@ -137,11 +140,19 @@ export default function ArtistEditProfile() {
     }, [artistData]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setIsDirty(true);
         const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+        if (name === "ifscCode") {
+            setFormData((prev) => ({ ...prev, ifscCode: value.toUpperCase().slice(0, 11) }));
+        } else if (name === "accountNumber") {
+            setFormData((prev) => ({ ...prev, accountNumber: value.replace(/[^\d]/g, "").slice(0, 18) }));
+        } else {
+            setFormData((prev) => ({ ...prev, [name]: value }));
+        }
     };
 
     const handleSelectChange = (name: string, value: string) => {
+        setIsDirty(true);
         if (name === "languageSpoken") {
             setFormData((prev) => {
                 const languages = prev.languageSpoken.includes(value)
@@ -156,7 +167,8 @@ export default function ArtistEditProfile() {
 
     // Upload a file to Firebase Storage
     const uploadFile = async (file: File, path: string) => {
-        return uploadImageFile(file, path);
+        const compressedFile = await compressImageUpload(file);
+        return uploadImageFile(compressedFile, path);
     };
 
     // Handle profile/cover photo change
@@ -274,9 +286,10 @@ export default function ArtistEditProfile() {
     };
 
     // Social links
-    const addSocialLink = () => setSocialLinks([...socialLinks, { platform: "youtube", url: "" }]);
-    const removeSocialLink = (index: number) => setSocialLinks(socialLinks.filter((_, i) => i !== index));
+    const addSocialLink = () => { setIsDirty(true); setSocialLinks([...socialLinks, { platform: "youtube", url: "" }]); };
+    const removeSocialLink = (index: number) => { setIsDirty(true); setSocialLinks(socialLinks.filter((_, i) => i !== index)); };
     const updateSocialLink = (index: number, field: string, value: string) => {
+        setIsDirty(true);
         const newLinks = [...socialLinks];
         newLinks[index] = { ...newLinks[index], platform: "youtube", [field]: value };
         setSocialLinks(newLinks);
@@ -291,6 +304,29 @@ export default function ArtistEditProfile() {
             return;
         }
         const validYoutubeLinks = getValidYoutubeLinks();
+
+        // Bank details validation
+        const ifscPattern = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+        if (formData.ifscCode && !ifscPattern.test(formData.ifscCode)) {
+            toast({
+                variant: "destructive",
+                title: "Invalid IFSC Code",
+                description: "IFSC code must strictly match the Indian IFSC format (e.g. SBIN0012345).",
+            });
+            return;
+        }
+
+        if (formData.accountNumber) {
+            const accLength = formData.accountNumber.length;
+            if (accLength < 9 || accLength > 18 || !/^\d+$/.test(formData.accountNumber)) {
+                toast({
+                    variant: "destructive",
+                    title: "Invalid Account Number",
+                    description: "Account number must be between 9 and 18 digits.",
+                });
+                return;
+            }
+        }
 
         setLoading(true);
         try {
@@ -335,6 +371,7 @@ export default function ArtistEditProfile() {
                 "Could not save profile changes."
             );
             await refreshArtistData();
+            setIsDirty(false);
             toast({ title: "Profile updated", description: "Your changes have been saved." });
         } catch (error: any) {
             logFirebaseError(error);
@@ -349,6 +386,7 @@ export default function ArtistEditProfile() {
 
     return (
         <div className="space-y-6 max-w-3xl">
+            <NavigationBlocker isDirty={isDirty} />
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                 <h1 className="font-display text-2xl font-bold mb-1">Edit Your Profile</h1>
                 <p className="text-sm text-muted-foreground">Update your information to attract more bookings</p>
@@ -676,12 +714,31 @@ export default function ArtistEditProfile() {
                             </div>
                             <div>
                                 <Label>IFSC Code</Label>
-                                <Input name="ifscCode" value={formData.ifscCode} onChange={handleChange} placeholder="SBIN00XXXXX" />
+                                <Input
+                                    name="ifscCode"
+                                    value={formData.ifscCode}
+                                    onChange={handleChange}
+                                    placeholder="SBIN00XXXXX"
+                                    maxLength={11}
+                                />
                             </div>
                         </div>
                         <div>
                             <Label>Account Number</Label>
-                            <Input name="accountNumber" value={formData.accountNumber} onChange={handleChange} placeholder="Enter account number" />
+                            <Input
+                                name="accountNumber"
+                                type="text"
+                                inputMode="numeric"
+                                value={formData.accountNumber}
+                                onChange={handleChange}
+                                onKeyPress={(event) => {
+                                    if (!/[0-9]/.test(event.key)) {
+                                        event.preventDefault();
+                                    }
+                                }}
+                                placeholder="Enter account number"
+                                maxLength={18}
+                            />
                         </div>
                     </CardContent>
                 </Card>

@@ -39,23 +39,32 @@ import { getArtistCategory, getArtistSubCategory, getParentCategoryForSubCategor
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
 import { getFallbackImageForArt, getFallbackImagesForArt, getUsableImageUrl } from "@/utils/fallbackImages";
+import { getLocalizedBio } from "@/utils/bioLocalizer";
+
+function getLocalizedLocation(locationStr: string, t: (k: string) => string): string {
+  if (!locationStr) return "";
+  const parts = locationStr.split(",").map((p) => p.trim());
+  const localizedParts = parts.map((part) => {
+    const key = `location.${part.toLowerCase()}`;
+    const trans = t(key);
+    return trans !== key ? trans : part;
+  });
+  return localizedParts.join(", ");
+}
+
+function getLocalizedLanguages(languagesList: string[], t: any): string {
+  if (!languagesList || !languagesList.length) return t("artist.priceOnRequest");
+  return languagesList
+    .map((lang) => {
+      const key = `language.${lang.trim().toLowerCase()}`;
+      const trans = t(key);
+      return trans !== key ? trans : lang;
+    })
+    .join(", ");
+}
 import { getUserArtistRating, submitArtistRating } from "@/services/ratingService";
 import { getArtistRatingSummary, hasRatings } from "@/services/ratingUtils";
-import {
-  addMonths,
-  eachDayOfInterval,
-  endOfMonth,
-  format,
-  getDay,
-  isToday,
-  startOfMonth,
-  subMonths,
-} from "date-fns";
-import {
-  subscribeArtistBookings,
-  subscribeArtistAvailability,
-} from "@/services/artistBookingService";
-import type { BookingEvent, ArtistAvailabilityBlock, BookingStatus } from "@/types/booking";
+import ArtistNotFound from "@/pages/ArtistNotFound";
 
 function compactLocation(artist: Record<string, any>) {
   return [artist.district || artist.city, artist.state].filter(Boolean).join(", ") || artist.location || "Maharashtra";
@@ -88,9 +97,9 @@ function getNumberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatPrice(value: unknown) {
+function formatPrice(value: unknown, t: any) {
   const amount = getNumberValue(value);
-  return amount > 0 ? `Rs ${amount.toLocaleString("en-IN")}` : "On request";
+  return amount > 0 ? `₹ ${amount.toLocaleString("en-IN")}` : t("artist.priceOnRequest");
 }
 
 function isPricingVisible(value: unknown) {
@@ -216,12 +225,12 @@ function getLanguageList(artist: Record<string, any>) {
   return Array.from(new Set(raw.map((value: unknown) => String(value || "").trim()).filter(Boolean)));
 }
 
-function getTravelLabel(value: unknown) {
+function getTravelLabel(value: unknown, t: any) {
   const normalized = String(value || "").toLowerCase();
-  if (normalized === "local") return "Local Only";
-  if (normalized === "state") return "Within State";
-  if (normalized === "all") return "All India";
-  return String(value || "On request");
+  if (normalized === "local") return t("register.travel.local");
+  if (normalized === "state") return t("register.travel.state");
+  if (normalized === "all") return t("register.travel.all");
+  return String(value || t("artist.priceOnRequest"));
 }
 
 function getForcedMappedImage(...categories: unknown[]) {
@@ -351,35 +360,10 @@ export default function ArtistProfile() {
 
   // Determine privilege level for the current user
   const isPrivileged = Boolean(
-    currentUser && (currentUser.uid === id || currentUser.role === "admin" || currentUser.email === "admin@mykalakar.com")
+    currentUser && (currentUser.uid === id || (currentUser as any).role === "admin" || currentUser.email === "admin@mykalakar.com")
   );
 
-  // New Phase 1 states
-  const [artistBookings, setArtistBookings] = useState<BookingEvent[]>([]);
-  const [artistAvailability, setArtistAvailability] = useState<ArtistAvailabilityBlock[]>([]);
-  const [preselectedDate, setPreselectedDate] = useState<string>("");
-  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(new Date()));
 
-  // Subscriptions to bookings and availability blocks
-  useEffect(() => {
-    if (!id || id.startsWith("demo-")) return;
-
-    let unsubBookings: (() => void) | undefined;
-    if (isPrivileged) {
-      unsubBookings = subscribeArtistBookings(id, (data) => {
-        setArtistBookings(data);
-      });
-    }
-
-    const unsubAvailability = subscribeArtistAvailability(id, (data) => {
-      setArtistAvailability(data);
-    });
-
-    return () => {
-      if (unsubBookings) unsubBookings();
-      unsubAvailability();
-    };
-  }, [id, currentUser]);
 
   useEffect(() => {
     let mounted = true;
@@ -491,7 +475,7 @@ export default function ArtistProfile() {
   const profileCategories = artist ? getProfileCategories(artist) : [];
 
   const pricingRangeLabel = useMemo(() => {
-    if (!profileCategories || profileCategories.length === 0) return "On Request";
+    if (!profileCategories || profileCategories.length === 0) return t("artist.priceOnRequest");
     const prices = profileCategories
       .flatMap((entry: any) => [
         entry.soloPerformancePrice,
@@ -500,13 +484,13 @@ export default function ArtistProfile() {
       ])
       .map(Number)
       .filter((p) => p > 0);
-    if (prices.length === 0) return "On Request";
+    if (prices.length === 0) return t("artist.priceOnRequest");
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
     return minPrice === maxPrice
-      ? `Rs ${minPrice.toLocaleString("en-IN")}`
-      : `Rs ${minPrice.toLocaleString("en-IN")} - Rs ${maxPrice.toLocaleString("en-IN")}`;
-  }, [profileCategories]);
+      ? `₹ ${minPrice.toLocaleString("en-IN")}`
+      : `₹ ${minPrice.toLocaleString("en-IN")} - ₹ ${maxPrice.toLocaleString("en-IN")}`;
+  }, [profileCategories, t]);
 
   const coverageAreas = useMemo(() => {
     if (!artist) return "Mumbai, Pune, Thane, Navi Mumbai, Nagpur, Nashik";
@@ -642,18 +626,7 @@ export default function ArtistProfile() {
   }
 
   if (!artist) {
-    return (
-      <div className="profile-page min-h-screen bg-[#FAFAFA]">
-        <Navbar />
-        <main className="page-shell container-shell flex min-h-[70vh] flex-col items-center justify-center text-center">
-          <h1 className="text-2xl font-extrabold text-stone-950">{t("artist.notFoundTitle")}</h1> {/* ADDED FOR i18n */}
-          <p className="mt-2 max-w-sm text-sm font-semibold leading-6 text-stone-500">{t("artist.notFoundText")}</p> {/* ADDED FOR i18n */}
-          <Link to="/artists" className="mt-5 inline-flex h-10 items-center rounded-full bg-stone-950 px-5 text-xs font-extrabold text-white">
-            {t("artist.backToArtists")} {/* ADDED FOR i18n */}
-          </Link>
-        </main>
-      </div>
-    );
+    return <ArtistNotFound />;
   }
 
   const primaryCategory = profileCategories[0];
@@ -662,7 +635,7 @@ export default function ArtistProfile() {
   const category = primaryCategory?.mainCategory || getArtistCategory(artist) || "Artist";
   const artType = primaryCategory?.artForm || getArtistSubCategory(artist) || artForms[0] || category;
   const artTypeLabel = getArtLabel(t, artType); // ADDED FOR i18n
-  const location = compactLocation(artist);
+  const location = getLocalizedLocation(compactLocation(artist), t);
   const profileAvatarImage = getProfileImageUrl(artist);
   const customHeroImage = getCoverImageUrl(artist);
   const fallbackHeroImage = getFallbackImageForArt(
@@ -731,9 +704,9 @@ export default function ArtistProfile() {
       : currentUser
         ? t("artist.selectRating")
         : t("artist.loginToRate"); // ADDED FOR i18n
-  const bio = artist.bio || artist.description || artist.artistProfile?.bio || t("artist.defaultBioWithLocation", { artType: artTypeLabel, location }); // ADDED FOR i18n
+  const bio = getLocalizedBio(artist.bio || artist.description || artist.artistProfile?.bio || "", artType, location, t);
   const languages = getLanguageList(artist);
-  const travelWillingness = getTravelLabel(artist.travelWillingness);
+  const travelWillingness = getTravelLabel(artist.travelWillingness, t);
   
   const pageTitle = `MyKalakar | ${artistName}`;
 
@@ -911,7 +884,7 @@ export default function ArtistProfile() {
               <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
                 <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
                   <Sparkles className="h-4 w-4 text-orange-500" />
-                  Art Categories
+                  {t("artist.artCategories")}
                 </h2>
                 <div className="mt-4 grid gap-3">
                   {profileCategories.map((entry) => (
@@ -935,7 +908,7 @@ export default function ArtistProfile() {
                                 <IndianRupee className="h-3.5 w-3.5 text-orange-500" />
                                 {label}
                               </span>
-                              <p className="mt-1 text-sm text-stone-950">{formatPrice(value)}</p>
+                              <p className="mt-1 text-sm text-stone-950">{formatPrice(value, t)}</p>
                             </div>
                           ))}
                         </div>
@@ -1038,12 +1011,6 @@ export default function ArtistProfile() {
               <ArtistCalendar 
                 artistId={String(artist.uid || artist.userId || artist.id)}
                 currentUser={currentUser}
-                bookings={artistBookings}
-                availability={artistAvailability}
-                onBookingSelect={(booking) => {
-                  console.log("Selected booking:", booking);
-                  // Optional: open a modal to show booking details here if privileged
-                }}
               />
             </section>
           </div>
@@ -1139,14 +1106,14 @@ export default function ArtistProfile() {
             )}
 
             <div className="profile-side-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-              <h2 className="profile-section-title text-sm font-extrabold text-gray-900">Profile Details</h2>
+              <h2 className="profile-section-title text-sm font-extrabold text-gray-900">{t("artist.profileDetails")}</h2>
               <div className="mt-3 space-y-3">
                 <div className="rounded-xl bg-stone-50 p-3">
-                  <p className="text-[10px] font-extrabold uppercase tracking-wide text-stone-400">Languages</p>
-                  <p className="mt-1 text-sm font-extrabold text-stone-950">{languages.length ? languages.join(", ") : "On request"}</p>
+                  <p className="text-[10px] font-extrabold uppercase tracking-wide text-stone-400">{t("artist.languages")}</p>
+                  <p className="mt-1 text-sm font-extrabold text-stone-950">{languages.length ? getLocalizedLanguages(languages, t) : t("artist.priceOnRequest")}</p>
                 </div>
                 <div className="rounded-xl bg-stone-50 p-3">
-                  <p className="text-[10px] font-extrabold uppercase tracking-wide text-stone-400">Travel</p>
+                  <p className="text-[10px] font-extrabold uppercase tracking-wide text-stone-400">{t("artist.travel")}</p>
                   <p className="mt-1 text-sm font-extrabold text-stone-950">{travelWillingness}</p>
                 </div>
               </div>
@@ -1160,11 +1127,11 @@ export default function ArtistProfile() {
                 </div>
                 <div>
                   <p className="text-sm font-extrabold text-stone-950">{location}</p>
-                  <p className="text-xs font-semibold text-stone-500">Available across coverage areas</p>
+                  <p className="text-xs font-semibold text-stone-500">{t("artist.availableAcrossCoverage")}</p>
                 </div>
               </div>
               <div className="mt-3">
-                <p className="text-[10px] font-extrabold uppercase tracking-wide text-stone-400 mb-1">Coverage Areas</p>
+                <p className="text-[10px] font-extrabold uppercase tracking-wide text-stone-400 mb-1">{t("artist.coverageAreas")}</p>
                 <div className="flex flex-wrap gap-1">
                   {coverageAreas.split(",").map((area) => (
                     <span key={area} className="text-[10px] font-bold bg-stone-100 px-2.5 py-1 rounded-full text-stone-600">
@@ -1185,7 +1152,6 @@ export default function ArtistProfile() {
         onOpenChange={setBookingOpen}
         artistName={artistName}
         artistId={String(artist.uid || artist.userId || artist.id)}
-        preselectedDate={preselectedDate}
       />
       <AdminEditArtistModal
         artist={artist}

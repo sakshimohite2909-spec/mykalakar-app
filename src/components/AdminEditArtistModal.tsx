@@ -4,6 +4,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { clearDataCache } from "@/services/dataService";
 
 interface AdminEditArtistModalProps {
   artist: Record<string, any>;
@@ -56,6 +57,7 @@ export function AdminEditArtistModal({ artist, isOpen, onClose, onSaveSuccess }:
       };
 
       await updateDoc(doc(db, "artists", artist.id), updatedPayload);
+      clearDataCache();
 
       toast({
         title: "Profile Updated",

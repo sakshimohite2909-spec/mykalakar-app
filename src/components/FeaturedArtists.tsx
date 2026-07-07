@@ -1,12 +1,25 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, BadgeCheck, ChevronLeft, ChevronRight, Heart, MapPin, Star } from "lucide-react";
+import { ArrowRight, BadgeCheck, ChevronLeft, ChevronRight, Heart, MapPin, Sparkles, Star } from "lucide-react";
 import { getCategoryGroupForArtistType } from "@/constants/artistSystem";
 import { getActiveArtists } from "@/services/dataService";
 import { SmartImage } from "@/components/SmartImage";
 import { buildArtistCards, type ArtistCardViewModel } from "@/services/marketplaceCards";
 import { useI18n } from "@/i18n/I18nProvider";
+import { cn } from "@/lib/utils";
+import { getLocalizedBio } from "@/utils/bioLocalizer";
+
+function getLocalizedLocation(locationStr: string, t: (k: string) => string): string {
+  if (!locationStr) return "";
+  const parts = locationStr.split(",").map((p) => p.trim());
+  const localizedParts = parts.map((part) => {
+    const key = `location.${part.toLowerCase()}`;
+    const trans = t(key);
+    return trans !== key ? trans : part;
+  });
+  return localizedParts.join(", ");
+}
 
 interface ArtistCardProps {
   artist: ArtistCardViewModel;
@@ -18,6 +31,17 @@ export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
   const artType = artist.subCategory || "Artist";
   const categoryGroup = getCategoryGroupForArtistType(artType) || artist.category || "Default";
   const ratingLabel = artist.reviews > 0 ? `${artist.rating.toFixed(1)} (${formatNumber(artist.reviews)} ${t("artist.ratings")})` : t("artist.noRatingsYet"); // ADDED FOR i18n
+  const isPremium = artist.artist?.isPremium === true || artist.artist?.voucherType === "premium" || (artist.artist?.artistProfile as any)?.isPremium === true;
+
+  const displayPrice = (() => {
+    const priceStr = String(artist.priceRange || "");
+    if (priceStr.toLowerCase().includes("on request")) {
+      return t("artist.priceOnRequest");
+    }
+    return priceStr.replace(/^Rs\s?/i, "₹ ");
+  })();
+
+  const localizedLocation = getLocalizedLocation(artist.location, t);
 
   return (
     <motion.div
@@ -27,7 +51,10 @@ export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
       className="relative min-w-[320px] snap-center py-6"
     >
       <Link to={`/artist/${artist.artistId}`} className="block h-full">
-        <div className="group flex h-full flex-col overflow-hidden rounded-[20px] border border-stone-100 bg-white shadow-[0_18px_50px_rgba(28,25,23,0.08)] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_28px_70px_rgba(28,25,23,0.14)]">
+        <div className={cn(
+          "group flex h-full flex-col overflow-hidden rounded-[20px] border bg-white shadow-[0_18px_50px_rgba(28,25,23,0.08)] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_28px_70px_rgba(28,25,23,0.14)]",
+          isPremium ? "border-amber-400/80 bg-gradient-to-br from-white to-amber-50/15" : "border-stone-100"
+        )}>
           <div className="relative h-48 overflow-hidden">
             <SmartImage
               src={artist.image}
@@ -40,6 +67,12 @@ export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
               sizes="(max-width: 768px) 320px, 360px"
               containerClassName="h-full w-full transition-transform duration-700 group-hover:scale-[1.03]"
             />
+            {isPremium && (
+              <div className="absolute left-4 top-4 z-10 flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white shadow-md">
+                <Sparkles className="h-3 w-3 fill-current" />
+                Premium
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent opacity-60" />
             <div className="absolute bottom-4 left-4 flex flex-col">
               <span className="mb-1 w-fit rounded-lg border border-orange-100 bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-orange-500 backdrop-blur-md">
@@ -61,28 +94,33 @@ export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
                   <h3 className="truncate text-2xl font-black leading-none tracking-tight text-stone-950 transition-colors group-hover:text-orange-600">
                     {artist.name || "Premium Artist"}
                   </h3>
-                  {artist.verified ? <BadgeCheck className="h-4 w-4 shrink-0 text-orange-500" /> : null}
+                  {artist.verified || isPremium ? (
+                    <BadgeCheck className={cn("h-4 w-4 shrink-0", isPremium ? "text-amber-500" : "text-orange-500")} />
+                  ) : null}
                 </div>
                 <p className="text-xs font-bold uppercase tracking-widest text-stone-400">{artType}</p>
               </div>
               <div className="flex items-center gap-1.5 rounded-sm bg-stone-50 px-2 py-1 text-xs font-black text-stone-400">
                 <MapPin className="h-3.5 w-3.5 text-orange-600" />
-                {artist.location.split(",")[0] || "MH"}
+                {localizedLocation.split(",")[0] || "MH"}
               </div>
             </div>
 
             <p className="line-clamp-3 flex-1 text-sm font-medium leading-relaxed text-stone-500">
-              {artist.artist.bio || `Professional ${artType} from ${artist.location}, ready for premium events.`}
+              {getLocalizedBio(artist.artist.bio || artist.artist.artistProfile?.bio || "", artType, localizedLocation, t)}
             </p>
 
             <div className="mt-auto flex items-center justify-between border-t border-stone-100 pt-6">
               <div className="flex flex-col">
-                <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Event Booking</span>
-                <span className="text-2xl font-black text-stone-950">
-                  {artist.priceRange}
+                <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">{t("artist.eventBookings")}</span>
+                <span className={cn("text-2xl font-black", isPremium ? "text-amber-600" : "text-stone-950")}>
+                  {displayPrice}
                 </span>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-950 shadow-lg transition-all group-hover:-translate-y-1 group-hover:bg-orange-600">
+              <div className={cn(
+                "flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg transition-all group-hover:-translate-y-1",
+                isPremium ? "bg-amber-500 group-hover:bg-amber-600" : "bg-stone-950 group-hover:bg-orange-600"
+              )}>
                 <ArrowRight className="h-6 w-6 text-white" />
               </div>
             </div>

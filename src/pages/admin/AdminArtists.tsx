@@ -23,7 +23,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getUsableImageUrl } from "@/utils/fallbackImages";
 
 export default function AdminArtists() {
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin } = useAuth();
   const [artists, setArtists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [queryInput, setQueryInput] = useState("");
@@ -62,6 +62,7 @@ export default function AdminArtists() {
   }, [newArtist.state]);
 
   useEffect(() => {
+    if (!currentUser || !isAdmin) return;
     const unsub = onSnapshot(
       query(collection(db, "artists")),
       (snapshot) => {
@@ -74,7 +75,7 @@ export default function AdminArtists() {
       }
     );
     return unsub;
-  }, []);
+  }, [currentUser, isAdmin]);
 
   const filtered = artists.filter(a => {
     const q = queryInput.toLowerCase();

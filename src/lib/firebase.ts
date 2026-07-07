@@ -1,8 +1,8 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { browserLocalPersistence, getAuth, setPersistence } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,9 +20,27 @@ Object.entries(firebaseConfig).forEach(([key, value]) => {
   }
 });
 
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+let app;
+try {
+  if (!firebaseConfig.apiKey) {
+    throw new Error("Missing FIREBASE_API_KEY. Environment variables failed to bind.");
+  }
+  app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+} catch (error) {
+  console.error("🔥 FATAL FIREBASE INIT ERROR:", error);
+  // Provide a dummy app to prevent the entire React tree from violently crashing
+  app = initializeApp({ apiKey: "dummy", projectId: "dummy", appId: "dummy" }, "dummy-app");
+}
+// Initialize App Check with reCAPTCHA v3 for bot mitigation
+const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_V3_SITE_KEY;
+const appCheck =
+  typeof window !== "undefined" && recaptchaSiteKey
+    ? initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+        isTokenAutoRefreshEnabled: true,
+      })
+    : null;
 
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const analytics =
   typeof window !== "undefined" && firebaseConfig.measurementId ? getAnalytics(app) : null;
 const auth = getAuth(app);
@@ -30,13 +48,13 @@ void setPersistence(auth, browserLocalPersistence).catch((error) => {
   console.warn("Firebase auth persistence warning:", error);
 });
 
-// Use initializeFirestore with long polling to bypass aggressive adblockers (ERR_BLOCKED_BY_CLIENT)
-// and enable local cache for offline/fallback capabilities
+import { initializeFirestore, memoryLocalCache } from "firebase/firestore";
+
+// Disable local persistence temporarily to force a fresh network request and bypass corrupted caches
 const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-  experimentalForceLongPolling: true,
+  localCache: memoryLocalCache(),
 });
 
 const storage = getStorage(app);
 
-export { app, analytics, auth, db, storage };
+export { app, analytics, auth, db, storage, appCheck };

@@ -65,7 +65,7 @@ export default function EventRequirements() {
         let hasMore = true;
 
         while (hasMore) {
-          const page = await getActiveArtistsPage(50, cursor || undefined);
+          const page = await getActiveArtistsPage(250, cursor || undefined);
           items.push(...(page.items as Record<string, unknown>[]));
           cursor = page.nextCursor;
           hasMore = page.hasMore && Boolean(cursor);

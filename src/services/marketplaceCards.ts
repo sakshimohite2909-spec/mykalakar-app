@@ -37,7 +37,7 @@ export type ArtistCardViewModel = {
   bio: string;
   tags: string[];
   eventTypes: string[];
-  artist: Record<string, unknown>;
+  artist: any;
 };
 
 function normalize(value: unknown) {
@@ -76,7 +76,7 @@ function isUploadedMedia(url: string) {
   return /^https?:\/\//i.test(url) && !isGenericAvatar(url);
 }
 
-function getUploadedImages(artist: Record<string, unknown>) {
+function getUploadedImages(artist: any) {
   const profileImage = artist.profileImage?.thumbnail || artist.profileImage?.url || artist.artistProfile?.profileImage || artist.media?.profilePhoto || artist.profilePhoto || "";
   const coverImage = artist.coverImage?.thumbnail || artist.coverImage?.url || artist.media?.coverPhoto || artist.coverPhoto || "";
   const gallery = Array.isArray(artist.gallery)
@@ -91,13 +91,13 @@ function getUploadedImages(artist: Record<string, unknown>) {
   return compactUnique([coverImage, profileImage, ...gallery, ...galleryPhotos]).filter(isUploadedMedia);
 }
 
-function getPriceRange(artist: Record<string, unknown>, service: Record<string, unknown>) {
+function getPriceRange(artist: any, service: any) {
   if (service.priceRange) return normalize(service.priceRange);
   const price = Number(service.soloPrice || service.teamPrice || service.price || artist.soloPrice || artist.startingPrice || 0);
   return price > 0 ? `Rs ${price.toLocaleString("en-IN")}+` : "On request";
 }
 
-export function getArtistServices(artist: Record<string, unknown>): ArtistService[] {
+export function getArtistServices(artist: any): ArtistService[] {
   const rawServices = Array.isArray(artist.services) ? artist.services : [];
   const rawArts = Array.isArray(artist.artsList) ? artist.artsList : [];
   const rawCategories = Array.isArray(artist.categories) ? artist.categories : [];
@@ -140,7 +140,7 @@ export function getArtistServices(artist: Record<string, unknown>): ArtistServic
     .filter(Boolean) as ArtistService[];
 }
 
-export function buildArtistCards(artists: Record<string, unknown>[], maxCards?: number): ArtistCardViewModel[] {
+export function buildArtistCards(artists: any[], maxCards?: number): ArtistCardViewModel[] {
   const cards: ArtistCardViewModel[] = [];
 
   artists.forEach((artist, artistIndex) => {
@@ -188,6 +188,15 @@ export function buildArtistCards(artists: Record<string, unknown>[], maxCards?: 
         artist,
       });
     });
+  });
+
+  // Sort premium voucher artists to the top
+  cards.sort((a, b) => {
+    const aPremium = a.artist.isPremium === true || a.artist.voucherType === "premium" || (a.artist.artistProfile as any)?.isPremium === true;
+    const bPremium = b.artist.isPremium === true || b.artist.voucherType === "premium" || (b.artist.artistProfile as any)?.isPremium === true;
+    if (aPremium && !bPremium) return -1;
+    if (!aPremium && bPremium) return 1;
+    return 0;
   });
 
   const result = typeof maxCards === "number" ? cards.slice(0, maxCards) : cards;

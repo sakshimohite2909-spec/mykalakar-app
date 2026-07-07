@@ -29,13 +29,6 @@
       "collectionGroup": "artists",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "featuredExp", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "artists",
-      "queryScope": "COLLECTION",
-      "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
@@ -132,13 +125,6 @@
     {
       "collectionGroup": "bookings",
       "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "artistId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "bookings",
       "fields": [
         { "fieldPath": "artistId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }

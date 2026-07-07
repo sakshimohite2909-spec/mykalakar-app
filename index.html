@@ -20,6 +20,19 @@
     <meta name="twitter:description" content="Discover and book verified artists for weddings, corporate events & more on MyKalakar." />
     <meta name="twitter:image" content="/mykalakar-logo.png" />
 
+    <!-- ── Non-Blocking Font Delivery ─────────────────────────────────── -->
+    <!-- Step 1: DNS prefetch + preconnect to eliminate connection overhead -->
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Step 2: Non-blocking stylesheet with display=swap prevents render-blocking -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Poppins:wght@600;700;800;900&family=Noto+Sans+Devanagari:wght@400;500;600;700;800&display=swap"
+    />
+    <!-- ──────────────────────────────────────────────────────────────── -->
+
     <link rel="preload" as="image" href="https://images.pexels.com/photos/28493510/pexels-photo-28493510.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1440&amp;h=900&amp;fit=crop&amp;dpr=1" />
     <link rel="preload" as="image" href="https://images.pexels.com/photos/33753145/pexels-photo-33753145.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1440&amp;h=900&amp;fit=crop&amp;dpr=1" />
     <link rel="preload" as="image" href="https://images.pexels.com/photos/31853515/pexels-photo-31853515.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1280&amp;h=720&amp;fit=crop&amp;dpr=1" />
@@ -28,6 +41,13 @@
   </head>
 
   <body>
+    <script>
+      if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

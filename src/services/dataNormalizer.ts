@@ -12,6 +12,8 @@
  *  - Any missing required field triggers a console.warn (never a crash).
  */
 
+import { getCategoryGroupForArtistType } from "../constants/artistSystem";
+
 // ─── TYPO CORRECTION MAP ────────────────────────────────────────────────────
 // Add any known data-entry errors here. These are corrected globally at render.
 const TYPO_MAP: Record<string, string> = {
@@ -91,11 +93,15 @@ export function normalizeCategory(value: unknown): string {
  * This is the SINGLE SOURCE OF TRUTH for subcategory across the entire UI.
  */
 export function resolveSubCategory(data: Record<string, unknown>): string {
+  const firstCategory = Array.isArray(data.categories) && data.categories.length > 0 ? data.categories[0] : "";
   const raw =
     data.artType ||
     data.subCategory ||
     data.subcategory ||
     data.primaryArtForm ||
+    firstCategory ||
+    data.performanceType ||
+    data.type ||
     data.category ||
     "";
   return correctTypo(toSafeString(raw));
@@ -107,12 +113,23 @@ export function resolveSubCategory(data: Record<string, unknown>): string {
  * This is the SINGLE SOURCE OF TRUTH for category across the entire UI.
  */
 export function resolveCategory(data: Record<string, unknown>): string {
-  const raw =
+  let raw =
     data.primaryCategory ||
     data.mainCategory ||
     data.categoryGroup ||
     data.category ||
     "";
+
+  if (!raw) {
+    const sub = resolveSubCategory(data);
+    if (sub) {
+      const group = getCategoryGroupForArtistType(sub);
+      if (group) {
+        raw = group;
+      }
+    }
+  }
+
   return normalizeCategory(raw);
 }
 

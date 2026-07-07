@@ -1,5 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
+import enMessages from "@/locales/en/common.json";
+import mrMessages from "@/locales/mr/common.json";
+import hiMessages from "@/locales/hi/common.json";
+
 export type Language = "en" | "mr" | "hi";
 export type Locale = "en-IN" | "mr-IN" | "hi-IN"; // ADDED FOR i18n
 
@@ -30,10 +34,10 @@ export const LANGUAGE_OPTIONS: LanguageOption[] = [
   { code: "hi", label: "हिंदी" },
 ];
 
-const localeLoaders: Record<Language, () => Promise<{ default: Messages }>> = {
-  en: () => import("@/locales/en/common.json"),
-  mr: () => import("@/locales/mr/common.json"),
-  hi: () => import("@/locales/hi/common.json"),
+const allMessages: Record<Language, Messages> = {
+  en: enMessages as unknown as Messages,
+  mr: mrMessages as unknown as Messages,
+  hi: hiMessages as unknown as Messages,
 };
 
 export function languageToLocale(language: Language): Locale { // ADDED FOR i18n
@@ -89,9 +93,6 @@ function interpolate(text: string, options?: TranslateOptions) {
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>(() => detectLanguage());
-  const [messages, setMessages] = useState<Messages>({});
-  const [fallbackMessages, setFallbackMessages] = useState<Messages>({});
-  const [isLoading, setIsLoading] = useState(true);
   const locale = languageToLocale(language); // ADDED FOR i18n
 
   useEffect(() => { // ADDED FOR i18n
@@ -100,29 +101,13 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.dataset.language = language;
   }, [language, locale]);
 
-  useEffect(() => {
-    let mounted = true;
-    setIsLoading(true);
-
-    Promise.all([localeLoaders.en(), localeLoaders[language]()])
-      .then(([english, selected]) => {
-        if (!mounted) return;
-        setFallbackMessages(english.default);
-        setMessages(selected.default);
-      })
-      .finally(() => {
-        if (mounted) setIsLoading(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [language]);
-
   const setLanguage = useCallback((nextLanguage: Language) => {
     persistLanguage(nextLanguage); // ADDED FOR i18n
     setLanguageState(nextLanguage);
   }, []);
+
+  const messages = allMessages[language];
+  const fallbackMessages = allMessages.en;
 
   const t = useCallback(
     (key: string, options?: TranslateOptions) => {
@@ -155,9 +140,9 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       t,
       formatNumber,
       formatCurrency,
-      isLoading,
+      isLoading: false,
     }),
-    [formatCurrency, formatNumber, isLoading, language, setLanguage, t],
+    [formatCurrency, formatNumber, language, setLanguage, t],
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

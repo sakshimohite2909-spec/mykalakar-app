@@ -7,12 +7,17 @@
  *   4. ★ NEW: Seed categories + states + master_data collections
  */
 import { useState } from "react";
-import { db } from "@/lib/firebase";
+import { useNavigate } from "react-router-dom";
+import { db, auth } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   collection, getDocs, query, where, doc, getDoc,
   setDoc, writeBatch, serverTimestamp,
 } from "firebase/firestore";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, ShieldCheck, CheckCircle2, AlertCircle, Database } from "lucide-react";
@@ -24,13 +29,101 @@ interface Log { type: "ok" | "warn" | "err"; msg: string }
 
 export default function AdminBootstrap() {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const [running, setRunning]   = useState(false);
   const [seeding, setSeeding]   = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(false);
+  const [bootstrapStatus, setBootstrapStatus] = useState("");
   const [logs,    setLogs]      = useState<Log[]>([]);
   const [seedLogs, setSeedLogs] = useState<string[]>([]);
 
   const addLog = (type: Log["type"], msg: string) =>
     setLogs((prev) => [...prev, { type, msg }]);
+
+  const handleBootstrap = async () => {
+    const rawUsername = import.meta.env.VITE_SEED_ADMIN_USERNAME || 'vortex';
+    const normalizedUsername = rawUsername.trim().toLowerCase();
+    const adminPassword = (import.meta.env.VITE_SEED_ADMIN_PASSWORD || '').trim();
+
+    if (!normalizedUsername || !adminPassword) {
+      setBootstrapStatus("Missing VITE_SEED_ADMIN_USERNAME or VITE_SEED_ADMIN_PASSWORD in .env");
+      toast({
+        variant: "destructive",
+        title: "Configuration Error",
+        description: "VITE_SEED_ADMIN_USERNAME and VITE_SEED_ADMIN_PASSWORD must be set in your .env file.",
+      });
+      return;
+    }
+
+    // Transparent masking: derive Firebase Auth email from username
+    const authEmail = `${normalizedUsername}@mykalakar.app`;
+
+    setBootstrapping(true);
+    setBootstrapStatus("Authenticating master admin account…");
+
+    try {
+      let uid:   string;
+      let email: string;
+
+      console.log("🛠️ [BOOTSTRAP DEBUG] Creating/Verifying Firebase User:", authEmail);
+
+      // ── Step 1: Get or create the Firebase Auth account ──────────────────
+      try {
+        const credential = await createUserWithEmailAndPassword(auth, authEmail, adminPassword);
+        uid   = credential.user.uid;
+        email = credential.user.email ?? authEmail;
+        setBootstrapStatus("Firebase Auth account created. Writing Firestore docs…");
+      } catch (createErr: any) {
+        if (createErr.code === "auth/email-already-in-use") {
+          // Account already exists — sign in to retrieve the UID
+          setBootstrapStatus("Account already exists. Signing in to retrieve UID…");
+          const credential = await signInWithEmailAndPassword(auth, authEmail, adminPassword);
+          uid   = credential.user.uid;
+          email = credential.user.email ?? authEmail;
+          setBootstrapStatus("Signed in successfully. Writing Firestore docs…");
+        } else {
+          throw createErr;
+        }
+      }
+
+      // ── Step 2: Atomic batch-write admins/{uid} + users/{uid} ───────────
+      const batch = writeBatch(db);
+
+      batch.set(doc(db, "admins", uid), {
+        uid,
+        username: normalizedUsername,
+        email: authEmail,
+        role: "admin",
+        status: "active",
+        permissions: ["all"],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      batch.set(doc(db, "users", uid), {
+        uid,
+        username: normalizedUsername,
+        email: authEmail,
+        role: "admin",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      setBootstrapStatus("✅ Admin initialization complete. Database and Auth synced.");
+      toast({
+        title: "Admin Initialized ✅",
+        description: "Both admins/ and users/ documents have been written. You may now log in.",
+      });
+    } catch (error: any) {
+      const msg = error?.message || String(error);
+      setBootstrapStatus(`Error: ${msg}`);
+      toast({ variant: "destructive", title: "Bootstrap Error", description: msg });
+    } finally {
+      setBootstrapping(false);
+    }
+  };
 
   // ── Step 1-3: Fix existing admin / artist data ──────────────────────────────
   const run = async () => {
@@ -199,6 +292,34 @@ export default function AdminBootstrap() {
           Fixes stuck admin approvals, syncs artists to the public listing, and seeds master data.
         </p>
       </div>
+
+      {/* ── Initial Admin Bootstrap ── */}
+      <Card className="border-emerald-200 bg-emerald-50/40">
+        <CardContent className="p-6 space-y-4">
+          <p className="text-sm font-medium flex items-center gap-2 text-emerald-800">
+            <ShieldCheck className="h-5 w-5" /> Initial Admin Bootstrap:
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Creates the Firebase Auth account for <code>VITE_SEED_ADMIN_USERNAME</code> (username is
+            automatically masked to <code>username@mykalakar.app</code> for Firebase), then atomically writes the <code>admin</code> document to both
+            <code>admins/</code> and <code>users/</code> in Firestore.
+          </p>
+          <Button
+            onClick={handleBootstrap}
+            disabled={running || seeding || bootstrapping}
+            className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+          >
+            {bootstrapping
+              ? <><Loader2 className="h-5 w-5 animate-spin mr-2" />Initialising...</>
+              : "Initialize Admin Account"}
+          </Button>
+          {bootstrapStatus && (
+            <p className="text-xs font-mono bg-white/60 border border-emerald-100 rounded-lg p-2 mt-2 text-center text-emerald-800">
+              {bootstrapStatus}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Fix existing data ── */}
       <Card className="border-primary/20 bg-primary/5">

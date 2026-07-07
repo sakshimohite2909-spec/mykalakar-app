@@ -573,6 +573,7 @@ h6 {
   display: -webkit-box;
   overflow: hidden;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
@@ -595,6 +596,7 @@ h6 {
   font-size: 0.76rem !important;
   line-height: 1.55 !important;
   -webkit-line-clamp: 2 !important;
+  line-clamp: 2 !important;
 }
 
 .luxury-card-meta {
@@ -1079,3 +1081,24 @@ h6 {
   display: none !important;
 }
 
+/* Light Theme Skeleton Loader Shimmer Overrides */
+.luxury-skeleton-card {
+  background: var(--mk-surface) !important;
+  border: 1px solid var(--mk-line) !important;
+}
+
+.luxury-skeleton-card div,
+.luxury-skeleton-card span,
+.luxury-skeleton-card strong,
+.luxury-skeleton-card p {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.09), rgba(0, 0, 0, 0.04)) !important;
+  background-size: 200% 100% !important;
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.03), rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.03)) !important;
+}
+
+.skeleton-shimmer::after {
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.06), transparent) !important;
+}

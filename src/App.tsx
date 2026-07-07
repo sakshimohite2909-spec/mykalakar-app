@@ -8,27 +8,29 @@ import { MasterDataProvider } from "@/contexts/MasterDataContext";
 import { I18nProvider } from "@/i18n/I18nProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import AppRouter from "@/AppRouter";
+import { FirebaseDiagnostic } from "@/components/FirebaseDiagnostic";
 
 const queryClient = new QueryClient();
 
 const App = () => (
-  <HelmetProvider>
-    <QueryClientProvider client={queryClient}>
-      <I18nProvider>
-        <AuthProvider>
-          <MasterDataProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <ErrorBoundary>
+  <ErrorBoundary>
+    <HelmetProvider>
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider>
+          <AuthProvider>
+            <MasterDataProvider>
+              {import.meta.env.DEV && <FirebaseDiagnostic />}
+              <TooltipProvider>
+                <Toaster />
+                <Sonner maxToasts={3} />
                 <AppRouter />
-              </ErrorBoundary>
-            </TooltipProvider>
-          </MasterDataProvider>
-        </AuthProvider>
-      </I18nProvider>
-    </QueryClientProvider>
-  </HelmetProvider>
+              </TooltipProvider>
+            </MasterDataProvider>
+          </AuthProvider>
+        </I18nProvider>
+      </QueryClientProvider>
+    </HelmetProvider>
+  </ErrorBoundary>
 );
 
 export default App;
