@@ -50,7 +50,7 @@ export default function MyKalakarHeroSlider() {
 
       <div
         ref={scope}
-        className="relative flex flex-col md:flex-row w-full md:h-[70vh] min-h-[620px] md:min-h-[560px] max-h-[820px] overflow-hidden rounded-[32px] border border-stone-800 bg-[#0f0b07] shadow-[0_30px_100px_rgba(0,0,0,0.85)] select-none"
+        className="relative flex flex-col md:flex-row w-full md:h-[70vh] min-h-[580px] md:min-h-[560px] md:max-h-[820px] md:overflow-hidden rounded-[32px] border border-stone-800 bg-[#0f0b07] shadow-[0_30px_100px_rgba(0,0,0,0.85)] select-none"
         onMouseEnter={() => slider.setIsPaused(true)}
         onMouseLeave={() => slider.setIsPaused(false)}
         onFocus={() => slider.setIsPaused(true)}
@@ -71,7 +71,7 @@ export default function MyKalakarHeroSlider() {
               <div
                 key={slide.id}
                 data-slide-detail
-                className="absolute left-6 md:left-10 top-10 md:top-14 z-20 max-w-[280px] md:max-w-[340px] text-white font-sans pointer-events-none select-none"
+                className="absolute left-6 md:left-10 top-20 md:top-14 z-20 max-w-[280px] md:max-w-[340px] text-white font-sans pointer-events-none select-none"
               >
                 <h2 className="text-2xl sm:text-3xl md:text-[38px] font-black leading-[1.18] drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] uppercase tracking-wide">
                   {parts.map((part, idx) => {

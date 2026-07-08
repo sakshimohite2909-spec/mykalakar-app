@@ -127,7 +127,7 @@ export default function Navbar() {
               <img 
                 src={STATIC_IMAGES.logo} 
                 alt="MyKalaakar Logo" 
-                className="h-10 w-10 object-contain"
+                className="h-full w-full object-cover"
                 style={{ imageRendering: "auto" }}
               />
             </div>
