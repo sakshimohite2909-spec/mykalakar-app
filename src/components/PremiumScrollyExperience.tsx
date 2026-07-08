@@ -415,7 +415,7 @@ function UpcomingEventsSection({ events, loading }: { events: CulturalEvent[]; l
         <div className="luxury-results-grid event-grid">
           <AnimatePresence mode="popLayout">
             {events.slice(0, 4).map((event, index) => (
-              <LuxuryEventCard key={event.id} event={event} index={index} />
+              <LuxuryEventCard key={(event.id as string) || index} event={event} index={index} />
             ))}
           </AnimatePresence>
         </div>
