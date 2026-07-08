@@ -7,8 +7,10 @@ import {
   CalendarDays,
   Camera,
   Drum,
+  Headphones,
   Mic2,
   Music2,
+  ShieldCheck,
   Sparkles,
   Users,
   Zap,
@@ -498,11 +500,81 @@ export default function PremiumScrollyExperience() {
       <Navbar />
       <main>
         <HeroCarousel />
+        <FeaturesBanner />
         <FeaturedArtistsSection artists={artists} loading={loading} />
         <UpcomingEventsSection events={events} loading={loading} />
         <CTASection />
       </main>
       <Footer />
     </div>
+  );
+}
+
+function FeaturesBanner() {
+  const { t } = useI18n();
+  return (
+    <section className="mx-auto mt-6 w-full max-w-[1240px] px-4 md:px-6">
+      <div className="bg-white border border-stone-200 shadow-sm rounded-[20px] px-6 py-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+        {/* Col 1 */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-650 shrink-0">
+            <Users className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-extrabold text-stone-900 leading-tight">
+              {t("features.artists.title")}
+            </h4>
+            <p className="text-[11px] text-stone-500 font-semibold mt-0.5">
+              {t("features.artists.desc")}
+            </p>
+          </div>
+        </div>
+
+        {/* Col 2 */}
+        <div className="flex items-center gap-3 border-t sm:border-t-0 md:border-l border-stone-100 pt-4 sm:pt-0 md:pl-6">
+          <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-650 shrink-0">
+            <CalendarDays className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-extrabold text-stone-900 leading-tight">
+              {t("features.events.title")}
+            </h4>
+            <p className="text-[11px] text-stone-500 font-semibold mt-0.5">
+              {t("features.events.desc")}
+            </p>
+          </div>
+        </div>
+
+        {/* Col 3 */}
+        <div className="flex items-center gap-3 border-t md:border-t-0 md:border-l border-stone-100 pt-4 md:pt-0 md:pl-6">
+          <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-650 shrink-0">
+            <ShieldCheck className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-extrabold text-stone-900 leading-tight">
+              {t("features.platform.title")}
+            </h4>
+            <p className="text-[11px] text-stone-500 font-semibold mt-0.5">
+              {t("features.platform.desc")}
+            </p>
+          </div>
+        </div>
+
+        {/* Col 4 */}
+        <div className="flex items-center gap-3 border-t md:border-t-0 md:border-l border-stone-100 pt-4 md:pt-0 md:pl-6">
+          <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-650 shrink-0">
+            <Headphones className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-extrabold text-stone-900 leading-tight">
+              {t("features.support.title")}
+            </h4>
+            <p className="text-[11px] text-stone-500 font-semibold mt-0.5">
+              {t("features.support.desc")}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

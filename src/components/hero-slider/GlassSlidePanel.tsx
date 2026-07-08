@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, CalendarDays, Sparkles } from "lucide-react";
 import type { HeroSlide } from "./sliderData";
 import { useI18n } from "@/i18n/I18nProvider";
+import { Equalizer } from "./MyKalakarHeroSlider";
 
 type GlassSlidePanelProps = {
   slide: HeroSlide;
@@ -26,9 +27,12 @@ export function GlassSlidePanel({ slide, activeIndex, slideCount }: GlassSlidePa
           <Sparkles className="h-3.5 w-3.5 shrink-0 text-orange-600 animate-pulse" />
           <span className="truncate">{t(`hero.slide${slide.id}.eyebrow`, { defaultValue: slide.eyebrow })}</span>
         </span>
-        <span className="shrink-0 text-[11px] font-extrabold text-stone-500">
-          {String(activeIndex + 1).padStart(2, "0")} / {String(slideCount).padStart(2, "0")}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-[11px] font-extrabold text-stone-500">
+            {String(activeIndex + 1).padStart(2, "0")} / {String(slideCount).padStart(2, "0")}
+          </span>
+          <Equalizer />
+        </div>
       </div>
 
       <h1 data-slide-detail className="mt-5 text-2xl font-black leading-[1.08] tracking-tight bg-gradient-to-r from-stone-950 via-orange-600 to-amber-600 bg-clip-text text-transparent sm:text-3xl md:text-3xl lg:text-4xl xl:text-[42px]">
