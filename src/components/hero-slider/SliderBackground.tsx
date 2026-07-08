@@ -33,7 +33,7 @@ export function SliderBackground({ slides, activeIndex }: SliderBackgroundProps)
               className="h-full w-full object-cover"
               style={{
                 objectPosition: slide.objectPosition,
-                imageRendering: "high-quality",
+                imageRendering: "auto",
               }}
             />
           </div>
