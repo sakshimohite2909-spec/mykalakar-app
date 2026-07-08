@@ -14,7 +14,7 @@ export function SliderControls({ activeIndex, slideCount, onPrev, onNext, onGoTo
       <button
         type="button"
         onClick={onPrev}
-        className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/60 bg-white/58 text-stone-950 shadow-lg backdrop-blur-xl transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 sm:left-5"
+        className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/60 bg-white/58 text-stone-950 shadow-lg backdrop-blur-xl transition-all duration-300 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:left-5"
         aria-label="Previous slide"
       >
         <ChevronLeft className="h-5 w-5" />
@@ -23,7 +23,7 @@ export function SliderControls({ activeIndex, slideCount, onPrev, onNext, onGoTo
       <button
         type="button"
         onClick={onNext}
-        className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/60 bg-white/58 text-stone-950 shadow-lg backdrop-blur-xl transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 sm:right-5"
+        className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/60 bg-white/58 text-stone-950 shadow-lg backdrop-blur-xl transition-all duration-300 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:right-5"
         aria-label="Next slide"
       >
         <ChevronRight className="h-5 w-5" />
