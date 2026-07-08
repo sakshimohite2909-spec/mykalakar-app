@@ -124,15 +124,24 @@ export async function getCategoryGroups() {
 
 export async function getActiveArtists(maxCount?: number) {
   const pageSize = clampPageSize(maxCount);
-  const cacheLimit = 100;
   
-  return cached(`artists:active:verified:all`, async () => {
+  // Check if any fresh cache entry has at least pageSize items to avoid refetching
+  for (const [key, entry] of cache.entries()) {
+    if (key.startsWith("artists:active:verified:") && isFresh(entry)) {
+      const list = entry.value as any[];
+      if (Array.isArray(list) && list.length >= pageSize) {
+        return list.slice(0, pageSize);
+      }
+    }
+  }
+
+  return cached(`artists:active:verified:${pageSize}`, async () => {
     try {
       const artistsQuery = query(
         collection(db, "artists"),
         where("status", "==", "active"),
         orderBy("createdAt", "desc"),
-        limit(cacheLimit)
+        limit(pageSize)
       );
       const snap = await withTimeout(getDocs(artistsQuery), FIREBASE_READ_TIMEOUT_MS, "Artists are taking too long to load.");
       return snap.docs.map((artist) => readyArtistMedia(docData<Record<string, any>>(artist)));
@@ -144,8 +153,6 @@ export async function getActiveArtists(maxCount?: number) {
       }
       return [];
     }
-  }).then((artists) => {
-    return artists.slice(0, pageSize);
   });
 }
 
@@ -204,15 +211,24 @@ export async function getActiveArtistsPage(pageSize?: number, cursor?: QueryDocu
 
 export async function getApprovedEvents(maxCount?: number) {
   const pageSize = clampPageSize(maxCount);
-  const cacheLimit = 100;
 
-  return cached(`events:approved:all`, async () => {
+  // Check if any fresh cache entry has at least pageSize items to avoid refetching
+  for (const [key, entry] of cache.entries()) {
+    if (key.startsWith("events:approved:") && isFresh(entry)) {
+      const list = entry.value as any[];
+      if (Array.isArray(list) && list.length >= pageSize) {
+        return list.slice(0, pageSize);
+      }
+    }
+  }
+
+  return cached(`events:approved:${pageSize}`, async () => {
     try {
       const eventsQuery = query(
         collection(db, EVENT_BRIEF_COLLECTION),
         where("status", "==", "approved"),
         orderBy("createdAt", "desc"),
-        limit(cacheLimit)
+        limit(pageSize)
       );
       const snap = await getDocs(eventsQuery);
       
@@ -222,8 +238,6 @@ export async function getApprovedEvents(maxCount?: number) {
       console.error("Events Fetch Critical Failure. Error Code:", error?.code, error);
       return [];
     }
-  }).then((events) => {
-    return typeof maxCount === "number" ? events.slice(0, maxCount) : events;
   });
 }
 
