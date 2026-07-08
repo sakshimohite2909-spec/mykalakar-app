@@ -493,7 +493,7 @@ export default function PremiumScrollyExperience() {
   }, []);
 
   return (
-    <div className="luxury-page home-page min-h-screen font-sans antialiased">
+    <div className="luxury-page home-page min-h-screen font-sans antialiased pb-20 md:pb-0">
       <Helmet>
         <title>{t("home.meta.title")}</title>
       </Helmet>

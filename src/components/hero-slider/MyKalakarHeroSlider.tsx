@@ -29,6 +29,8 @@ const heroSliderStyles = `
   @keyframes eq-bar-2 { 0% { height: 30%; } 100% { height: 85%; } }
   @keyframes eq-bar-3 { 0% { height: 15%; } 100% { height: 95%; } }
   @keyframes eq-bar-4 { 0% { height: 25%; } 100% { height: 90%; } }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 `;
 
 export default function MyKalakarHeroSlider() {
@@ -159,8 +161,8 @@ export default function MyKalakarHeroSlider() {
           </div>
         </div>
 
-        {/* Thumbnails Row (Desktop bottom overlay) */}
-        <div className="absolute bottom-6 left-6 right-6 z-30 hidden lg:flex items-center justify-between gap-3">
+        {/* Thumbnails Row (Desktop bottom overlay, mobile horizontal scrollable) */}
+        <div className="absolute bottom-6 left-4 right-4 z-30 flex overflow-x-auto md:overflow-visible gap-2 md:gap-3 py-1 scrollbar-none snap-x snap-mandatory">
           {HERO_SLIDES.map((slide, index) => {
             const isActive = index === slider.activeIndex;
             return (
@@ -168,7 +170,7 @@ export default function MyKalakarHeroSlider() {
                 key={slide.id}
                 type="button"
                 onClick={() => slider.goTo(index)}
-                className={`flex-1 flex items-center gap-3 p-3 rounded-2xl border transition-all duration-300 ${
+                className={`flex-1 min-w-[140px] md:min-w-0 flex items-center gap-3 p-3 rounded-2xl border transition-all duration-300 snap-start ${
                   isActive
                     ? "bg-[#25180f]/90 border-orange-500/80 shadow-[0_4px_25px_rgba(249,115,22,0.2)] scale-[1.03]"
                     : "bg-black/40 border-white/5 hover:border-white/15 hover:bg-black/55"
