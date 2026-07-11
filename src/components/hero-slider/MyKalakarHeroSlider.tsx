@@ -43,16 +43,17 @@ export default function MyKalakarHeroSlider() {
   const activeSlide = HERO_SLIDES[slider.activeIndex];
 
   return (
-    <section className="relative w-full h-screen overflow-hidden">
+    <section className="relative w-full min-h-screen md:h-screen flex flex-col md:block bg-[#0f0b07] overflow-hidden">
       <style dangerouslySetInnerHTML={{ __html: heroSliderStyles }} />
 
       {/* Background Glowing Ambient Orbs */}
       <div className="absolute -top-10 left-10 w-96 h-96 rounded-full bg-gradient-to-tr from-orange-500/25 to-amber-400/25 blur-[100px] pointer-events-none" />
       <div className="absolute -bottom-10 right-10 w-[500px] h-[500px] rounded-full bg-gradient-to-br from-pink-500/25 to-purple-500/25 blur-[120px] pointer-events-none" />
 
+      {/* Top Part: Image Slider (Mobile: 45vh, Desktop: fullscreen absolute) */}
       <div
         ref={scope}
-        className="relative w-full h-full overflow-hidden bg-[#0f0b07] select-none"
+        className="relative w-full h-[45vh] min-h-[300px] md:h-full overflow-hidden select-none"
         onMouseEnter={() => slider.setIsPaused(true)}
         onMouseLeave={() => slider.setIsPaused(false)}
         onFocus={() => slider.setIsPaused(true)}
@@ -63,13 +64,82 @@ export default function MyKalakarHeroSlider() {
         <div className="absolute inset-0 w-full h-full z-0">
           <SliderBackground slides={HERO_SLIDES} activeIndex={slider.activeIndex} />
           {/* Extra dark overlay to ensure readability */}
-          <div className="absolute inset-0 bg-black/50 z-10" />
+          <div className="absolute inset-0 bg-black/40 z-10" />
         </div>
 
-        {/* Content Wrapper */}
-        <div className="relative z-20 flex flex-col md:flex-row w-full h-full justify-between items-center px-6 sm:px-12 md:px-16 pt-24 pb-32 md:pb-24 gap-6 md:gap-12">
+        {/* Previous Button (Left Margin of Image) */}
+        <button
+          type="button"
+          onClick={slider.goPrev}
+          className="absolute left-3 top-1/2 z-35 flex h-10 w-10 md:h-12 md:w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-orange-600 hover:text-white sm:left-5"
+          aria-label="Previous slide"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+
+        {/* Next Button (Right Margin of Image) */}
+        <button
+          type="button"
+          onClick={slider.goNext}
+          className="absolute right-3 top-1/2 z-35 flex h-10 w-10 md:h-12 md:w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-orange-600 hover:text-white sm:right-5"
+          aria-label="Next slide"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+
+        {/* Thumbnails Row - DESKTOP ONLY here (at bottom of fullscreen) */}
+        <div className="hidden md:flex absolute bottom-6 left-4 right-4 z-30 overflow-visible gap-3 py-1 scrollbar-none">
+          {HERO_SLIDES.map((slide, index) => {
+            const isActive = index === slider.activeIndex;
+            return (
+              <button
+                key={slide.id}
+                type="button"
+                onClick={() => slider.goTo(index)}
+                className={`flex-1 min-w-0 flex items-center gap-3 p-3 rounded-2xl border transition-all duration-300 ${
+                  isActive
+                    ? "bg-[#25180f]/90 border-orange-500/80 shadow-[0_4px_25px_rgba(249,115,22,0.2)] scale-[1.03]"
+                    : "bg-black/40 border-white/5 hover:border-white/15 hover:bg-black/55"
+                }`}
+              >
+                {/* Mini Thumbnail Image */}
+                <div className="w-12 h-10 rounded-lg overflow-hidden shrink-0">
+                  <img src={slide.image} alt="" className="w-full h-full object-cover" />
+                </div>
+                
+                {/* Thumbnail Info */}
+                <div className="text-left min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-stone-500">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    {isActive && <Equalizer />}
+                  </div>
+                  <p className={`text-xs font-extrabold truncate mt-0.5 ${isActive ? "text-white" : "text-stone-400"}`}>
+                    {t(`hero.slide${slide.id}.thumbnail`)}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Progress Indicators - DESKTOP ONLY here */}
+        <div className="hidden md:flex absolute bottom-2 left-6 right-6 z-30 items-center gap-2 justify-center">
+          {HERO_SLIDES.map((_, index) => (
+            <div
+              key={index}
+              className={`h-[3px] rounded-full transition-all duration-500 ${
+                index === slider.activeIndex ? "w-12 bg-orange-500 shadow-[0_0_8px_#f97316]" : "w-6 bg-stone-700/60"
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* DESKTOP ONLY Content Wrapper */}
+        <div className="hidden md:flex absolute inset-0 z-20 flex-row w-full h-full justify-between items-center px-12 md:px-16 pt-24 pb-24 gap-12">
           {/* Left Side: Headline Text */}
-          <div className="hidden md:flex w-full md:w-[50%] flex-col justify-center text-white pointer-events-none select-none">
+          <div className="flex w-full md:w-[50%] flex-col justify-center text-white pointer-events-none select-none">
             {HERO_SLIDES.map((slide, index) => {
               if (index !== slider.activeIndex) return null;
               const overlayText = t(`hero.slide${slide.id}.overlay`, { defaultValue: "" });
@@ -112,29 +182,14 @@ export default function MyKalakarHeroSlider() {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Previous Button (Left Margin) */}
-        <button
-          type="button"
-          onClick={slider.goPrev}
-          className="absolute left-3 top-1/2 z-30 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:left-5"
-          aria-label="Previous slide"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
+      {/* MOBILE ONLY Content Wrapper (flowing below the image slider) */}
+      <div className="md:hidden w-full bg-[#0f0b07] px-5 pt-6 pb-28 flex flex-col gap-6 relative z-20">
+        <GlassSlidePanel slide={activeSlide} activeIndex={slider.activeIndex} slideCount={HERO_SLIDES.length} />
 
-        {/* Next Button (Right Margin) */}
-        <button
-          type="button"
-          onClick={slider.goNext}
-          className="absolute right-3 top-1/2 z-30 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:right-5"
-          aria-label="Next slide"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </button>
-
-        {/* Thumbnails Row (Desktop bottom overlay, mobile horizontal scrollable) */}
-        <div className="absolute bottom-[84px] md:bottom-6 left-4 right-4 z-30 flex overflow-x-auto md:overflow-visible gap-2 md:gap-3 py-1 scrollbar-none snap-x snap-mandatory">
+        {/* Mobile Thumbnails Row */}
+        <div className="w-full flex overflow-x-auto gap-2 py-1 scrollbar-none snap-x snap-mandatory">
           {HERO_SLIDES.map((slide, index) => {
             const isActive = index === slider.activeIndex;
             return (
@@ -142,26 +197,23 @@ export default function MyKalakarHeroSlider() {
                 key={slide.id}
                 type="button"
                 onClick={() => slider.goTo(index)}
-                className={`flex-1 min-w-[140px] md:min-w-0 flex items-center gap-3 p-3 rounded-2xl border transition-all duration-300 snap-start ${
+                className={`flex-1 min-w-[130px] flex items-center gap-2 p-2.5 rounded-xl border transition-all duration-300 snap-start ${
                   isActive
-                    ? "bg-[#25180f]/90 border-orange-500/80 shadow-[0_4px_25px_rgba(249,115,22,0.2)] scale-[1.03]"
-                    : "bg-black/40 border-white/5 hover:border-white/15 hover:bg-black/55"
+                    ? "bg-[#25180f]/90 border-orange-500/80 shadow-[0_4px_15px_rgba(249,115,22,0.15)]"
+                    : "bg-black/30 border-white/5"
                 }`}
               >
-                {/* Mini Thumbnail Image */}
-                <div className="w-12 h-10 rounded-lg overflow-hidden shrink-0">
+                <div className="w-9 h-8 rounded-md overflow-hidden shrink-0">
                   <img src={slide.image} alt="" className="w-full h-full object-cover" />
                 </div>
-                
-                {/* Thumbnail Info */}
                 <div className="text-left min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-stone-500">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] font-bold text-stone-500">
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     {isActive && <Equalizer />}
                   </div>
-                  <p className={`text-xs font-extrabold truncate mt-0.5 ${isActive ? "text-white" : "text-stone-400"}`}>
+                  <p className={`text-[10px] font-black truncate mt-0.5 ${isActive ? "text-white" : "text-stone-400"}`}>
                     {t(`hero.slide${slide.id}.thumbnail`)}
                   </p>
                 </div>
@@ -170,13 +222,13 @@ export default function MyKalakarHeroSlider() {
           })}
         </div>
 
-        {/* Progress Indicator Lines (integrated below thumbnails) */}
-        <div className="absolute bottom-[72px] md:bottom-2 left-6 right-6 z-30 flex items-center gap-2 justify-center">
+        {/* Mobile Progress indicators */}
+        <div className="flex items-center gap-1.5 justify-center mt-1">
           {HERO_SLIDES.map((_, index) => (
             <div
               key={index}
               className={`h-[3px] rounded-full transition-all duration-500 ${
-                index === slider.activeIndex ? "w-12 bg-orange-500 shadow-[0_0_8px_#f97316]" : "w-6 bg-stone-700/60"
+                index === slider.activeIndex ? "w-10 bg-orange-500 shadow-[0_0_6px_#f97316]" : "w-4 bg-stone-700/60"
               }`}
             />
           ))}
