@@ -67,9 +67,9 @@ export default function MyKalakarHeroSlider() {
         </div>
 
         {/* Content Wrapper */}
-        <div className="relative z-20 flex flex-col md:flex-row w-full h-full justify-between items-center px-6 sm:px-12 md:px-16 pt-24 pb-28 md:pb-24 gap-6 md:gap-12">
+        <div className="relative z-20 flex flex-col md:flex-row w-full h-full justify-between items-center px-6 sm:px-12 md:px-16 pt-24 pb-32 md:pb-24 gap-6 md:gap-12">
           {/* Left Side: Headline Text */}
-          <div className="w-full md:w-[50%] flex flex-col justify-center text-white pointer-events-none select-none">
+          <div className="hidden md:flex w-full md:w-[50%] flex-col justify-center text-white pointer-events-none select-none">
             {HERO_SLIDES.map((slide, index) => {
               if (index !== slider.activeIndex) return null;
               const overlayText = t(`hero.slide${slide.id}.overlay`, { defaultValue: "" });
@@ -134,7 +134,7 @@ export default function MyKalakarHeroSlider() {
         </button>
 
         {/* Thumbnails Row (Desktop bottom overlay, mobile horizontal scrollable) */}
-        <div className="absolute bottom-6 left-4 right-4 z-30 flex overflow-x-auto md:overflow-visible gap-2 md:gap-3 py-1 scrollbar-none snap-x snap-mandatory">
+        <div className="absolute bottom-[84px] md:bottom-6 left-4 right-4 z-30 flex overflow-x-auto md:overflow-visible gap-2 md:gap-3 py-1 scrollbar-none snap-x snap-mandatory">
           {HERO_SLIDES.map((slide, index) => {
             const isActive = index === slider.activeIndex;
             return (
@@ -171,7 +171,7 @@ export default function MyKalakarHeroSlider() {
         </div>
 
         {/* Progress Indicator Lines (integrated below thumbnails) */}
-        <div className="absolute bottom-2 left-6 right-6 z-30 flex items-center gap-2 justify-center">
+        <div className="absolute bottom-[72px] md:bottom-2 left-6 right-6 z-30 flex items-center gap-2 justify-center">
           {HERO_SLIDES.map((_, index) => (
             <div
               key={index}
