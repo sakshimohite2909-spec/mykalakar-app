@@ -163,7 +163,7 @@
 }
 
 /* Global Overrides */
-[class*="bg-orange-50"] {
+.bg-orange-50, [class*="bg-orange-50/"] {
   background-color: #FAFAFA !important;
 }
 

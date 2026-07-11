@@ -22,7 +22,7 @@ const App = () => (
               {import.meta.env.DEV && <FirebaseDiagnostic />}
               <TooltipProvider>
                 <Toaster />
-                <Sonner maxToasts={3} />
+                <Sonner />
                 <AppRouter />
               </TooltipProvider>
             </MasterDataProvider>

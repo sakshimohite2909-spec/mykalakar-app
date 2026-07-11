@@ -59,18 +59,7 @@ export default function MainLayout() {
 
       <div id="app-content" className="relative z-10 min-h-screen overflow-x-hidden text-[#1F2937]">
         <Suspense fallback={<PageLoader />}>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.main
-              key={location.pathname}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="min-h-screen"
-            >
-              <Outlet />
-            </motion.main>
-          </AnimatePresence>
+          <Outlet />
         </Suspense>
       </div>
 

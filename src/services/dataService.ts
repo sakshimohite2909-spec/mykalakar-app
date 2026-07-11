@@ -226,14 +226,19 @@ export async function getApprovedEvents(maxCount?: number) {
     try {
       const eventsQuery = query(
         collection(db, EVENT_BRIEF_COLLECTION),
-        where("status", "==", "approved"),
-        orderBy("createdAt", "desc"),
-        limit(pageSize)
+        where("status", "==", "approved")
       );
       const snap = await getDocs(eventsQuery);
       
       const events = snap.docs.map((event) => docData<Record<string, any>>(event));
-      return events.map(readyEventMedia);
+      // Sort client-side to prevent composite index errors
+      events.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+        const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+        return bTime - aTime;
+      });
+      const hydrated = events.map(readyEventMedia);
+      return typeof maxCount === "number" ? hydrated.slice(0, maxCount) : hydrated;
     } catch (error: any) {
       console.error("Events Fetch Critical Failure. Error Code:", error?.code, error);
       return [];
@@ -245,14 +250,18 @@ export function subscribeApprovedEvents(maxCount: number | undefined, onData: (e
   const pageSize = clampPageSize(maxCount);
   const eventsQuery = query(
     collection(db, EVENT_BRIEF_COLLECTION),
-    where("status", "==", "approved"),
-    orderBy("createdAt", "desc"),
-    limit(pageSize)
+    where("status", "==", "approved")
   );
   return onSnapshot(
     eventsQuery,
     (snap) => {
-      const events = snap.docs.map((event) => docData<Record<string, any>>(event)).filter(isPublicEvent);
+      const events = snap.docs.map((event) => docData<Record<string, any>>(event));
+      // Sort client-side to prevent composite index errors
+      events.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+        const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+        return bTime - aTime;
+      });
       const hydrated = events.map(readyEventMedia);
       onData(typeof maxCount === "number" ? hydrated.slice(0, maxCount) : hydrated);
     },

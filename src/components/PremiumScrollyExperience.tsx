@@ -21,7 +21,7 @@ import HeroCarousel from "./HeroCarousel";
 import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
 import { SmartImage } from "./SmartImage";
 import { STATIC_IMAGES } from "@/services/ImageRegistryService";
-import { getActiveArtists, getApprovedEvents } from "@/services/dataService";
+import { subscribeActiveArtists, subscribeApprovedEvents } from "@/services/dataService";
 import { buildArtistCards } from "@/services/marketplaceCards";
 import { SpotlightSearch } from "@/components/search/SpotlightSearch";
 import { AnimatePresence, LuxuryArtistCard, LuxuryEventCard } from "@/components/discovery/LuxuryDiscovery";
@@ -467,28 +467,29 @@ export default function PremiumScrollyExperience() {
   const { t } = useI18n(); // ADDED FOR i18n
   const [artists, setArtists] = useState<ShowcaseArtist[]>([]);
   const [events, setEvents] = useState<CulturalEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [artistsLoading, setArtistsLoading] = useState(true);
+  const [eventsLoading, setEventsLoading] = useState(true);
 
   useEffect(() => {
-    let mounted = true;
-    Promise.all([getActiveArtists(8), getApprovedEvents(3)])
-      .then(([artistData, eventData]) => {
-        if (!mounted) return;
-        setArtists(artistData as ShowcaseArtist[]);
-        setEvents(eventData as CulturalEvent[]);
-      })
-      .catch((error) => {
-        console.warn("Homepage Firebase data unavailable.", error);
-        if (!mounted) return;
-        setArtists([]);
-        setEvents([]);
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
+    const unsubscribeArtists = subscribeActiveArtists(8, (data) => {
+      setArtists(data as ShowcaseArtist[]);
+      setArtistsLoading(false);
+    }, (error) => {
+      console.warn("Failed to subscribe to active artists:", error);
+      setArtistsLoading(false);
+    });
+
+    const unsubscribeEvents = subscribeApprovedEvents(3, (data) => {
+      setEvents(data as CulturalEvent[]);
+      setEventsLoading(false);
+    }, (error) => {
+      console.warn("Failed to subscribe to approved events:", error);
+      setEventsLoading(false);
+    });
 
     return () => {
-      mounted = false;
+      unsubscribeArtists();
+      unsubscribeEvents();
     };
   }, []);
 
@@ -501,8 +502,8 @@ export default function PremiumScrollyExperience() {
       <main>
         <HeroCarousel />
         <FeaturesBanner />
-        <FeaturedArtistsSection artists={artists} loading={loading} />
-        <UpcomingEventsSection events={events} loading={loading} />
+        <FeaturedArtistsSection artists={artists} loading={artistsLoading} />
+        <UpcomingEventsSection events={events} loading={eventsLoading} />
         <CTASection />
       </main>
       <Footer />

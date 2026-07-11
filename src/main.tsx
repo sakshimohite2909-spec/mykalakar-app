@@ -1,27 +1,33 @@
 import { createRoot } from "react-dom/client";
 
-// --- TEMPORARY DIAGNOSTIC CACHE PURGE ---
-// Instructs the browser to programmatically nuke corrupted Firebase IndexedDB databases on boot.
-(async function clearCorruptedBrowserData() {
-  try {
-    const dbs = await window.indexedDB.databases();
-    dbs.forEach(db => {
-      if (db.name && (db.name.includes('firebase') || db.name.includes('firestore'))) {
-        window.indexedDB.deleteDatabase(db.name);
-        console.log(`🧹 Automatically purged corrupted database: ${db.name}`);
-      }
-    });
-  } catch (e) {
-    console.error("Cache purge failed:", e);
-  }
-})();
-// ----------------------------------------
+
 
 import App from "./App.tsx";
 import "./index.css";
 import "./styles/system-overrides.css";
 import "./styles/luxury-light-redesign.css";
 import "./styles/mobile-responsive.css";
+
+// --- GOOGLE TRANSLATE REACT CRASH PATCH ---
+// Prevents Google Translate and other extension DOM mutations from crashing React on route transitions.
+if (typeof window !== "undefined") {
+  const originalRemoveChild = Node.prototype.removeChild;
+  Node.prototype.removeChild = function <T extends Node>(child: T): T {
+    if (child.parentNode !== this) {
+      return child;
+    }
+    return originalRemoveChild.call(this, child) as T;
+  };
+
+  const originalInsertBefore = Node.prototype.insertBefore;
+  Node.prototype.insertBefore = function <T extends Node>(newNode: T, referenceNode: Node | null): T {
+    if (referenceNode && referenceNode.parentNode !== this) {
+      return this.appendChild(newNode) as unknown as T;
+    }
+    return originalInsertBefore.call(this, newNode, referenceNode) as T;
+  };
+}
+// ------------------------------------------
 
 if (import.meta.env.DEV) {
   void import("@/lib/firebaseDiagnostics")

@@ -65,8 +65,7 @@ export function useApprovedBriefs(): BriefFeedState {
 
     const q = query(
       collection(db, "eventBriefs"),
-      where("status", "==", "approved"),
-      orderBy("createdAt", "desc")
+      where("status", "==", "approved")
     );
 
     const unsub = onSnapshot(
@@ -76,6 +75,13 @@ export function useApprovedBriefs(): BriefFeedState {
           id: d.id,
           ...(d.data() as Omit<ApprovedEventBrief, "id">),
         })) as ApprovedEventBrief[];
+
+        // Sort client-side to prevent composite index errors
+        briefs.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+          const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+          return bTime - aTime;
+        });
 
         setState({ status: "success", briefs });
       },

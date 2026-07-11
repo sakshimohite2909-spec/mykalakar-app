@@ -43,123 +43,95 @@ export default function MyKalakarHeroSlider() {
   const activeSlide = HERO_SLIDES[slider.activeIndex];
 
   return (
-    <section className="relative mx-auto mt-6 w-full max-w-[1240px] px-4 pb-4 md:px-6">
+    <section className="relative w-full h-screen overflow-hidden">
       <style dangerouslySetInnerHTML={{ __html: heroSliderStyles }} />
 
       {/* Background Glowing Ambient Orbs */}
-      <div className="absolute -top-10 left-10 w-72 h-72 rounded-full bg-gradient-to-tr from-orange-400/10 to-amber-300/10 blur-[80px] pointer-events-none" />
-      <div className="absolute -bottom-10 right-10 w-80 h-80 rounded-full bg-gradient-to-br from-pink-400/10 to-purple-400/10 blur-[90px] pointer-events-none" />
+      <div className="absolute -top-10 left-10 w-96 h-96 rounded-full bg-gradient-to-tr from-orange-500/25 to-amber-400/25 blur-[100px] pointer-events-none" />
+      <div className="absolute -bottom-10 right-10 w-[500px] h-[500px] rounded-full bg-gradient-to-br from-pink-500/25 to-purple-500/25 blur-[120px] pointer-events-none" />
 
       <div
         ref={scope}
-        className="relative flex flex-col md:flex-row w-full md:h-[70vh] min-h-[580px] md:min-h-[560px] md:max-h-[820px] md:overflow-hidden rounded-[32px] border border-stone-800 bg-[#0f0b07] shadow-[0_30px_100px_rgba(0,0,0,0.85)] select-none"
+        className="relative w-full h-full overflow-hidden bg-[#0f0b07] select-none"
         onMouseEnter={() => slider.setIsPaused(true)}
         onMouseLeave={() => slider.setIsPaused(false)}
         onFocus={() => slider.setIsPaused(true)}
         onBlur={() => slider.setIsPaused(false)}
         {...slider.touchHandlers}
       >
-        {/* Left Side: Image Slider (58% width on desktop, 340px height on mobile) */}
-        <div className="relative w-full md:w-[58%] h-[340px] md:h-full overflow-hidden shrink-0 clip-curved-right">
+        {/* Fullscreen Background Slider */}
+        <div className="absolute inset-0 w-full h-full z-0">
           <SliderBackground slides={HERO_SLIDES} activeIndex={slider.activeIndex} />
-          
-          {/* Text Overlay on active image */}
-          {HERO_SLIDES.map((slide, index) => {
-            if (index !== slider.activeIndex) return null;
-            const overlayText = t(`hero.slide${slide.id}.overlay`, { defaultValue: "" });
-            if (!overlayText) return null;
-            const parts = overlayText.includes(",") ? overlayText.split(",") : [overlayText];
-            return (
-              <div
-                key={slide.id}
-                data-slide-detail
-                className="absolute left-6 md:left-10 top-20 md:top-14 z-20 max-w-[280px] md:max-w-[340px] text-white font-sans pointer-events-none select-none"
-              >
-                <h2 className="text-2xl sm:text-3xl md:text-[38px] font-black leading-[1.18] drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] uppercase tracking-wide">
-                  {parts.map((part, idx) => {
-                    const words = part.trim().split(" ");
-                    if (idx === 0 && words.length > 1) {
-                      const lastWord = words.pop();
-                      const remaining = words.join(" ");
-                      return (
-                        <span key={idx} className="block mb-1">
-                          {remaining} <span className="text-orange-500">{lastWord}</span>
-                        </span>
-                      );
-                    }
-                    return (
-                      <span key={idx} className={`block ${idx === 1 ? 'text-stone-200 mt-1 font-semibold text-lg sm:text-xl md:text-2xl normal-case' : ''}`}>
-                        {part.trim()}
-                      </span>
-                    );
-                  })}
-                </h2>
-              </div>
-            );
-          })}
+          {/* Extra dark overlay to ensure readability */}
+          <div className="absolute inset-0 bg-black/50 z-10" />
         </div>
 
-        {/* Curved Gold Glow Divider */}
-        <div className="absolute top-0 bottom-0 left-[58%] -translate-x-[15px] w-[40px] pointer-events-none hidden md:block z-25 overflow-visible">
-          <svg className="w-full h-full" viewBox="0 0 40 500" preserveAspectRatio="none">
-            <path
-              d="M0,0 Q35,250 0,500"
-              fill="none"
-              stroke="url(#gold-glow-line)"
-              strokeWidth="4"
-              className="drop-shadow-[0_0_10px_rgba(243,156,18,0.7)]"
-            />
-            <defs>
-              <linearGradient id="gold-glow-line" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#d4af37" stopOpacity="0.1" />
-                <stop offset="35%" stopColor="#f39c12" stopOpacity="1" />
-                <stop offset="65%" stopColor="#f1c40f" stopOpacity="1" />
-                <stop offset="100%" stopColor="#d4af37" stopOpacity="0.1" />
-              </linearGradient>
-            </defs>
-          </svg>
+        {/* Content Wrapper */}
+        <div className="relative z-20 flex flex-col md:flex-row w-full h-full justify-between items-center px-6 sm:px-12 md:px-16 pt-24 pb-28 md:pb-24 gap-6 md:gap-12">
+          {/* Left Side: Headline Text */}
+          <div className="w-full md:w-[50%] flex flex-col justify-center text-white pointer-events-none select-none">
+            {HERO_SLIDES.map((slide, index) => {
+              if (index !== slider.activeIndex) return null;
+              const overlayText = t(`hero.slide${slide.id}.overlay`, { defaultValue: "" });
+              if (!overlayText) return null;
+              const parts = overlayText.includes(",") ? overlayText.split(",") : [overlayText];
+              return (
+                <div
+                  key={slide.id}
+                  data-slide-detail
+                  className="max-w-[420px] md:max-w-[500px] text-white font-sans"
+                >
+                  <h2 className="text-3xl sm:text-4xl md:text-[42px] lg:text-[48px] font-black leading-[1.12] drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] uppercase tracking-wide">
+                    {parts.map((part, idx) => {
+                      const words = part.trim().split(" ");
+                      if (idx === 0 && words.length > 1) {
+                        const lastWord = words.pop();
+                        const remaining = words.join(" ");
+                        return (
+                          <span key={idx} className="block mb-1">
+                            {remaining} <span className="text-orange-500">{lastWord}</span>
+                          </span>
+                        );
+                      }
+                      return (
+                        <span key={idx} className={`block ${idx === 1 ? 'text-stone-200 mt-2 font-semibold text-lg sm:text-xl md:text-2xl normal-case' : ''}`}>
+                          {part.trim()}
+                        </span>
+                      );
+                    })}
+                  </h2>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Right Side: Glass Slide Panel */}
+          <div className="w-full md:w-[45%] lg:w-[42%] flex flex-col justify-center">
+            <div className="relative z-10 w-full">
+              <GlassSlidePanel slide={activeSlide} activeIndex={slider.activeIndex} slideCount={HERO_SLIDES.length} />
+            </div>
+          </div>
         </div>
 
         {/* Previous Button (Left Margin) */}
         <button
           type="button"
           onClick={slider.goPrev}
-          className="absolute left-3 top-1/3 md:top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:left-5"
+          className="absolute left-3 top-1/2 z-30 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:left-5"
           aria-label="Previous slide"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
 
-        {/* Next Button (Mobile - Right Edge) */}
+        {/* Next Button (Right Margin) */}
         <button
           type="button"
           onClick={slider.goNext}
-          className="absolute right-3 top-1/3 z-30 md:hidden flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:right-5"
+          className="absolute right-3 top-1/2 z-30 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:right-5"
           aria-label="Next slide"
         >
           <ChevronRight className="h-5 w-5" />
         </button>
-
-        {/* Next Button (Desktop - Curved Arc) */}
-        <button
-          type="button"
-          onClick={slider.goNext}
-          className="absolute left-[58%] -translate-x-1/2 top-1/2 -translate-y-1/2 z-30 hidden md:flex h-12 w-12 items-center justify-center rounded-full border border-orange-400 bg-white text-stone-900 shadow-[0_0_20px_rgba(249,115,22,0.5)] transition-all duration-300 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-500"
-          aria-label="Next slide"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </button>
-
-        {/* Right Side: Vibrant Text Panel (42% width on desktop, auto height on mobile) */}
-        <div className="relative w-full md:w-[42%] flex flex-col justify-center p-5 sm:p-8 md:p-10 lg:p-12 pb-24 md:pb-28 lg:pb-32 overflow-hidden bg-gradient-to-br from-[#1c130d] to-[#0c0806] border-t md:border-t-0 border-stone-850">
-          {/* Ambient colorful gradient orbs behind the layout with slow pulse */}
-          <div className="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-gradient-to-tr from-pink-400/15 via-orange-400/10 to-amber-300/10 blur-3xl pointer-events-none z-0 animate-pulse" style={{ animationDuration: "8s" }} />
-          <div className="absolute -bottom-12 -left-12 w-64 h-64 rounded-full bg-gradient-to-bl from-indigo-400/15 via-purple-400/10 to-cyan-400/10 blur-3xl pointer-events-none z-0 animate-pulse" style={{ animationDuration: "10s" }} />
-          
-          <div className="relative z-10 w-full">
-            <GlassSlidePanel slide={activeSlide} activeIndex={slider.activeIndex} slideCount={HERO_SLIDES.length} />
-          </div>
-        </div>
 
         {/* Thumbnails Row (Desktop bottom overlay, mobile horizontal scrollable) */}
         <div className="absolute bottom-6 left-4 right-4 z-30 flex overflow-x-auto md:overflow-visible gap-2 md:gap-3 py-1 scrollbar-none snap-x snap-mandatory">
