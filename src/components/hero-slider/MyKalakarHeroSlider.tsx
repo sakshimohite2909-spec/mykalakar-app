@@ -50,10 +50,10 @@ export default function MyKalakarHeroSlider() {
       <div className="absolute -top-10 left-10 w-96 h-96 rounded-full bg-gradient-to-tr from-orange-500/25 to-amber-400/25 blur-[100px] pointer-events-none" />
       <div className="absolute -bottom-10 right-10 w-[500px] h-[500px] rounded-full bg-gradient-to-br from-pink-500/25 to-purple-500/25 blur-[120px] pointer-events-none" />
 
-      {/* Top Part: Image Slider (Mobile: 45vh, Desktop: fullscreen absolute) */}
+      {/* Top Part: Image Slider (Mobile: aspect-[4/3], Desktop: fullscreen absolute) */}
       <div
         ref={scope}
-        className="relative w-full h-[45vh] min-h-[300px] md:h-full overflow-hidden select-none"
+        className="relative w-full aspect-[4/3] md:aspect-none md:h-full overflow-hidden select-none"
         onMouseEnter={() => slider.setIsPaused(true)}
         onMouseLeave={() => slider.setIsPaused(false)}
         onFocus={() => slider.setIsPaused(true)}
