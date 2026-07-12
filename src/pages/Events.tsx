@@ -619,72 +619,77 @@ function EventsInner() {
                 const coverImage = ImageRegistryService.getBestImage(ev?.performanceType || "Marriage", "event");
 
                 return (
-                  <motion.article
+                  <Link
                     key={ev.id || index}
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.2) }}
-                    className="group flex flex-col rounded-3xl border border-white/60 bg-white/80 p-5 shadow-[0_8px_32px_rgba(226,92,29,0.04)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-orange-100"
+                    to={`/event/${ev.id}`}
+                    className="group block h-full focus-visible:outline-none"
                   >
-                    {/* Cover image header */}
-                    <div className="relative w-full aspect-[16/10] overflow-hidden rounded-2xl bg-stone-50 border border-stone-100/50 mb-4 select-none">
-                      <img
-                        src={coverImage}
-                        alt={title}
-                        loading="lazy"
-                        className="w-full h-full object-cover object-center group-hover:scale-103 transition duration-700"
-                      />
-                      <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm shadow-sm rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#E25C1D] border border-orange-50">
-                        {ev?.performanceType || t("events.card.performance")}
-                      </span>
-                    </div>
-
-                    {/* Details content */}
-                    <div className="flex flex-col flex-1 gap-2.5 text-left">
-                      {/* Header Tier */}
-                      <h3 className="text-xl font-extrabold text-stone-900 leading-snug line-clamp-1 group-hover:text-[#E25C1D] transition">
-                        {title}
-                      </h3>
-
-                      {/* Financial Tier */}
-                      <div className="inline-flex items-center gap-1 rounded-xl bg-orange-50/50 border border-orange-100/50 px-3 py-1.5 w-fit mt-1">
-                        <IndianRupee className="h-4 w-4 text-[#E25C1D]" />
-                        <span className="text-lg font-black text-[#E25C1D]">
-                          {budgetVal > 0 ? budgetVal.toLocaleString("en-IN") : t("events.card.flexible")}
-                        </span>
-                        <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wide ml-1 select-none">
-                          {t("events.card.budget")}
+                    <motion.article
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.2) }}
+                      className="flex flex-col rounded-3xl border border-white/60 bg-white/80 p-5 shadow-[0_8px_32px_rgba(226,92,29,0.04)] backdrop-blur-sm transition-all duration-300 md:group-hover:-translate-y-1 md:group-hover:shadow-xl md:group-hover:border-orange-100 h-full"
+                    >
+                      {/* Cover image header */}
+                      <div className="relative w-full aspect-[16/10] overflow-hidden rounded-2xl bg-stone-50 border border-stone-100/50 mb-4 select-none">
+                        <img
+                          src={coverImage}
+                          alt={title}
+                          loading="lazy"
+                          className="w-full h-full object-cover object-center md:group-hover:scale-103 transition duration-700"
+                        />
+                        <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm shadow-sm rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#E25C1D] border border-orange-50">
+                          {ev?.performanceType || t("events.card.performance")}
                         </span>
                       </div>
 
-                      {/* Logistics Line */}
-                      <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm font-semibold text-stone-500 mt-2">
-                        <span className="flex items-center gap-1.5 shrink-0">
-                          <MapPin className="h-4 w-4 text-stone-400" />
-                          {locStr.split(",")[0]}
-                        </span>
-                        <span className="flex items-center gap-1.5 shrink-0">
-                          <Calendar className="h-4 w-4 text-stone-400" />
-                          {dateStr}
-                        </span>
-                      </div>
+                      {/* Details content */}
+                      <div className="flex flex-col flex-1 gap-2.5 text-left">
+                        {/* Header Tier */}
+                        <h3 className="text-xl font-extrabold text-stone-900 leading-snug line-clamp-1 md:group-hover:text-[#E25C1D] transition">
+                          {title}
+                        </h3>
 
-                      {/* Tag Array */}
-                      {categoriesList.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-auto pt-4 border-t border-stone-100/80">
-                          {categoriesList.map((cat: string) => (
-                            <span
-                              key={cat}
-                              className="rounded-full bg-stone-50 border border-stone-150 px-3 py-1 text-[10px] font-black text-stone-600 uppercase tracking-wider"
-                            >
-                              {cat}
-                            </span>
-                          ))}
+                        {/* Financial Tier */}
+                        <div className="inline-flex items-center gap-1 rounded-xl bg-orange-50/50 border border-orange-100/50 px-3 py-1.5 w-fit mt-1">
+                          <IndianRupee className="h-4 w-4 text-[#E25C1D]" />
+                          <span className="text-lg font-black text-[#E25C1D]">
+                            {budgetVal > 0 ? budgetVal.toLocaleString("en-IN") : t("events.card.flexible")}
+                          </span>
+                          <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wide ml-1 select-none">
+                            {t("events.card.budget")}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  </motion.article>
+
+                        {/* Logistics Line */}
+                        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm font-semibold text-stone-500 mt-2">
+                          <span className="flex items-center gap-1.5 shrink-0">
+                            <MapPin className="h-4 w-4 text-stone-400" />
+                            {locStr.split(",")[0]}
+                          </span>
+                          <span className="flex items-center gap-1.5 shrink-0">
+                            <Calendar className="h-4 w-4 text-stone-400" />
+                            {dateStr}
+                          </span>
+                        </div>
+
+                        {/* Tag Array */}
+                        {categoriesList.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-auto pt-4 border-t border-stone-100/80">
+                            {categoriesList.map((cat: string) => (
+                              <span
+                                key={cat}
+                                className="rounded-full bg-stone-50 border border-stone-150 px-3 py-1 text-[10px] font-black text-stone-600 uppercase tracking-wider"
+                              >
+                                {cat}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </motion.article>
+                  </Link>
                 );
               })}
             </AnimatePresence>
