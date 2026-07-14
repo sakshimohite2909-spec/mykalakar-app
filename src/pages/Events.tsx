@@ -58,7 +58,7 @@ interface NewBriefModalProps {
 }
 
 function NewBriefModal({ open, onClose }: NewBriefModalProps) {
-  const { currentUser } = useAuth();
+  const { currentUser, userRole } = useAuth();
   const { categories } = useCategories();
   const { t } = useI18n();
   const [eventName, setEventName] = useState("");
@@ -108,6 +108,15 @@ function NewBriefModal({ open, onClose }: NewBriefModalProps) {
         variant: "destructive",
         title: t("events.toast.signinRequired"),
         description: t("events.toast.signinRequiredText"),
+      });
+      return;
+    }
+
+    if (userRole === "artist") {
+      toast({
+        variant: "destructive",
+        title: t("events.toast.failed") || "Restricted Action",
+        description: t("events.toast.artistCannotPost"),
       });
       return;
     }
@@ -437,7 +446,7 @@ function EventsSkeleton() {
 
 // Inner component wrapper for safety and state
 function EventsInner() {
-  const { currentUser } = useAuth();
+  const { currentUser, userRole } = useAuth();
   const navigate = useNavigate();
   const { t } = useI18n();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -501,6 +510,14 @@ function EventsInner() {
         description: t("events.toast.authRequiredText"),
       });
       navigate("/login");
+      return;
+    }
+    if (userRole === "artist") {
+      toast({
+        variant: "destructive",
+        title: t("events.toast.failed") || "Restricted Action",
+        description: t("events.toast.artistCannotPost"),
+      });
       return;
     }
     setIsModalOpen(true);

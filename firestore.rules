@@ -31,9 +31,29 @@ service cloud.firestore {
     
     match /eventBriefs/{id} {
       allow read: if true;
-      allow create: if isAuth() && request.resource.data.createdBy == request.auth.uid;
-      allow update, delete: if isAuth() && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow create: if isAuth() && request.resource.data.createdBy == request.auth.uid && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != 'artist';
+      allow update: if isAuth() && (
+        resource.data.createdBy == request.auth.uid 
+        || isAdmin()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['applicationsCount', 'updatedAt'])
+      );
+      allow delete: if isAuth() && (resource.data.createdBy == request.auth.uid || isAdmin());
       match /{document=**} { allow read: if true; allow write: if isAuth() && isAdmin(); }
+    }
+
+    match /event_applications/{id} {
+      allow create: if isAuth() && request.resource.data.artistId == request.auth.uid;
+      allow read: if isAuth() && (
+        request.auth.uid == resource.data.artistId 
+        || get(/databases/$(database)/documents/eventBriefs/$(resource.data.eventId)).data.createdBy == request.auth.uid
+        || isAdmin()
+      );
+      allow update: if isAuth() && (
+        request.auth.uid == resource.data.artistId 
+        || get(/databases/$(database)/documents/eventBriefs/$(resource.data.eventId)).data.createdBy == request.auth.uid
+        || isAdmin()
+      );
+      allow delete: if isAdmin();
     }
     
     // MasterData structural mappings - Open read for dropdowns/filters, write restricted to Admins

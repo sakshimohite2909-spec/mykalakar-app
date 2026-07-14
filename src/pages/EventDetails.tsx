@@ -171,28 +171,54 @@ export default function EventDetails() {
           <aside className="lg:sticky lg:top-24 lg:self-start">
             <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
               <h2 className="text-lg font-extrabold text-stone-950">{t("event.applyTitle")}</h2> {/* ADDED FOR i18n */}
-              <p className="mt-1 text-xs font-semibold leading-5 text-stone-500">{t("event.applyText")}</p> {/* ADDED FOR i18n */}
-              <Textarea
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                placeholder={t("event.applyMessagePlaceholder")}
-                className="mt-4 min-h-28 rounded-2xl border-stone-200 bg-stone-50 text-sm font-semibold"
-              />
-              <Button onClick={handleApply} disabled={applying} className="mt-4 h-11 w-full rounded-full bg-orange-600 text-xs font-extrabold uppercase tracking-widest text-white hover:bg-orange-500">
-                {applying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                {t("event.applyNow")} {/* ADDED FOR i18n */}
-              </Button>
+              
+              {currentUser && !isArtist ? (
+                <div className="mt-4 rounded-xl bg-orange-50/50 border border-orange-100 p-4 text-center">
+                  <p className="text-sm font-bold text-stone-700 leading-6">
+                    {t("event.applyArtistOnlyText")}
+                  </p>
+                  <Link
+                    to="/register?role=artist"
+                    className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-full bg-orange-600 text-xs font-extrabold uppercase tracking-widest text-white hover:bg-orange-500 transition hover:scale-[1.01]"
+                  >
+                    {t("event.registerAsArtist")}
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-stone-500">{t("event.applyText")}</p> {/* ADDED FOR i18n */}
+                  <Textarea
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                    placeholder={t("event.applyMessagePlaceholder")}
+                    className="mt-4 min-h-28 rounded-2xl border-stone-200 bg-stone-50 text-sm font-semibold"
+                  />
+                  <Button onClick={handleApply} disabled={applying} className="mt-4 h-11 w-full rounded-full bg-orange-600 text-xs font-extrabold uppercase tracking-widest text-white hover:bg-orange-500">
+                    {applying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                    {t("event.applyNow")} {/* ADDED FOR i18n */}
+                  </Button>
+                </>
+              )}
             </div>
           </aside>
         </div>
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/95 p-3 shadow-[0_-10px_28px_rgba(28,25,23,0.10)] backdrop-blur-xl md:hidden">
-        <Button onClick={handleApply} disabled={applying} className="h-11 w-full rounded-full bg-orange-600 text-xs font-extrabold uppercase tracking-widest text-white hover:bg-orange-500">
-          {applying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-          {t("event.applyNow")} {/* ADDED FOR i18n */}
-        </Button>
-      </div>
+      {(!currentUser || isArtist) && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/95 p-3 shadow-[0_-10px_28px_rgba(28,25,23,0.10)] backdrop-blur-xl md:hidden">
+          <Button onClick={handleApply} disabled={applying} className="h-11 w-full rounded-full bg-orange-600 text-xs font-extrabold uppercase tracking-widest text-white hover:bg-orange-500">
+            {applying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+            {t("event.applyNow")} {/* ADDED FOR i18n */}
+          </Button>
+        </div>
+      )}
+      {currentUser && !isArtist && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/95 p-3 shadow-[0_-10px_28px_rgba(28,25,23,0.10)] backdrop-blur-xl md:hidden">
+          <Link to="/register?role=artist" className="inline-flex h-11 w-full items-center justify-center rounded-full bg-orange-600 text-xs font-extrabold uppercase tracking-widest text-white hover:bg-orange-500">
+            {t("event.registerAsArtist")}
+          </Link>
+        </div>
+      )}
 
       <Footer />
     </div>

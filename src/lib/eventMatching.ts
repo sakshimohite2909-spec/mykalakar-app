@@ -10,7 +10,12 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { getArtistArtForms, normalizeArtistType } from "@/constants/artistSystem";
+import {
+  getArtistArtForms,
+  normalizeArtistType,
+  CATEGORY_GROUPS,
+  getCategoryGroupForArtistType,
+} from "@/constants/artistSystem";
 import { sanitizePayload } from "@/lib/firebaseSafe";
 
 export type EventStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -28,20 +33,88 @@ export interface CulturalEventPayload {
   createdBy?: string;
   status?: EventStatus | string;
   applicationsCount?: number;
+  subCategory?: string;
+  subcategory?: string;
+  category?: string;
+  categories?: string[];
 }
 
 export function normalizeArtForm(value: unknown) {
   return normalizeArtistType(value) ?? String(value ?? "").trim();
 }
 
+export function getEventArtForms(event: CulturalEventPayload): string[] {
+  const candidates = [
+    ...(Array.isArray(event.categories) ? event.categories : []),
+    event.artType,
+    event.subCategory,
+    event.subcategory,
+    event.category,
+  ];
+  const forms = Array.from(new Set(candidates.map(c => normalizeArtForm(c)).filter(Boolean)));
+  if (forms.length === 0 && event.performanceType) {
+    forms.push(normalizeArtForm(event.performanceType));
+  }
+  return forms;
+}
+
 export function getEventArtType(event: CulturalEventPayload) {
-  return normalizeArtForm(event.artType);
+  const forms = getEventArtForms(event);
+  return forms[0] || "";
+}
+
+export function getAllRelatedArtForms(form: string): string[] {
+  const trimmed = String(form || "").trim();
+  if (!trimmed) return [];
+
+  const results = [trimmed.toLowerCase()];
+
+  // Check if it matches a parent group name case-insensitively
+  for (const [groupName, group] of Object.entries(CATEGORY_GROUPS)) {
+    if (groupName.toLowerCase() === trimmed.toLowerCase()) {
+      for (const sub of group.subcategories) {
+        results.push(sub.toLowerCase());
+      }
+    }
+  }
+
+  // Check if it's a subcategory of a parent group
+  const parentGroup = getCategoryGroupForArtistType(trimmed);
+  if (parentGroup) {
+    results.push(parentGroup.toLowerCase());
+  }
+
+  return Array.from(new Set(results));
 }
 
 export function artistMatchesEvent(event: CulturalEventPayload, artistProfile: Record<string, any>) {
-  const artType = getEventArtType(event);
-  if (!artType || event.status !== "APPROVED") return false;
-  return getArtistArtForms(artistProfile).includes(artType);
+  const status = String(event.status || "").toUpperCase();
+  if (status !== "APPROVED") return false;
+
+  const eventArtForms = getEventArtForms(event);
+  if (eventArtForms.length === 0) return false;
+
+  const artistArtForms = getArtistArtForms(artistProfile);
+  if (artistArtForms.length === 0) return false;
+
+  // Expand event art forms to all related categories and subcategories
+  const expandedEventForms = new Set(
+    eventArtForms.flatMap(form => getAllRelatedArtForms(form))
+  );
+
+  // Expand artist art forms to all related categories and subcategories
+  const expandedArtistForms = new Set(
+    artistArtForms.flatMap(form => getAllRelatedArtForms(form))
+  );
+
+  // Check if there is any intersection between expanded forms
+  for (const artistForm of expandedArtistForms) {
+    if (expandedEventForms.has(artistForm)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export async function submitEventApplication({
@@ -55,17 +128,43 @@ export async function submitEventApplication({
 }) {
   if (!artistId) throw new Error("User not authenticated");
   return runTransaction(db, async (transaction) => {
-    const eventRef = doc(db, "events", eventId);
+    const eventRef = doc(db, "eventBriefs", eventId);
     const userRef = doc(db, "users", artistId);
+    const artistRef = doc(db, "artists", artistId);
     const eventSnap = await transaction.get(eventRef);
     const userSnap = await transaction.get(userRef);
+    const artistSnap = await transaction.get(artistRef);
 
     if (!eventSnap.exists()) throw new Error("Event not found.");
-    if (!userSnap.exists()) throw new Error("Artist profile not found.");
+    if (!userSnap.exists() && !artistSnap.exists()) {
+      throw new Error("Artist profile not found.");
+    }
 
     const event = eventSnap.data() as CulturalEventPayload;
-    const userProfile = userSnap.data();
-    if (!artistMatchesEvent(event, userProfile)) {
+    const userProfile = userSnap.exists() ? userSnap.data() : {};
+    const artistProfile = artistSnap.exists() ? artistSnap.data() : {};
+
+    const role = userProfile.role || artistProfile.role || "";
+    if (role !== "artist") {
+      throw new Error("Only registered artists can apply for events.");
+    }
+
+    // Merge user and artist documents to capture all potential art forms and profile details
+    const mergedArtist = {
+      ...userProfile,
+      ...artistProfile,
+      artistProfile: {
+        ...(userProfile?.artistProfile || {}),
+        ...(artistProfile?.artistProfile || {}),
+      },
+    };
+
+    const eventStatus = String(event.status || "").toUpperCase();
+    if (eventStatus !== "APPROVED") {
+      throw new Error("This event is not open for applications yet.");
+    }
+
+    if (!artistMatchesEvent(event, mergedArtist)) {
       throw new Error("This event is not open for your registered art forms.");
     }
 
@@ -91,7 +190,8 @@ export async function submitEventApplication({
 
 export async function notifyArtistsForApprovedEvent(eventId: string, event: CulturalEventPayload) {
   const artType = getEventArtType(event);
-  if (!artType || event.status !== "APPROVED") return 0;
+  const status = String(event.status || "").toUpperCase();
+  if (!artType || status !== "APPROVED") return 0;
 
   const matchingArtists = await getDocs(
     query(collection(db, "users"), where("artistProfile.artForms", "array-contains", artType))
