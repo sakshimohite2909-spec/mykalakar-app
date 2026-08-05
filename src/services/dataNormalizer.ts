@@ -18,28 +18,62 @@ import { getCategoryGroupForArtistType } from "../constants/artistSystem";
 // Add any known data-entry errors here. These are corrected globally at render.
 const TYPO_MAP: Record<string, string> = {
   // Spelling fixes
-  "marraige": "Marriage",
-  "marrige": "Marriage",
-  "mariage": "Marriage",
+  "marraige": "Wedding",
+  "marrige": "Wedding",
+  "mariage": "Wedding",
+  "wedding": "Wedding",
   // Category casing fixes
   "dj's": "DJs",
   "dj s": "DJs",
   "d.j.": "DJs",
-  // Subcategory aliases
+  // Varkari Sampraday aliases & typos
   "bhajan mandal": "Bhajani Mandal",
   "tabla player": "Tabla Vadak",
+  "harmonium player": "Harmonium Vadak",
+  "dholki player": "Dholki Vadak",
+  "mridang": "Mridangamani",
+  "mrudungmani": "Mridangamani",
+  "mrudung": "Mridangamani",
+  "veenekari": "Vinekari",
+  "taalkari": "Talkari",
+  "taal kari": "Talkari",
   "kirtan group": "Kirtankar",
-  "dhol group": "Dhol Pathak",
+  "kirtan": "Kirtankar",
+  "pravachan": "Pravachankar",
+  "vyaspeeth": "Vyaspithchalak",
+  "vyaspith": "Vyaspithchalak",
+  "bhagwat katha": "Bhagwat Katha Kathan",
+  "bhagwat kathan": "Bhagwat Katha Kathan",
+  "ram katha": "Ram Katha",
+  "ram kathan": "Ram Katha",
+  "warkari": "Varkari Sampraday",
+  "warkari sanstha": "Warkari Sanstha",
+  // Wedding aliases & typos
+  "wedding photographer": "Wedding Photographer",
+  "mehndi artist": "Mehendi Artist",
+  "mehandi artist": "Mehendi Artist",
+  "dhol tasha": "Dhol-Tasha Pathak",
+  "dhol-tasha": "Dhol-Tasha Pathak",
+  "dhol pathak": "Dhol-Tasha Pathak",
   "lezim group": "Lezim Pathak",
   // Event type fixes
-  "corporate event": "Corporate",
+  "corporate event": "Corporate Event",
   "birthday party": "Birthday",
-  "festival event": "Festival",
-  "spiritual event": "Spiritual",
+  "festival event": "Festival Event",
+  "spiritual event": "Varkari Sampraday",
 };
 
 // ─── CATEGORY CANONICAL NAMES ────────────────────────────────────────────────
 const CATEGORY_CANONICAL: Record<string, string> = {
+  "varkari sampraday": "Varkari Sampraday",
+  "varkari samprday": "Varkari Sampraday",
+  "varkari": "Varkari Sampraday",
+  "spiritual": "Varkari Sampraday",
+  "spiritual & varkari sampraday": "Varkari Sampraday",
+  "spiritual and varkari sampraday": "Varkari Sampraday",
+  "spiritual varkari sampraday": "Varkari Sampraday",
+  "wedding": "Wedding",
+  "marriage": "Wedding",
   "performers": "Performers",
   "performer": "Performers",
   "event services": "Event Services",
@@ -49,11 +83,6 @@ const CATEGORY_CANONICAL: Record<string, string> = {
   "folk & traditional arts": "Folk & Traditional Arts",
   "folk and traditional arts": "Folk & Traditional Arts",
   "folk traditional": "Folk & Traditional Arts",
-  "spiritual varkari sampraday": "Spiritual & Varkari Sampraday",
-  "spiritual & varkari sampraday": "Spiritual & Varkari Sampraday",
-  "spiritual and varkari sampraday": "Spiritual & Varkari Sampraday",
-  "varkari": "Spiritual & Varkari Sampraday",
-  "spiritual": "Spiritual & Varkari Sampraday",
 };
 
 // ─── PRIMITIVE NORMALIZER ───────────────────────────────────────────────────

@@ -35,7 +35,7 @@ import {
   limit,
 } from "firebase/firestore";
 
-export type UserRole = "admin" | "artist" | "user" | "customer" | "admin_request" | null;
+export type UserRole = "admin" | "artist" | "telecaller" | "user" | "customer" | "admin_request" | null;
 export type ApplicationStatus = "pending" | "approved" | "rejected" | "active" | "hidden" | "suspended" | null;
 
 export interface ArtistData {
@@ -45,7 +45,13 @@ export interface ArtistData {
   email: string;
   status: ApplicationStatus;
   applicationId?: string;
-  [key: string]: unknown;
+  category?: string;
+  subcategory?: string;
+  artForm?: string;
+  verified?: boolean;
+  profilePhoto?: string;
+  media?: { profilePhoto?: string; [key: string]: any };
+  [key: string]: any;
 }
 
 interface AuthContextType {
@@ -58,6 +64,7 @@ interface AuthContextType {
   applicationStatus: ApplicationStatus;
   isAdmin: boolean;
   isArtist: boolean;
+  isTelecaller: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
   register: (email: string, password: string) => Promise<{ success: boolean; uid: string; message: string }>;
@@ -506,6 +513,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       applicationStatus,
       isAdmin,
       isArtist: userRole === "artist" && (applicationStatus === "approved" || applicationStatus === "active"),
+      isTelecaller: userRole === "telecaller" || isAdmin,
       loading,
       login,
       register,

@@ -15,6 +15,7 @@ import { PHONE_MAX_LENGTH, PHONE_PLACEHOLDER, sanitizePhoneNumber, validatePhone
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
 import { createArtistBooking, checkArtistAvailability } from "@/services/artistBookingService";
+import { saveCustomerInquiryLead } from "@/services/telecallerService";
 import { motion, AnimatePresence } from "framer-motion";
 
 const eventTypes = ["Wedding", "Corporate Event", "Birthday Party", "Festival", "Concert", "Private Event"];
@@ -214,6 +215,20 @@ export default function BookingModal({ open, onOpenChange, artistName, artistId,
         FIREBASE_WRITE_TIMEOUT_MS,
         t("booking.timeoutText")
       );
+
+      // Automatically sync inquiry to Telecaller Workbench
+      saveCustomerInquiryLead({
+        customerName: formData.customerName,
+        customerPhone: formData.customerPhone,
+        customerEmail: currentUser.email || "",
+        eventType: formData.eventType,
+        eventDate: formData.eventDate,
+        eventLocation: formData.eventLocation,
+        budget: Number(formData.authorizedAmount || 0),
+        message: formData.message || formData.specialRequirements || "",
+        artistId,
+        artistName,
+      });
 
       toast({
         title: "Booking Requested & Authorized",

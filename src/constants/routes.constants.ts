@@ -55,6 +55,9 @@ export const ROUTES = {
   ADMIN_SETTINGS: "settings",
   ADMIN_BOOTSTRAP: "bootstrap",
   ADMIN_EVENT_BRIEFS: "event-briefs",
+
+  // Telecaller Dashboard
+  TELECALLER: "/telecaller",
 } as const;
 
 export type AppRoutes = typeof ROUTES;

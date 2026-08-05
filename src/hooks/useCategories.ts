@@ -9,6 +9,68 @@ export interface CategoryGroup {
 
 const FALLBACK_CATEGORIES: CategoryGroup[] = [
   {
+    heading: "Varkari Sampraday",
+    tags: [
+      "Kirtankar",
+      "Pravachankar",
+      "Vyaspithchalak",
+      "Chopdar",
+      "Bhagwat Katha Kathan",
+      "Ram Katha",
+      "Gayak",
+      "Bharudkar",
+      "Bhajani Mandal",
+      "Shastriya Bhajan",
+      "Mridangamani",
+      "Vinekari",
+      "Talkari",
+      "Tabla Vadak",
+      "Harmonium Vadak",
+      "Dholki Vadak",
+      "Chiplya Player",
+      "Warkari Sanstha",
+      "Sound System",
+      "Mandap Decoration"
+    ],
+  },
+  {
+    heading: "Wedding",
+    tags: [
+      "Banquet Hall",
+      "Marriage Hall",
+      "Lawn",
+      "Bridal Makeup Artist",
+      "Groom Makeup Artist",
+      "Mehendi Artist",
+      "Wedding Photographer",
+      "Candid Photographer",
+      "Wedding Videographer",
+      "Drone Photography",
+      "Pre-Wedding Shoot",
+      "DJ",
+      "Live Singer",
+      "Orchestra",
+      "Wedding Band",
+      "Anchor (Emcee)",
+      "Dhol-Tasha Pathak",
+      "Lezim Pathak",
+      "Veg Catering",
+      "Non-Veg Catering",
+      "Buffet Service",
+      "Maharashtrian Catering",
+      "Wedding Decorator",
+      "Flower Decoration",
+      "Mandap Decoration",
+      "Sound System",
+      "Stage Setup",
+      "Lighting",
+      "Bridal Car",
+      "Wedding Card Designer",
+      "Pandit / Priest",
+      "Wedding Planner"
+    ],
+  },
+  {
     heading: "Performers",
     tags: [
       "Karaoke Singers",
@@ -30,8 +92,8 @@ const FALLBACK_CATEGORIES: CategoryGroup[] = [
       "Videography",
       "Makeup Artists",
       "Mehndi Artists",
-      "Sound & Lighting",
-      "Anchors/Hosts"
+      "Sound System",
+      "Mandap Decoration"
     ],
   },
   {
@@ -48,28 +110,6 @@ const FALLBACK_CATEGORIES: CategoryGroup[] = [
       "Jalsa & Dashavatar",
       "Dhagaai & Dholki",
       "Bahurupiya"
-    ],
-  },
-  {
-    heading: "Spiritual & Varkari Sampraday",
-    tags: [
-      "Kirtankar",
-      "Pravachankar",
-      "Vyaspeeth Chalak",
-      "Chiplya Player",
-      "Gayak",
-      "Mrudungmani",
-      "Bharudkar",
-      "Sound System",
-      "Mandap & Decoration",
-      "Veenekari",
-      "Taal Kari",
-      "Varkari Sanstha",
-      "Bhajani Mandal",
-      "Shastriya Bhajan",
-      "Tabla Vadak",
-      "Harmonium Vadak",
-      "Dholki Vadak"
     ],
   }
 ];

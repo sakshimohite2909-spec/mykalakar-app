@@ -192,14 +192,12 @@ h6 {
 }
 
 .brand-logo-mark {
-  background:
-    radial-gradient(circle at 36% 22%, rgba(255, 214, 102, 0.22), transparent 42%),
-    #fff !important;
+  background: #fff !important;
 }
 
 .brand-logo-mark img {
   display: block;
-  transform: scale(1.08);
+  object-fit: contain;
 }
 
 .btn-glass-primary,
@@ -490,22 +488,23 @@ h6 {
 }
 
 .luxury-card {
+  position: relative !important;
   min-height: 0 !important;
   overflow: hidden !important;
   border: 1px solid var(--mk-line) !important;
   border-radius: var(--mk-radius) !important;
   background: var(--mk-surface) !important;
-  box-shadow: var(--mk-shadow-sm) !important;
+  box-shadow: 0 4px 20px rgba(78, 50, 26, 0.04) !important;
   transition:
-    transform 220ms var(--mk-ease),
-    border-color 220ms var(--mk-ease),
-    box-shadow 220ms var(--mk-ease) !important;
+    transform 400ms cubic-bezier(0.25, 1, 0.5, 1),
+    border-color 400ms cubic-bezier(0.25, 1, 0.5, 1),
+    box-shadow 400ms cubic-bezier(0.25, 1, 0.5, 1) !important;
 }
 
 .luxury-card:hover {
-  transform: translate3d(0, -3px, 0) !important;
-  border-color: rgba(249, 115, 22, 0.26) !important;
-  box-shadow: var(--mk-shadow-md) !important;
+  transform: translate3d(0, -8px, 0) !important;
+  border-color: rgba(249, 115, 22, 0.35) !important;
+  box-shadow: 0 20px 38px rgba(78, 50, 26, 0.12), 0 4px 12px rgba(249, 115, 22, 0.05) !important;
 }
 
 .luxury-card > a,
@@ -527,6 +526,8 @@ h6 {
   min-height: 0 !important;
   height: 100% !important;
   background: #f5efe8 !important;
+  position: relative !important;
+  overflow: hidden !important;
 }
 
 .luxury-card-media .smart-image,
@@ -537,6 +538,14 @@ h6 {
   width: 100% !important;
   object-fit: cover !important;
   object-position: center !important;
+  transition: transform 800ms cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.luxury-card:hover .luxury-card-media .smart-image,
+.luxury-card:hover .luxury-card-media img,
+.luxury-card:hover .standard-card-surface .smart-image,
+.luxury-card:hover .standard-card-surface img {
+  transform: scale(1.08) !important;
 }
 
 .luxury-card-vignette {
@@ -546,13 +555,21 @@ h6 {
 .luxury-card-rating {
   left: 0.7rem !important;
   top: 0.7rem !important;
-  border: 1px solid rgba(255, 255, 255, 0.74) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
   border-radius: 999px !important;
-  background: rgba(255, 255, 255, 0.9) !important;
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
   color: var(--mk-orange-dark) !important;
-  padding: 0.35rem 0.55rem !important;
+  padding: 0.35rem 0.65rem !important;
   font-size: 0.68rem !important;
-  box-shadow: var(--mk-shadow-sm) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+  transition: transform 300ms cubic-bezier(0.25, 1, 0.5, 1), background-color 300ms cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.luxury-card:hover .luxury-card-rating {
+  transform: scale(1.05) translateY(-1px) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
 }
 
 .luxury-card-body {
@@ -578,9 +595,15 @@ h6 {
 }
 
 .luxury-card-title-row svg {
-  height: 1rem !important;
-  width: 1rem !important;
+  height: 1.1rem !important;
+  width: 1.1rem !important;
   color: var(--mk-orange) !important;
+  transition: transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1), color 350ms ease !important;
+}
+
+.luxury-card:hover .luxury-card-title-row svg {
+  transform: translate3d(3px, -3px, 0) scale(1.15) !important;
+  color: var(--mk-orange-dark) !important;
 }
 
 .luxury-card-subtitle {
@@ -609,6 +632,39 @@ h6 {
 .luxury-card-meta strong {
   color: var(--mk-orange-dark) !important;
   font-size: 0.75rem !important;
+}
+
+/* Premium Card Shining Effect & Amber Glow on Hover */
+.luxury-artist-card.border-amber-400\/80 {
+  position: relative !important;
+}
+
+.luxury-artist-card.border-amber-400\/80::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -150%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: skewX(-25deg);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.luxury-artist-card.border-amber-400\/80:hover::before {
+  left: 250%;
+  transition: left 1.2s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.luxury-artist-card.border-amber-400\/80:hover {
+  border-color: rgba(245, 158, 11, 0.6) !important;
+  box-shadow: 0 20px 42px rgba(245, 158, 11, 0.15), 0 4px 14px rgba(245, 158, 11, 0.08) !important;
 }
 
 .luxury-page .category-card,
@@ -736,6 +792,7 @@ h6 {
   font-family: "Poppins", "Montserrat", "Noto Sans Devanagari", system-ui, sans-serif !important;
   color: #111827 !important;
   letter-spacing: 0 !important;
+  line-height: 1.4 !important;
 }
 
 .profile-primary-cta {

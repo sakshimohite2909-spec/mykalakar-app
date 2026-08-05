@@ -67,24 +67,52 @@ type LiveBrief = Record<string, unknown>;
 
 const CHIP_GROUPS: { heading: string; icon: React.ReactNode; tags: string[] }[] = [
   {
+    heading: "Varkari Sampraday",
+    icon: <Star className="h-3.5 w-3.5 text-amber-500" />,
+    tags: [
+      "Kirtankar",
+      "Pravachankar",
+      "Vyaspithchalak",
+      "Chopdar",
+      "Bhagwat Katha Kathan",
+      "Ram Katha",
+      "Bhajani Mandal",
+      "Mridangamani",
+      "Gayak",
+      "Bharudkar",
+      "Tabla Vadak",
+      "Harmonium Vadak",
+    ],
+  },
+  {
+    heading: "Wedding",
+    icon: <Sparkles className="h-3.5 w-3.5 text-rose-500" />,
+    tags: [
+      "Wedding Photographer",
+      "Bridal Makeup Artist",
+      "Mehendi Artist",
+      "Wedding Decorator",
+      "DJ",
+      "Pandit / Priest",
+      "Dhol-Tasha Pathak",
+      "Catering",
+      "Wedding Band",
+    ],
+  },
+  {
     heading: "Performers",
     icon: <Mic2 className="h-3.5 w-3.5" />,
-    tags: ["Karaoke Singers", "Orchestra", "Magicians", "DJs", "Live Bands"],
+    tags: ["Karaoke Singers", "Orchestra", "Magicians", "DJs", "Live Bands", "Anchors / Hosts"],
   },
   {
     heading: "Event Services",
     icon: <Camera className="h-3.5 w-3.5" />,
-    tags: ["Photography", "Videography", "Makeup Artists", "Sound & Lighting", "Anchors/Hosts"],
+    tags: ["Photography", "Videography", "Makeup Artists", "Sound System", "Mandap Decoration"],
   },
   {
     heading: "Folk & Traditional Arts",
     icon: <Music className="h-3.5 w-3.5" />,
-    tags: ["Gondhal", "Jagran", "Bharud", "Lavani Performers", "Dhol Tasha Pathak"],
-  },
-  {
-    heading: "Spiritual & Varkari Sampraday",
-    icon: <Star className="h-3.5 w-3.5" />,
-    tags: ["Kirtankar", "Pravachankar", "Bhajan Mandal"],
+    tags: ["Gondhal", "Jagran", "Bharud", "Lezim Pathak", "Dhol Pathak", "Waghya Murali"],
   },
 ];
 

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { STATIC_IMAGES } from "@/services/ImageRegistryService";
 import {
   ArrowLeft,
   AtSign,
@@ -154,8 +155,8 @@ export default function ArtistLogin() {
           className="w-full max-w-md justify-self-center"
         >
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl gradient-bg shadow-[0_12px_40px_rgba(232,111,58,0.25)]">
-              <Music className="h-7 w-7 text-white" />
+            <div className="mx-auto mb-5 inline-flex items-center justify-center">
+              <img src={STATIC_IMAGES.logo} alt="MyKalakar" className="h-12 md:h-14 w-auto object-contain" />
             </div>
             <h1 className="font-display text-4xl font-black tracking-tight text-[#1A1A1A]">
               {t("auth.loginTitle")}

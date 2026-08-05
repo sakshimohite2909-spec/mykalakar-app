@@ -2,7 +2,7 @@ import { useState, Suspense } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { imageRegistry } from "@/services/ImageRegistryService";
+import { imageRegistry, STATIC_IMAGES } from "@/services/ImageRegistryService";
 import { getUsableImageUrl } from "@/utils/fallbackImages";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,11 +70,8 @@ export default function ArtistLayout() {
             {/* Sidebar - Desktop */}
             <aside className="hidden lg:flex flex-col w-64 border-r border-border/50 bg-card/50 backdrop-blur-xl p-4 sticky top-0 h-screen">
                 {/* Logo */}
-                <Link to="/" className="flex items-center gap-2 px-3 mb-6">
-                    <div className="w-9 h-9 rounded-lg gradient-bg flex items-center justify-center text-primary-foreground font-display font-bold text-lg">
-                        M
-                    </div>
-                    <span className="font-display font-bold text-xl">MyKalakar</span>
+                <Link to="/" className="flex items-center px-1 mb-6">
+                    <img src={STATIC_IMAGES.logo} alt="MyKalakar" className="h-10 w-auto object-contain" />
                 </Link>
 
                 {/* Artist Info */}
@@ -139,11 +136,8 @@ export default function ArtistLayout() {
                         className="absolute left-0 top-0 bottom-0 w-72 bg-background border-r border-border p-4 flex flex-col"
                     >
                         <div className="flex items-center justify-between mb-6">
-                            <Link to="/" className="flex items-center gap-2">
-                                <div className="w-9 h-9 rounded-lg gradient-bg flex items-center justify-center text-primary-foreground font-display font-bold text-lg">
-                                    M
-                                </div>
-                                <span className="font-display font-bold text-xl">MyKalakar</span>
+                            <Link to="/" className="flex items-center">
+                                <img src={STATIC_IMAGES.logo} alt="MyKalakar" className="h-9 w-auto object-contain" />
                             </Link>
                             <button onClick={() => setSidebarOpen(false)}>
                                 <X className="h-5 w-5" />

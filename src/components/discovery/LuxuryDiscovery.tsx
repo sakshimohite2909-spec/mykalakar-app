@@ -7,6 +7,8 @@ import {
   BadgeCheck,
   CalendarDays,
   MapPin,
+  MessageSquare,
+  Phone,
   RefreshCw,
   Search,
   SlidersHorizontal,

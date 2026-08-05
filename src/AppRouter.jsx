@@ -45,6 +45,11 @@ const ArtistAvailabilityPage = lazy(() => import("./pages/artist/ArtistAvailabil
 const ArtistNotifications = lazy(() => import("./pages/artist/ArtistNotifications"));
 const ArtistReviews = lazy(() => import("./pages/artist/ArtistReviews"));
 const ArtistSettings = lazy(() => import("./pages/artist/ArtistSettings"));
+const SchoolTemplate = lazy(() => import("./components/SchoolTemplate"));
+const TelecallerProtectedRoute = lazy(() => import("./components/TelecallerProtectedRoute"));
+const TelecallerLayout = lazy(() => import("./pages/telecaller/TelecallerLayout"));
+const TelecallerDashboard = lazy(() => import("./pages/telecaller/TelecallerDashboard"));
+const TelecallerLogin = lazy(() => import("./pages/telecaller/TelecallerLogin"));
 
 const artistDashboardChildren = [
   { index: true, element: <ArtistDashboardHome /> },
@@ -73,7 +78,9 @@ const router = createBrowserRouter([
       { path: "artist-login", element: <ArtistLogin /> },
       { path: "admin-login", element: <ArtistLogin /> },
       { path: "user-login", element: <ArtistLogin /> },
+      { path: "telecaller-login", element: <TelecallerLogin /> },
       { path: "forgot-password", element: <ForgotPassword /> },
+      { path: "school", element: <SchoolTemplate /> },
       {
         path: "profile",
         element: (
@@ -140,6 +147,21 @@ const router = createBrowserRouter([
           { path: ROUTES.ADMIN_SETTINGS, element: <AdminSettings /> },
           { path: ROUTES.ADMIN_BOOTSTRAP, element: <AdminBootstrap /> },
           { path: ROUTES.ADMIN_EVENT_BRIEFS, element: <AdminEventBriefs /> },
+        ],
+      },
+      {
+        path: "telecaller",
+        element: (
+          <TelecallerProtectedRoute>
+            <TelecallerLayout />
+          </TelecallerProtectedRoute>
+        ),
+        errorElement: <RouteErrorBoundary />,
+        children: [
+          { index: true, element: <TelecallerDashboard /> },
+          { path: "dashboard", element: <TelecallerDashboard /> },
+          { path: "leads", element: <TelecallerDashboard /> },
+          { path: "artists", element: <TelecallerDashboard /> },
         ],
       },
       { path: ROUTES.NOT_FOUND, element: <NotFound /> },

@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { LayoutDashboard, Users, FolderOpen, CalendarDays, UserPlus, Settings, LogOut, Menu, X, MapPin, ShieldCheck, Search, UserCircle, Loader2, FileText } from "lucide-react";
 import { useState, Suspense } from "react";
 import { cn } from "@/lib/utils";
+import { STATIC_IMAGES } from "@/services/ImageRegistryService";
 
 const sidebarItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -39,10 +40,9 @@ export default function AdminLayout() {
       )}>
         <div className="mb-6 flex items-center justify-between px-3">
           <Link to="/admin" className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg gradient-bg flex items-center justify-center text-primary-foreground font-display font-bold text-lg">M</div>
+            <img src={STATIC_IMAGES.logo} alt="MyKalakar" className="h-9 w-auto object-contain" />
             <div className={cn("transition-opacity", collapsed && "lg:hidden")}>
-              <span className="block font-display font-bold text-xl leading-none">MyKalakar</span>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Admin</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600 block">Admin</span>
             </div>
           </Link>
           <button className="lg:hidden rounded-lg p-2 transition hover:bg-secondary/50" onClick={() => setSidebarOpen(false)}><X className="h-5 w-5" /></button>

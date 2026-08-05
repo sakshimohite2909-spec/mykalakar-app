@@ -101,7 +101,7 @@ export function BookingListView({
                   <Eye className="mr-2 h-4 w-4" />
                   View Details
                 </Button>
-                {showActions && booking.status === "pending" && (
+                {showActions && (booking.status === "pending" || booking.status === "PENDING_ARTIST_RESPONSE") && (
                   <>
                     <Button
                       className="bg-[#FF6B00] text-white hover:bg-[#e86100]"

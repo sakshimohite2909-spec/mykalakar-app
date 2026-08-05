@@ -35,13 +35,16 @@ import {
     Youtube,
     Building2,
     Phone,
+    IndianRupee,
 } from "lucide-react";
 import { NavigationBlocker } from "@/components/NavigationBlocker";
+import { Switch } from "@/components/ui/switch";
 
 const BIO_MAX_LENGTH = 1000;
 
 export default function ArtistEditProfile() {
-    const { artistData, refreshArtistData } = useAuth();
+    const { artistData: rawArtistData, refreshArtistData } = useAuth();
+    const artistData = rawArtistData as any;
     const [loading, setLoading] = useState(false);
     const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
     const [isDirty, setIsDirty] = useState(false);
@@ -65,6 +68,10 @@ export default function ArtistEditProfile() {
         bankName: "",
         ifscCode: "",
         accountNumber: "",
+        soloPrice: "",
+        duoPrice: "",
+        teamPrice: "",
+        showPricingOnProfile: false,
     });
 
     const [socialLinks, setSocialLinks] = useState<Array<{ platform: string; url: string }>>([]);
@@ -126,6 +133,10 @@ export default function ArtistEditProfile() {
                 bankName: artistData.bankDetails?.bankName || artistData.bankName || "",
                 ifscCode: artistData.bankDetails?.ifscCode || artistData.ifscCode || "",
                 accountNumber: artistData.bankDetails?.accountNumber || artistData.accountNumber || "",
+                soloPrice: artistData.soloPrice || artistData.soloPerformancePrice || "",
+                duoPrice: artistData.duoPrice || artistData.duoPerformancePrice || "",
+                teamPrice: artistData.teamPrice || artistData.teamPerformancePrice || "",
+                showPricingOnProfile: artistData.showPricingOnProfile ?? artistData.showPriceOnProfile ?? false,
             });
             const existingYoutubeLinks = Array.isArray(artistData.youtubeLinks)
                 ? artistData.youtubeLinks.map((url: string) => ({ platform: "youtube", url }))
@@ -331,6 +342,43 @@ export default function ArtistEditProfile() {
         setLoading(true);
         try {
             const ownerId = artistData.uid || artistData.id;
+
+            const updatedCategoriesArray = Array.isArray(artistData.categoriesArray) && artistData.categoriesArray.length
+                ? artistData.categoriesArray.map((entry: any, index: number) => {
+                    if (index === 0) {
+                        return {
+                            ...entry,
+                            soloPrice: Number(formData.soloPrice) || 0,
+                            soloPerformancePrice: Number(formData.soloPrice) || 0,
+                            duoPrice: Number(formData.duoPrice) || 0,
+                            duoPerformancePrice: Number(formData.duoPrice) || 0,
+                            teamPrice: Number(formData.teamPrice) || 0,
+                            teamPerformancePrice: Number(formData.teamPrice) || 0,
+                            showPricingOnProfile: formData.showPricingOnProfile,
+                        };
+                    }
+                    return entry;
+                })
+                : undefined;
+
+            const updatedArtsList = Array.isArray(artistData.artsList) && artistData.artsList.length
+                ? artistData.artsList.map((entry: any, index: number) => {
+                    if (index === 0) {
+                        return {
+                            ...entry,
+                            soloPrice: Number(formData.soloPrice) || 0,
+                            soloPerformancePrice: Number(formData.soloPrice) || 0,
+                            duoPrice: Number(formData.duoPrice) || 0,
+                            duoPerformancePrice: Number(formData.duoPrice) || 0,
+                            teamPrice: Number(formData.teamPrice) || 0,
+                            teamPerformancePrice: Number(formData.teamPrice) || 0,
+                            showPricingOnProfile: formData.showPricingOnProfile,
+                        };
+                    }
+                    return entry;
+                })
+                : undefined;
+
             await withTimeout(
                 updateUnifiedArtistProfile({
                     artistId: artistData.id,
@@ -358,6 +406,16 @@ export default function ArtistEditProfile() {
                     portfolioUrl: validYoutubeLinks[0] || "",
                     videos: validYoutubeLinks.map((url) => ({ platform: "youtube", url })),
                     artistProfile: buildArtistProfile(),
+                    soloPrice: Number(formData.soloPrice) || 0,
+                    soloPerformancePrice: Number(formData.soloPrice) || 0,
+                    duoPrice: Number(formData.duoPrice) || 0,
+                    duoPerformancePrice: Number(formData.duoPrice) || 0,
+                    teamPrice: Number(formData.teamPrice) || 0,
+                    teamPerformancePrice: Number(formData.teamPrice) || 0,
+                    showPricingOnProfile: formData.showPricingOnProfile,
+                    showPriceOnProfile: formData.showPricingOnProfile,
+                    ...(updatedCategoriesArray ? { categoriesArray: updatedCategoriesArray } : {}),
+                    ...(updatedArtsList ? { artsList: updatedArtsList } : {}),
                     },
                     userData: {
                         name: formData.name,
@@ -689,6 +747,80 @@ export default function ArtistEditProfile() {
                         <Button type="button" variant="outline" size="sm" onClick={addSocialLink} className="w-full">
                             <Plus className="h-4 w-4 mr-2" /> Add More Links
                         </Button>
+                    </CardContent>
+                </Card>
+            </motion.div>
+
+            {/* Pricing Details */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
+                <Card>
+                    <CardContent className="p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-semibold flex items-center gap-2">
+                                <IndianRupee className="h-5 w-5 text-orange-500" /> Performance Pricing
+                            </h3>
+                            <div className="flex items-center gap-2">
+                                <Label htmlFor="showPricingOnProfile" className="text-xs font-bold text-muted-foreground cursor-pointer">
+                                    Show pricing on profile
+                                </Label>
+                                <Switch
+                                    id="showPricingOnProfile"
+                                    checked={formData.showPricingOnProfile}
+                                    onCheckedChange={(checked) => {
+                                        setIsDirty(true);
+                                        setFormData((prev) => ({ ...prev, showPricingOnProfile: checked }));
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <Label>Solo Performance Price (₹)</Label>
+                                <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="e.g. 5000"
+                                    value={formData.soloPrice}
+                                    onChange={(e) => {
+                                        setIsDirty(true);
+                                        const value = e.target.value.replace(/[^\d]/g, "");
+                                        setFormData((prev) => ({ ...prev, soloPrice: value }));
+                                    }}
+                                    className="text-[#1A1A1A] placeholder:text-slate-400"
+                                />
+                            </div>
+                            <div>
+                                <Label>Duo Performance Price (₹)</Label>
+                                <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="e.g. 8000"
+                                    value={formData.duoPrice}
+                                    onChange={(e) => {
+                                        setIsDirty(true);
+                                        const value = e.target.value.replace(/[^\d]/g, "");
+                                        setFormData((prev) => ({ ...prev, duoPrice: value }));
+                                    }}
+                                    className="text-[#1A1A1A] placeholder:text-slate-400"
+                                />
+                            </div>
+                            <div>
+                                <Label>Team Performance Price (₹)</Label>
+                                <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="e.g. 15000"
+                                    value={formData.teamPrice}
+                                    onChange={(e) => {
+                                        setIsDirty(true);
+                                        const value = e.target.value.replace(/[^\d]/g, "");
+                                        setFormData((prev) => ({ ...prev, teamPrice: value }));
+                                    }}
+                                    className="text-[#1A1A1A] placeholder:text-slate-400"
+                                />
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
             </motion.div>

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Facebook, Instagram, Mail, Sparkles, Twitter, Youtube } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
+import { STATIC_IMAGES } from "@/services/ImageRegistryService";
 
 const socialLinks = [
   { Icon: Facebook, href: "https://facebook.com", label: "Facebook" },
@@ -38,11 +39,8 @@ export default function Footer() {
         <div className="container">
           <div className="footer-luxury-grid">
             <div className="footer-luxury-brand">
-              <Link to="/" className="footer-brand-lockup">
-                <span>
-                  <Sparkles className="h-5 w-5" />
-                </span>
-                {t("brand.name")} {/* ADDED FOR i18n */}
+              <Link to="/" className="footer-brand-lockup inline-block">
+                <img src={STATIC_IMAGES.logo} alt={t("brand.name")} className="h-11 md:h-12 w-auto object-contain" />
               </Link>
               <p>
                 {t("footer.description")} {/* ADDED FOR i18n */}

@@ -83,6 +83,7 @@ service cloud.firestore {
       allow update: if isOwner(id) 
         && !modifyingRestrictedFields(['isAdmin', 'isVerified', 'averageRating', 'walletBalance', 'id', 'uid'])
         || isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastBookingTimestamp'])
+        || isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['averageRating', 'totalRatings', 'ratingSum', 'rating', 'reviews', 'stats', 'updatedAt'])
         || isAdmin();
       
       // Explicit subcollection matching replaces raw wildcards to avoid data-leak inheritance
@@ -92,6 +93,10 @@ service cloud.firestore {
       }
       match /private_settings/{docId} {
         allow read, write: if isOwner(id) || isAdmin();
+      }
+      match /ratings/{ratingUserId} {
+        allow read: if true;
+        allow write: if isAuth() && isOwner(ratingUserId) && ratingUserId != id;
       }
     }
 

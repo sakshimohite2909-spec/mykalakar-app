@@ -18,7 +18,7 @@ import {
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import HeroCarousel from "./HeroCarousel";
-import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
+import { CATEGORY_GROUP_OPTIONS, MAIN_EVENT_CARDS } from "@/constants/artistSystem";
 import { SmartImage } from "./SmartImage";
 import { STATIC_IMAGES } from "@/services/ImageRegistryService";
 import { subscribeActiveArtists, subscribeApprovedEvents } from "@/services/dataService";
@@ -305,47 +305,61 @@ function Hero() {
 }
 
 function CategoryGrid() {
-  const { t } = useI18n(); // ADDED FOR i18n
+  const { t } = useI18n();
   return (
     <section className="container-shell app-section content-section rhythm-right">
-      <SectionHeading eyebrow={t("home.categories.eyebrow")} title={t("home.categories.title")} action={t("common.viewAll")} to="/explore" /> {/* ADDED FOR i18n */}
-      <div className="scrollbar-none flex overflow-x-auto snap-x snap-mandatory gap-3 pb-4 md:pb-0 md:grid md:grid-cols-3 lg:grid-cols-4 md:gap-4 lg:gap-6 md:overflow-visible">
-        {CATEGORY_GROUP_OPTIONS.map((group, index) => {
-          const Icon = categoryIcons[group.name] || Sparkles;
-          const groupLabel = getArtLabel(t, group.name); // ADDED FOR i18n
+      <SectionHeading eyebrow={t("home.categories.eyebrow") || "EXPLORE BY EVENT"} title={t("home.categories.title") || "Select Event Category"} action={t("common.viewAll") || "View All"} to="/artists" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+        {MAIN_EVENT_CARDS.map((card, index) => {
+          const cardLabel = getArtLabel(t, card.name);
           return (
             <Link
-              key={group.id}
-              to={`/artists?category=${encodeURIComponent(group.name)}`}
-              className="relative flex flex-col h-full w-[38%] shrink-0 snap-start md:w-auto md:shrink overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition-all duration-300 hover:border-orange-300 hover:shadow-md hover:-translate-y-1 group"
+              key={card.id}
+              to={`/artists?category=${encodeURIComponent(card.name)}`}
+              className="group relative flex flex-col overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:border-orange-400/80 hover:shadow-xl"
             >
-              {/* Image area (aspect-[4/3]) */}
-              <div className="w-full aspect-[4/3] relative overflow-hidden bg-stone-50 rounded-t-xl">
+              {/* Image Banner Area */}
+              <div className="relative aspect-[16/9] w-full overflow-hidden bg-stone-100">
                 <SmartImage
-                  src={group.image}
-                  alt={group.name}
-                  usageId={`home-category:${group.id}`}
-                  category={group.name}
+                  src={card.image}
+                  alt={card.name}
+                  usageId={`home-main-event:${card.id}`}
+                  category={card.name}
                   orientation="landscape"
-                  priority={index < 2}
+                  priority={index < 3}
                   aspectRatio="aspect-auto"
-                  containerClassName="h-full w-full transition duration-300 group-hover:scale-105"
-                  imageClassName="object-center"
+                  containerClassName="h-full w-full transition-transform duration-700 group-hover:scale-105"
+                  imageClassName="object-cover object-center"
                 />
-                <div className="absolute top-2.5 left-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm border border-stone-100 text-orange-600 transition-transform duration-300 group-hover:scale-110">
-                  <Icon className="h-3 w-3" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-full bg-white/95 backdrop-blur-md px-3 py-1 text-xs font-black text-stone-900 shadow-md">
+                  <span className="text-sm">{card.icon}</span>
+                  <span>{cardLabel}</span>
                 </div>
               </div>
 
-              {/* Text content area */}
-              <div className="p-4 md:p-5 flex-grow flex flex-col justify-between bg-white border-t border-stone-100 text-left">
-                <div className="space-y-1.5">
-                  <h3 className="text-lg font-bold text-gray-900 line-clamp-1 leading-snug">
-                    {groupLabel}
+              {/* Card Body */}
+              <div className="flex flex-col flex-1 p-4 md:p-5 justify-between">
+                <div>
+                  <h3 className="text-lg font-extrabold text-stone-950 group-hover:text-orange-600 transition-colors flex items-center justify-between">
+                    <span>{cardLabel}</span>
+                    <ArrowRight className="h-4 w-4 text-stone-400 group-hover:text-orange-600 group-hover:translate-x-1 transition-all" />
                   </h3>
-                  <p className="text-sm font-normal text-gray-500 line-clamp-3 leading-relaxed">
-                    {group.subcategories.map((item) => getArtLabel(t, item)).join(" / ")}
+                  <p className="mt-1 text-xs text-stone-500 line-clamp-2 leading-relaxed">
+                    {card.description}
                   </p>
+                </div>
+
+                {/* Subcategories preview chips */}
+                <div className="mt-3.5 pt-3 border-t border-stone-100 flex flex-wrap gap-1.5">
+                  {card.subcategoriesPreview.map((sub) => (
+                    <span
+                      key={sub}
+                      className="inline-flex items-center rounded-md bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-600 group-hover:bg-orange-50 group-hover:text-orange-700 transition-colors"
+                    >
+                      {sub}
+                    </span>
+                  ))}
                 </div>
               </div>
             </Link>
@@ -502,6 +516,7 @@ export default function PremiumScrollyExperience() {
       <main>
         <HeroCarousel />
         <FeaturesBanner />
+        <CategoryGrid />
         <FeaturedArtistsSection artists={artists} loading={artistsLoading} />
         <UpcomingEventsSection events={events} loading={eventsLoading} />
         <CTASection />

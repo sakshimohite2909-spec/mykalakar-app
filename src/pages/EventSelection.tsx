@@ -31,45 +31,41 @@ const PAGE_SIZE = 9;
 const eventOptions: EventOption[] = [
   {
     id: "1",
-    name: "Marriage",
-    image: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=2070&auto=format&fit=crop",
-    description: "Artists, rituals, hosts, and media teams.",
+    name: "Varkari Sampraday",
+    image: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=1200&q=80",
+    description: "Kirtankar, Pravachankar, Vyaspithchalak, Chopdar, Bhagwat/Ram Katha, Bhajani Mandal & Mridangamani.",
   },
   {
     id: "2",
-    name: "Birthday",
-    // Red concert lighting
-    image: "https://images.unsplash.com/photo-1598285526019-20412e8c2ec6?q=80&w=2000&auto=format&fit=crop",
-    description: "Performers and entertainers for family events.",
+    name: "Wedding",
+    image: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=2070&auto=format&fit=crop",
+    description: "Venues, Decorators, Photographers, Catering, Mehendi, Makeup, DJ & Wedding Essentials.",
   },
   {
     id: "3",
-    name: "Corporate",
-    // 4K corporate stage spotlight close-up
-    image: "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?q=80&w=2070&auto=format&fit=crop",
-    description: "Anchors, speakers, and stage-ready acts.",
+    name: "Birthday",
+    image: "https://images.unsplash.com/photo-1598285526019-20412e8c2ec6?q=80&w=2000&auto=format&fit=crop",
+    description: "Performers, Magicians, DJs, Balloon Decorators, and Family Entertainers.",
   },
   {
     id: "4",
-    name: "Festival",
-    // 4K festival stage lights close-up
-    image: "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?q=80&w=2070&auto=format&fit=crop",
-    description: "Dhol, lezim, zanj, and folk ensembles.",
+    name: "Corporate Event",
+    image: "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?q=80&w=2070&auto=format&fit=crop",
+    description: "Anchors, Speakers, AV Setup, LED Wall, and Professional Stage Acts.",
   },
   {
     id: "5",
-    name: "Spiritual",
-    // Close-up of traditional Maharashtrian singer / cymbals details
-    image: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=1200&q=80",
-    description: "Kirtan, bhajan, pravachan, and varkari groups.",
+    name: "Cultural & Folk",
+    image: "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?q=80&w=2070&auto=format&fit=crop",
+    description: "Gondhal, Bharud, Dhol-Tasha Pathak, Lezim Ensembles, and Folk Artists.",
   },
 ];
 const EVENT_TYPE_BY_ID: Record<string, string> = {
-  "1": "Wedding",
-  "2": "Birthday Party",
-  "3": "Corporate Event",
-  "4": "Festival Celebration",
-  "5": "Spiritual Event",
+  "1": "Varkari Sampraday",
+  "2": "Wedding",
+  "3": "Birthday",
+  "4": "Corporate Event",
+  "5": "Cultural Event",
 };
 
 function withoutEventFacetFilters(filters: SmartFilters): SmartFilters {
@@ -260,7 +256,7 @@ const EventSelection = () => {
               <motion.div layout className="luxury-results-grid event-grid">
                 <AnimatePresence mode="popLayout">
                   {pageEvents.map((event, index) => (
-                    <LuxuryEventCard key={event.id} event={{ ...event, image: getLiveEventMappedImage(event) }} index={index} />
+                    <LuxuryEventCard key={String(event.id || index)} event={{ ...event, image: getLiveEventMappedImage(event) }} index={index} />
                   ))}
                 </AnimatePresence>
               </motion.div>

@@ -805,7 +805,7 @@ export default function ArtistProfile() {
                 </span>
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-3">
+              <div className="mt-5 flex flex-wrap gap-2.5">
                 <Button
                   onClick={() => setBookingOpen(true)}
                   className="h-11 rounded-full bg-orange-600 px-5 text-xs font-extrabold uppercase tracking-widest text-white shadow-sm transition hover:bg-orange-700 hover:shadow-md"
@@ -1006,13 +1006,6 @@ export default function ArtistProfile() {
                 </div>
               </section>
             ) : null}
-            {/* Availability Calendar */}
-            <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md overflow-hidden">
-              <ArtistCalendar 
-                artistId={String(artist.uid || artist.userId || artist.id)}
-                currentUser={currentUser}
-              />
-            </section>
           </div>
 
           {/* Booking sidebar */}

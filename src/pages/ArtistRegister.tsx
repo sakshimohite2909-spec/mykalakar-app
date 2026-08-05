@@ -1,4 +1,4 @@
-import {
+import React, {
   type ChangeEvent,
   type ComponentType,
   memo,
@@ -41,7 +41,7 @@ import {
   Youtube,
 } from "lucide-react";
 import { collection, doc, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { getDownloadURL, ref, uploadBytes, type UploadResult } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import { compressImageUpload } from "@/utils/imageCompression";
 import { FIREBASE_UPLOAD_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
@@ -49,7 +49,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getExternalUrl, getYoutubeThumbnailUrl } from "@/lib/youtube";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
-import { ARTIST_TYPES, CATEGORY_STRUCTURE, MAIN_CATEGORIES, normalizeArtistType } from "@/constants/artistSystem";
+import { ARTIST_TYPES, CATEGORY_STRUCTURE, MAIN_CATEGORIES, getSubcategoriesForMainCategory, normalizeArtistType } from "@/constants/artistSystem";
 import {
   PHONE_MAX_LENGTH,
   PHONE_PLACEHOLDER,
@@ -327,7 +327,7 @@ async function uploadArtistRegistrationImage(uid: string, file: File, folder: st
   const safeFileName = sanitizeStorageFileName(compressedFile.name);
   const storagePath = `artists/${uid}/${folder}/${Date.now()}-${safeFileName}`;
   const storageRef = ref(storage, storagePath);
-  const snapshot = await withTimeout(
+  const snapshot = await withTimeout<UploadResult>(
     uploadBytes(storageRef, compressedFile, {
       contentType: compressedFile.type,
       customMetadata: {
@@ -578,7 +578,7 @@ function ArtCategoryCard({
         <SearchableDropdown
           label={t("register.label.artForm")}
           value={art.category}
-          options={art.mainCategory ? [...CATEGORY_STRUCTURE[art.mainCategory as keyof typeof CATEGORY_STRUCTURE].subcategories] : []}
+          options={art.mainCategory ? getSubcategoriesForMainCategory(art.mainCategory) : []}
           placeholder={t("register.placeholder.artForm")}
           error={error}
           disabled={!art.mainCategory}
@@ -1419,7 +1419,16 @@ export default function ArtistRegister() {
         galleryStoragePaths,
         extraArtUploads,
       } = await uploadRegistrationMedia(uid, preparedExtraArts);
-      const extraArtUploadMap = new Map(extraArtUploads.map((item) => [item.id, item]));
+      const extraArtUploadMap = new Map<
+        string,
+        {
+          id: string;
+          profilePhoto: string;
+          profileStoragePath: string;
+          performancePhoto: string;
+          performanceStoragePath: string;
+        }
+      >(extraArtUploads.map((item) => [item.id, item]));
       const primaryCategoryYoutubeLinks = getSubmittedYoutubeLinks(primaryArtYoutubeLinks);
       const normalizeSubmittedCategory = (value: string) => normalizeArtistType(value) ?? value.trim();
       const buildCategoryEntry = ({

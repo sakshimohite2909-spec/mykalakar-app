@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Leva } from "leva";
 import { Loader2 } from "lucide-react";
@@ -31,12 +31,20 @@ function PageLoader() {
 export default function MainLayout() {
   const location = useLocation();
   const { t } = useI18n();
+
+  // Normalize URLs with multiple leading slashes (e.g. //telecaller -> /telecaller)
+  if (location.pathname.startsWith("//")) {
+    const cleanPath = location.pathname.replace(/^\/+/g, "/");
+    return <Navigate to={cleanPath + location.search + location.hash} replace />;
+  }
+
   const isAuthPage = AUTH_PATHS.includes(location.pathname);
   const isAntiGravityPage = location.pathname === "/antigravity";
   const showBottomNav =
     !isAuthPage &&
     !isAntiGravityPage &&
     !location.pathname.startsWith("/admin") &&
+    !location.pathname.startsWith("/telecaller") &&
     !location.pathname.startsWith("/artist/dashboard");
 
   return (

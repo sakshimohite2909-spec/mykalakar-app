@@ -17,8 +17,8 @@ export type SmartFilters = {
   eventTypes?: string[];
 };
 
-export type FilterableArtist = Record<string, unknown>;
-export type FilterableEvent = Record<string, unknown>;
+export type FilterableArtist = Record<string, any>;
+export type FilterableEvent = Record<string, any>;
 export type FilterFacetOption = {
   name: string;
   count: number;
@@ -53,10 +53,14 @@ const CATEGORY_ALIASES: Record<string, CategoryGroupName> = {
   "folk and traditional": "Folk & Traditional Arts",
   "folk & traditional": "Folk & Traditional Arts",
   "folk & traditional arts": "Folk & Traditional Arts",
-  spiritual: "Spiritual & Varkari Sampraday",
-  varkari: "Spiritual & Varkari Sampraday",
-  "spiritual & varkari": "Spiritual & Varkari Sampraday",
-  "spiritual & varkari sampraday": "Spiritual & Varkari Sampraday",
+  spiritual: "Varkari Sampraday",
+  varkari: "Varkari Sampraday",
+  "varkari sampraday": "Varkari Sampraday",
+  "varkari samprday": "Varkari Sampraday",
+  "spiritual & varkari": "Varkari Sampraday",
+  "spiritual & varkari sampraday": "Varkari Sampraday",
+  wedding: "Wedding",
+  marriage: "Wedding",
 };
 
 const SUBCATEGORY_ALIASES: Record<string, string> = {
@@ -69,9 +73,30 @@ const SUBCATEGORY_ALIASES: Record<string, string> = {
   magician: "Magicians",
   puppetry: "Puppet Show",
   kirtan: "Kirtankar",
+  kirtankar: "Kirtankar",
+  pravachan: "Pravachankar",
+  pravachankar: "Pravachankar",
+  vyaspith: "Vyaspithchalak",
+  vyaspithchalak: "Vyaspithchalak",
+  chopdar: "Chopdar",
+  bhagwat: "Bhagwat Katha Kathan",
+  "bhagwat katha": "Bhagwat Katha Kathan",
+  "ram katha": "Ram Katha",
   bhajan: "Bhajani Mandal",
+  "bhajani mandal": "Bhajani Mandal",
   bharud: "Bharud",
+  bharudkar: "Bharudkar",
+  mridang: "Mridangamani",
+  mridangamani: "Mridangamani",
+  vinekari: "Vinekari",
+  talkari: "Talkari",
+  "tabla vadak": "Tabla Vadak",
+  "harmonium vadak": "Harmonium Vadak",
+  "dholki vadak": "Dholki Vadak",
   "dhol pathak": "Dhol Pathak",
+  "dhol tasha": "Dhol-Tasha Pathak",
+  photography: "Photography",
+  "wedding photographer": "Wedding Photographer",
 };
 const NON_SPECIFIC_EVENT_TERMS = new Set(["event", "events"]);
 
@@ -327,11 +352,12 @@ export function filterArtists<T extends FilterableArtist>(artists: T[], filters:
 }
 
 export function getEventCategory(event: FilterableEvent) {
-  const requiredCategories = Array.isArray(event.requiredCategories) ? event.requiredCategories : [];
+  const requiredCategories = Array.isArray(event.requiredCategories) ? (event.requiredCategories as string[]) : [];
+  const subCat = (event.artType || event.subCategory || event.subcategory || event.category || "") as string;
   return (
-    getParentCategoryForSubCategory(event.artType || event.subCategory || event.subcategory || event.category) ||
-    requiredCategories.map(getParentCategoryForSubCategory).find(Boolean) ||
-    canonicalCategory(event.category) ||
+    getParentCategoryForSubCategory(subCat) ||
+    requiredCategories.map((c) => getParentCategoryForSubCategory(String(c))).find(Boolean) ||
+    canonicalCategory((event.category || "") as string) ||
     ""
   );
 }
