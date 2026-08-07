@@ -256,6 +256,139 @@ export const CATEGORY_LEVEL2_DATA: Record<
       },
     ],
   },
+
+  // ─── VARKARI SAMPRADAY LEVEL 2 CATEGORIES ───
+  "Spiritual Speakers": {
+    title: "Spiritual Speakers",
+    subtitle: "Renowned Kirtankars, Pravachankars & Kathakars for Varkari Sampraday programs.",
+    heroImage: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=1200&auto=format&fit=crop",
+    allSubcategories: [
+      "Kirtankar",
+      "Pravachankar",
+      "Vyaspithchalak",
+      "Chopdar",
+      "Bhagwat Katha Kathan",
+      "Ram Katha",
+    ],
+    popularServices: [
+      {
+        title: "Kirtankar",
+        artistsCount: "950+ Kirtankars",
+        image: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Kirtankar",
+      },
+      {
+        title: "Pravachankar",
+        artistsCount: "620+ Pravachankars",
+        image: "https://images.unsplash.com/photo-1608613304899-ea8098577e38?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Pravachankar",
+      },
+      {
+        title: "Vyaspithchalak",
+        artistsCount: "410+ Performers",
+        image: "https://images.unsplash.com/photo-1544717305-2782549b5136?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Vyaspithchalak",
+      },
+      {
+        title: "Bhagwat Katha Kathan",
+        artistsCount: "380+ Kathakars",
+        image: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Bhagwat Katha Kathan",
+      },
+    ],
+  },
+  "Vocal Artists": {
+    title: "Vocal Artists",
+    subtitle: "Bhajani Mandals, Classical Bhajan singers, Bharudkars & Devotional Vocalists.",
+    heroImage: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop",
+    allSubcategories: [
+      "Gayak",
+      "Bharudkar",
+      "Bhajani Mandal",
+      "Shastriya Bhajan",
+    ],
+    popularServices: [
+      {
+        title: "Bhajani Mandal",
+        artistsCount: "1280+ Groups",
+        image: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Bhajani Mandal",
+      },
+      {
+        title: "Bharudkar",
+        artistsCount: "450+ Performers",
+        image: "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Bharudkar",
+      },
+      {
+        title: "Gayak",
+        artistsCount: "890+ Singers",
+        image: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Gayak",
+      },
+      {
+        title: "Shastriya Bhajan",
+        artistsCount: "340+ Vocalists",
+        image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Shastriya Bhajan",
+      },
+    ],
+  },
+  "Instrumental Artists": {
+    title: "Instrumental Artists",
+    subtitle: "Master Mridangamani, Tabla & Harmonium Vadak, Vinekari & Talkaris.",
+    heroImage: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1200&auto=format&fit=crop",
+    allSubcategories: [
+      "Mridangamani",
+      "Vinekari",
+      "Talkari",
+      "Tabla Vadak",
+      "Harmonium Vadak",
+      "Dholki Vadak",
+    ],
+    popularServices: [
+      {
+        title: "Mridangamani",
+        artistsCount: "840+ Masters",
+        image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Mridangamani",
+      },
+      {
+        title: "Harmonium Vadak",
+        artistsCount: "750+ Artists",
+        image: "https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Harmonium Vadak",
+      },
+      {
+        title: "Tabla Vadak",
+        artistsCount: "920+ Artists",
+        image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Tabla Vadak",
+      },
+      {
+        title: "Talkari",
+        artistsCount: "610+ Performers",
+        image: "https://images.unsplash.com/photo-1544717305-2782549b5136?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Talkari",
+      },
+    ],
+  },
+  "Organizations": {
+    title: "Organizations",
+    subtitle: "Registered Warkari Sansthas, Dindi Management & Spiritual Collectives.",
+    heroImage: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=1200&auto=format&fit=crop",
+    allSubcategories: [
+      "Warkari Sanstha",
+    ],
+    popularServices: [
+      {
+        title: "Warkari Sanstha",
+        artistsCount: "310+ Sansthas",
+        image: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=800&auto=format&fit=crop",
+        queryParam: "Warkari Sanstha",
+      },
+    ],
+  },
 };
 
 export default function CategoryLevel2Page() {
