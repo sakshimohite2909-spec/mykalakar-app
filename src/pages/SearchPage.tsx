@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, CalendarDays, Search, Sparkles, UsersRound } from "lucide-react";
 import { LayoutGroup, motion } from "framer-motion";
 import type { QueryDocumentSnapshot } from "firebase/firestore";
@@ -181,9 +181,35 @@ function ResultSkeleton({ type }: { type: ExploreTab }) {
 }
 
 export default function SearchPage() {
+  const navigate = useNavigate();
   const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const [params, setParams] = useSearchParams();
   const paramsKey = params.toString();
+
+  const categoryParam = params.get("category");
+  const subCategoryParam = params.get("subcategory") || params.get("subCategory") || params.get("subcategories");
+
+  useEffect(() => {
+    if (categoryParam && !subCategoryParam) {
+      const catClean = categoryParam.trim();
+      let eventRoute = "";
+      if (catClean === "Wedding") eventRoute = "/events/Wedding";
+      else if (catClean === "Varkari Sampraday" || catClean.includes("Varkari") || catClean.includes("Spiritual")) eventRoute = "/events/Varkari%20Sampraday";
+      else if (catClean === "Birthday") eventRoute = "/events/Birthday";
+      else if (catClean === "Corporate" || catClean === "Corporate Event") eventRoute = "/events/Corporate%20Event";
+      else if (catClean.includes("Folk") || catClean === "Cultural Event" || catClean.includes("Cultural")) eventRoute = "/events/Cultural%20Event";
+
+      if (eventRoute) {
+        navigate(eventRoute, { replace: true });
+      }
+    } else if (subCategoryParam) {
+      const catClean = categoryParam ? categoryParam.trim() : "Wedding";
+      navigate(
+        `/events/${encodeURIComponent(catClean)}/Photography/${encodeURIComponent(subCategoryParam)}`,
+        { replace: true }
+      );
+    }
+  }, [categoryParam, subCategoryParam, navigate]);
   const resettingFiltersRef = useRef(false);
   const routeState = params.get("state") || "";
   const routeCity = params.get("city") || params.get("district") || "";

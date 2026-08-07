@@ -44,7 +44,7 @@ const eventOptions: EventOption[] = [
   {
     id: "3",
     name: "Birthday",
-    image: "https://images.unsplash.com/photo-1598285526019-20412e8c2ec6?q=80&w=2000&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1530103862676-de88924083a2?q=80&w=2000&auto=format&fit=crop",
     description: "Performers, Magicians, DJs, Balloon Decorators, and Family Entertainers.",
   },
   {

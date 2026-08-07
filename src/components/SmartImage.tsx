@@ -22,7 +22,7 @@ interface SmartImageProps extends HTMLAttributes<HTMLDivElement> {
   height?: number;
   usageId?: string;
   category?: string;
-  orientation?: "landscape" | "portrait";
+  orientation?: "landscape" | "portrait" | "square";
 }
 
 function safeSrc(src?: string | null, fallback = EMPTY_PIXEL) {

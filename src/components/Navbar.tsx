@@ -27,8 +27,6 @@ import { STATIC_IMAGES, imageRegistry } from "@/services/ImageRegistryService";
 import { getInitials } from "@/services/dataNormalizer";
 import { getUsableImageUrl } from "@/utils/fallbackImages";
 
-import { EVENT_CATEGORY_HIERARCHY } from "@/constants/artistSystem";
-
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -148,54 +146,6 @@ export default function Navbar() {
               {label}
             </Link>
           ))}
-
-          {/* Categories Dropdown (WeddingBazaar Style) */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="group inline-flex min-h-10 items-center gap-1.5 rounded-full px-3 py-2 text-sm font-bold text-stone-600 hover:text-stone-950 transition drop-shadow-md"
-              >
-                <Sparkles className="h-4 w-4 text-amber-500" />
-                <span>Categories</span>
-                <ChevronDown className="h-3.5 w-3.5 text-stone-400 group-hover:text-stone-600" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" className="w-80 max-h-[460px] overflow-y-auto rounded-2xl border-orange-100/80 bg-white/95 p-2 shadow-2xl backdrop-blur-xl">
-              {Object.entries(EVENT_CATEGORY_HIERARCHY).map(([eventName, eventData]) => (
-                <div key={eventName} className="mb-2.5 last:mb-0 border-b border-stone-100 pb-2 last:border-b-0 last:pb-0">
-                  <div
-                    onClick={() => navigate(`/artists?category=${encodeURIComponent(eventName)}`)}
-                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-black uppercase tracking-wider text-orange-600 hover:bg-orange-50 rounded-xl cursor-pointer"
-                  >
-                    <span>{eventData.icon}</span>
-                    <span>{eventName}</span>
-                  </div>
-                  <div className="pl-3 pr-2 py-0.5 space-y-1">
-                    {Object.entries(eventData.groups).map(([groupName, groupData]) => (
-                      <div key={groupName} className="text-xs">
-                        <span className="font-bold text-stone-800 flex items-center gap-1 py-0.5">
-                          <span className="text-xs">{groupData.icon}</span>
-                          <span>{groupName}</span>
-                        </span>
-                        <div className="flex flex-wrap gap-1 pl-2.5 pt-0.5 pb-1">
-                          {groupData.subcategories.slice(0, 5).map((sub) => (
-                            <Link
-                              key={sub}
-                              to={`/artists?subCategory=${encodeURIComponent(sub)}`}
-                              className="text-[11px] font-medium text-stone-500 hover:text-orange-600 hover:underline"
-                            >
-                              {sub} •
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </nav>
 
         <div className="ml-auto hidden items-center gap-2 md:flex">

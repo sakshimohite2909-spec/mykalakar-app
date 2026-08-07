@@ -1145,6 +1145,9 @@ export default function ArtistProfile() {
         onOpenChange={setBookingOpen}
         artistName={artistName}
         artistId={String(artist.uid || artist.userId || artist.id)}
+        startingPrice={pricingRangeLabel}
+        artistAvatar={profileAvatarImage || avatarFallbackImage}
+        artistLocation={location}
       />
       <AdminEditArtistModal
         artist={artist}

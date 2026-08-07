@@ -11,6 +11,9 @@ import { ROUTES } from "@/constants/routes.constants";
 const Index = lazy(() => import("./pages/Index"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const EventSelection = lazy(() => import("./pages/EventSelection"));
+const EventLevel1Page = lazy(() => import("./pages/EventLevel1Page"));
+const CategoryLevel2Page = lazy(() => import("./pages/CategoryLevel2Page"));
+const SubcategoryLevel3Page = lazy(() => import("./pages/SubcategoryLevel3Page"));
 const Events = lazy(() => import("./pages/Events"));
 const LocationSelection = lazy(() => import("./pages/LocationSelection"));
 const EventRequirements = lazy(() => import("./pages/EventRequirements"));
@@ -98,10 +101,16 @@ const router = createBrowserRouter([
           </AdminProtectedRoute>
         ),
       },
-      { path: "explore", element: <SearchPage /> },
-      { path: "artists", element: <SearchPage /> },
-      { path: "search", element: <SearchPage /> },
+      { path: "explore", element: <SubcategoryLevel3Page /> },
+      { path: "artists", element: <SubcategoryLevel3Page /> },
+      { path: "search", element: <SubcategoryLevel3Page /> },
       { path: "events", element: <Events /> },
+      { path: "events/:eventName", element: <EventLevel1Page /> },
+      { path: "events/:eventName/:categoryName", element: <CategoryLevel2Page /> },
+      { path: "events/:eventName/:categoryName/:subCategoryName", element: <SubcategoryLevel3Page /> },
+      { path: "subcategory-select", element: <SubcategoryLevel3Page /> },
+      { path: "category-select", element: <CategoryLevel2Page /> },
+      { path: "event-select", element: <EventLevel1Page /> },
       { path: "event/:id", element: <EventDetails /> },
       { path: "location-select", element: <LocationSelection /> },
       { path: "event-requirements", element: <EventRequirements /> },

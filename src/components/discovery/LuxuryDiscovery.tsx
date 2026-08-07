@@ -195,6 +195,15 @@ export function LuxuryFilterBar({
     onChange({ eventTypes: toggleValue(activeEventTypes, eventType) });
   };
 
+  const categoryAndSubCategoryNames = new Set([
+    ...categoryFacets.map((group) => normalizeKey(group.name)),
+    ...subCategoryFacets.map((sub) => normalizeKey(sub.name)),
+  ]);
+
+  const filteredEventTypeOptions = compact(eventTypeOptions).filter(
+    (eventType) => !categoryAndSubCategoryNames.has(normalizeKey(eventType))
+  );
+
   return (
     <motion.section layout className="luxury-filter-dock" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
       <div className="luxury-filter-topline">
@@ -247,14 +256,14 @@ export function LuxuryFilterBar({
         ) : null}
       </AnimatePresence>
 
-      {tagOptions.length || eventTypeOptions.length ? (
+      {tagOptions.length || filteredEventTypeOptions.length ? (
         <div className="luxury-chip-row tertiary" aria-label={t("filters.tagsAndEvents")}> {/* ADDED FOR i18n */}
           {compact(tagOptions).slice(0, 8).map((tag) => (
             <FilterPill key={`tag:${tag}`} active={activeTags.includes(tag)} onClick={() => toggleTag(tag)}>
               #{tag}
             </FilterPill>
           ))}
-          {compact(eventTypeOptions).slice(0, 8).map((eventType) => (
+          {filteredEventTypeOptions.slice(0, 8).map((eventType) => (
             <FilterPill key={`event:${eventType}`} active={activeEventTypes.includes(eventType)} onClick={() => toggleEventType(eventType)}>
               {getArtLabel(t, eventType)} {/* ADDED FOR i18n */}
             </FilterPill>

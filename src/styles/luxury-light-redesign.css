@@ -1159,3 +1159,41 @@ h6 {
 .skeleton-shimmer::after {
   background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.06), transparent) !important;
 }
+
+/* Custom Horizontal Scrollbar for Artist Cards */
+.artist-scroll-container {
+  display: flex !important;
+  gap: 1.25rem !important;
+  overflow-x: auto !important;
+  padding-bottom: 1rem !important;
+  padding-top: 0.25rem !important;
+  scroll-snap-type: x mandatory !important;
+  scroll-behavior: smooth !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #ea580c #f5f5f4 !important;
+}
+
+.artist-scroll-container::-webkit-scrollbar {
+  height: 8px !important;
+}
+
+.artist-scroll-container::-webkit-scrollbar-track {
+  background: #f5f5f4 !important;
+  border-radius: 999px !important;
+}
+
+.artist-scroll-container::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #ea580c, #f97316) !important;
+  border-radius: 999px !important;
+}
+
+.artist-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #c2410c !important;
+}
+
+.artist-scroll-item {
+  min-width: 290px !important;
+  max-width: 320px !important;
+  flex: 0 0 auto !important;
+  scroll-snap-align: start !important;
+}

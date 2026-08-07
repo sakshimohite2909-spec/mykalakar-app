@@ -525,64 +525,62 @@ function EventsInner() {
 
   return (
     <div className="w-full max-w-[1200px] mx-auto px-4 pt-28 pb-16">
-      {/* Hero Banner Section */}
-      <section className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/80 p-8 shadow-xl backdrop-blur-sm lg:p-12 mb-10 text-left">
-        {/* Glow Effects */}
-        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-orange-100/40 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-amber-100/40 blur-3xl pointer-events-none" />
+      {/* Premium Hero Banner Section */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-stone-950 via-stone-900 to-stone-800 p-8 sm:p-10 lg:p-12 shadow-xl mb-10 text-left text-white">
+        {/* Ambient Glows */}
+        <div className="absolute top-0 right-0 h-96 w-96 rounded-full bg-orange-600/15 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
           <div className="max-w-2xl">
-            <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#E25C1D]">
-              <Sparkles className="h-3 w-3" /> {t("events.hero.badge")}
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/20 border border-orange-500/30 px-3.5 py-1 text-[11px] font-extrabold uppercase tracking-wider text-orange-400">
+              <Sparkles className="h-3.5 w-3.5" /> Event Marketplace
             </span>
-            <h1 className="mt-4 text-3xl font-extrabold text-stone-900 tracking-tight sm:text-5xl leading-tight">
-              {t("events.hero.title")}
+            <h1 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
+              Live Briefs & Quick Event Setup
             </h1>
-            <p className="mt-4 text-sm font-semibold text-stone-500 leading-relaxed max-w-xl">
-              {t("events.hero.subtitle")}
+            <p className="mt-3.5 text-sm sm:text-base font-semibold text-stone-300 leading-relaxed max-w-xl">
+              Create event requirements and connect with verified artists. Browse live event briefs or setup a quick brief for performers across India.
             </p>
 
-            <div className="mt-6 flex flex-wrap gap-3">
+            <div className="mt-7 flex flex-wrap items-center gap-3.5">
               <button
                 type="button"
                 onClick={handleCreateBriefClick}
-                className="inline-flex h-11 items-center gap-2 rounded-full bg-[#E25C1D] hover:bg-[#c94e17] px-6 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-orange-500/20 hover:shadow-orange-500/35 transition active:scale-[0.98]"
+                className="inline-flex h-12 items-center gap-2 rounded-full bg-orange-600 hover:bg-orange-500 px-6 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-orange-600/30 transition active:scale-[0.98]"
               >
-                <Plus className="h-4 w-4" />
-                {t("events.hero.createButton")}
+                <Plus className="h-4 w-4 stroke-[2.5]" />
+                + Create Event Brief
               </button>
               <Link
-                to="/artists"
-                className="inline-flex h-11 items-center gap-1.5 rounded-full border border-stone-200 hover:border-stone-300 bg-white px-5 text-xs font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-[0.98]"
+                to="/events/Wedding"
+                className="inline-flex h-12 items-center gap-2 rounded-full border border-stone-700 bg-stone-900/80 hover:bg-stone-800 px-6 text-xs font-extrabold uppercase tracking-wider text-stone-200 shadow-sm transition active:scale-[0.98]"
               >
-                {t("events.hero.exploreAll")}
-                <ArrowRight className="h-4 w-4 text-stone-400" />
+                Browse by Event
+                <ArrowRight className="h-4 w-4 text-orange-400" />
               </Link>
+            </div>
+          </div>
+
+          {/* Right Hero Image Card */}
+          <div className="relative w-full lg:w-[400px] h-[220px] sm:h-[260px] rounded-2xl overflow-hidden shadow-2xl border border-stone-800 shrink-0">
+            <img
+              src="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop"
+              alt="Live Event Setup"
+              className="w-full h-full object-cover object-center"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-transparent to-transparent" />
+            <div className="absolute bottom-4 left-4 right-4">
+              <span className="text-[11px] font-extrabold text-orange-400 uppercase tracking-widest">
+                Verified Requirements
+              </span>
+              <p className="text-xs font-bold text-stone-200 mt-0.5">
+                Connect directly with top rated performers & service providers.
+              </p>
             </div>
           </div>
         </div>
       </section>
-
-      {/* High-Impact 4K Visual Wrapper */}
-      <div className="relative w-full h-[400px] md:h-[500px] rounded-3xl shadow-lg border border-white/20 mb-10 overflow-hidden bg-stone-100 flex items-center justify-center">
-        <img
-          src="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=2000&auto=format&fit=crop"
-          alt="Premium Cultural Event Setup"
-          className="absolute inset-0 w-full h-full object-cover object-center"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-        <div className="absolute bottom-8 left-8 right-8 md:bottom-12 md:left-12 z-10">
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 md:p-8 max-w-2xl shadow-xl">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E25C1D] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white mb-4">
-              <Sparkles className="h-3 w-3" /> {t("events.hero.featuredExperience")}
-            </span>
-            <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight drop-shadow-sm">
-              {t("events.hero.featuredTitle")}
-            </h2>
-          </div>
-        </div>
-      </div>
 
       {/* Main Grid Feed */}
       <section className="min-h-[300px]">
