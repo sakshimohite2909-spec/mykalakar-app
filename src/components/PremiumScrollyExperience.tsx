@@ -311,7 +311,7 @@ function CategoryGrid() {
   const { t } = useI18n();
   return (
     <section className="container-shell app-section content-section rhythm-right">
-      <SectionHeading eyebrow={t("home.categories.eyebrow") || "EXPLORE BY EVENT"} title={t("home.categories.title") || "Select Event Category"} action={t("common.viewAll") || "View All"} to="/artists" />
+      <SectionHeading eyebrow={t("home.categories.eyebrow") || "EXPLORE BY EVENT"} title={t("home.categories.title") || "Select Event Category"} action={t("common.viewAll") || "View All"} to="/events" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-7">
         {MAIN_EVENT_CARDS.map((card, index) => {
           const cardLabel = getArtLabel(t, card.name);
@@ -395,7 +395,7 @@ function FeaturedArtistsSection({ artists, loading }: { artists: ShowcaseArtist[
   };
 
   return (
-    <section className="container-shell app-section content-section rhythm-left luxury-section">
+    <section className="container-shell app-section content-section rhythm-left luxury-section !mt-4 md:!mt-6">
       <div className="flex items-center justify-between mb-4 sm:mb-5 max-w-[1240px] mx-auto px-4 md:px-6">
         <h2 className="text-xl md:text-2xl font-extrabold text-stone-900 tracking-tight">
           Featured Artists
@@ -565,7 +565,6 @@ export default function PremiumScrollyExperience() {
         <HeroCarousel />
         <BrowseAndPopularCategories />
         <FeaturedArtistsSection artists={artists} loading={artistsLoading} />
-        <UpcomingEventsSection events={events} loading={eventsLoading} />
         <CTASection />
       </main>
       <Footer />

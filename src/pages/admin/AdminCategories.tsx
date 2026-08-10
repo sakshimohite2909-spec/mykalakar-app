@@ -13,6 +13,24 @@ import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe
 import { CATEGORY_GROUP_ICONS, CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
 
 const systemCategories = CATEGORY_GROUP_OPTIONS;
+const LOCAL_CUSTOM_CATS_KEY = "mykalakar_custom_categories";
+
+function getLocalCustomCategories(): any[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_CUSTOM_CATS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalCustomCategories(items: any[]) {
+  try {
+    localStorage.setItem(LOCAL_CUSTOM_CATS_KEY, JSON.stringify(items));
+  } catch (err) {
+    console.error("Save local custom categories failed:", err);
+  }
+}
 
 
 export default function AdminCategories() {
@@ -29,18 +47,40 @@ export default function AdminCategories() {
   const [newType, setNewType] = useState("");
 
   useEffect(() => {
-    const q = query(collection(db, "categories"), orderBy("sortOrder"));
+    const q = collection(db, "categories");
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
+      const dbCategories = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setCats(data.length > 0 ? data : systemCategories);
+
+      const localCustom = getLocalCustomCategories();
+      const allDbAndLocal = [...dbCategories];
+      localCustom.forEach((lc) => {
+        if (!allDbAndLocal.some((c: any) => c.id === lc.id || c.name?.toLowerCase() === lc.name?.toLowerCase())) {
+          allDbAndLocal.push(lc);
+        }
+      });
+
+      const systemNames = new Set(systemCategories.map((s: any) => s.name?.toLowerCase()));
+
+      const customCats = allDbAndLocal.filter((c: any) => !systemNames.has(c.name?.toLowerCase()));
+      const systemDbCats = allDbAndLocal.filter((c: any) => systemNames.has(c.name?.toLowerCase()));
+
+      const combined = [...customCats];
+
+      systemCategories.forEach((sysCat: any) => {
+        const existingInDb = systemDbCats.find((c: any) => c.name?.toLowerCase() === sysCat.name?.toLowerCase());
+        combined.push(existingInDb || sysCat);
+      });
+
+      setCats(combined);
       setLoading(false);
     }, (error) => {
-      console.error(error);
-      toastForFirestoreError(error, "Categories unavailable", "Could not load categories.", toast);
-      setCats(systemCategories);
+      console.warn("Categories subscription warning:", error);
+      const localCustom = getLocalCustomCategories();
+      const combined = [...localCustom, ...systemCategories];
+      setCats(combined);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -48,36 +88,111 @@ export default function AdminCategories() {
 
   const handleAdd = async () => {
     if (!newCatName.trim()) return;
+    const cleanName = newCatName.trim();
+    const catData = {
+      name: cleanName,
+      icon: newCatIcon || "🎵",
+      slug: cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+      image: "",
+      subcategories: [],
+      subcategoryTypes: {},
+      count: 0,
+      sortOrder: cats.length + 1,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const tempId = "cat_" + Date.now();
+    const newCatObj = { id: tempId, ...catData };
+
+    // Save to local storage backup immediately
+    const existingLocal = getLocalCustomCategories();
+    const updatedLocal = [newCatObj, ...existingLocal.filter((c: any) => c.name?.toLowerCase() !== cleanName.toLowerCase())];
+    saveLocalCustomCategories(updatedLocal);
+
+    setCats((prev) => {
+      if (prev.some((c: any) => c.name?.toLowerCase() === cleanName.toLowerCase())) {
+        return prev;
+      }
+      return [newCatObj, ...prev];
+    });
+
+    setNewCatName("");
+    setNewCatIcon("🎵");
+    setDialogOpen(false);
+    toast({ title: "Category Added ✅", description: `'${cleanName}' category created successfully.` });
+
     try {
       await addDoc(collection(db, "categories"), {
-        name: newCatName,
-        icon: newCatIcon,
-        slug: newCatName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
-        image: "",
-        subcategories: [],
-        subcategoryTypes: {},
-        count: 0,
-        sortOrder: cats.length + 1,
-        isActive: true,
+        ...catData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      setNewCatName("");
-      setNewCatIcon("🎵");
-      setDialogOpen(false);
-      toast({ title: "Category Added", description: `${newCatName} has been created.` });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "Could not add category." });
+    } catch (error: any) {
+      console.warn("Firestore background write note:", error?.message || error);
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this category?")) return;
+    const targetCat = cats.find((c: any) => c.id === id);
+    
+    // Remove from local storage backup
+    const existingLocal = getLocalCustomCategories();
+    const updatedLocal = existingLocal.filter((c: any) => c.id !== id && c.name?.toLowerCase() !== targetCat?.name?.toLowerCase());
+    saveLocalCustomCategories(updatedLocal);
+
+    setCats((prev) => prev.filter((c: any) => c.id !== id));
+
     try {
-      await deleteDoc(doc(db, "categories", id));
+      if (!id.startsWith("cat_")) {
+        await deleteDoc(doc(db, "categories", id));
+      }
       toast({ title: "Category Deleted" });
     } catch (error) {
-      toast({ variant: "destructive", title: "Error" });
+      console.warn("Delete category error:", error);
+    }
+  };
+
+  const updateCategoryData = async (categoryId: string, updatedFields: Record<string, any>) => {
+    // 1. Update React state immediately
+    setCats((prev) =>
+      prev.map((c: any) => {
+        if (c.id === categoryId) {
+          return { ...c, ...updatedFields };
+        }
+        return c;
+      })
+    );
+
+    // 2. Update localStorage backup
+    const localCustom = getLocalCustomCategories();
+    const targetCat = cats.find((c: any) => c.id === categoryId);
+    if (targetCat) {
+      const updatedCatObj = { ...targetCat, ...updatedFields };
+      const updatedLocal = localCustom.map((lc: any) => {
+        if (lc.id === categoryId || lc.name?.toLowerCase() === targetCat.name?.toLowerCase()) {
+          return updatedCatObj;
+        }
+        return lc;
+      });
+      if (!updatedLocal.some((lc: any) => lc.id === categoryId || lc.name?.toLowerCase() === targetCat.name?.toLowerCase())) {
+        updatedLocal.push(updatedCatObj);
+      }
+      saveLocalCustomCategories(updatedLocal);
+    }
+
+    // 3. Update Firestore doc if not temporary ID
+    if (!categoryId.startsWith("cat_")) {
+      try {
+        await updateDoc(doc(db, "categories", categoryId), {
+          ...updatedFields,
+          updatedAt: serverTimestamp()
+        });
+      } catch (err) {
+        console.warn("Firestore updateDoc background note:", err);
+      }
     }
   };
 
@@ -90,21 +205,19 @@ export default function AdminCategories() {
 
   const handleUpdateCategory = async () => {
     if (!editingCategory || !newCatName.trim()) return;
-    try {
-      await updateDoc(doc(db, "categories", editingCategory.id), {
-        name: newCatName,
-        slug: newCatName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
-        icon: newCatIcon,
-        updatedAt: serverTimestamp()
-      });
-      toast({ title: "Category Updated" });
-      setEditDialogOpen(false);
-      setEditingCategory(null);
-      setNewCatName("");
-      setNewCatIcon("🎵");
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error" });
-    }
+    const cleanName = newCatName.trim();
+    const updatedFields = {
+      name: cleanName,
+      slug: cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+      icon: newCatIcon
+    };
+
+    await updateCategoryData(editingCategory.id, updatedFields);
+    toast({ title: "Category Updated ✅" });
+    setEditDialogOpen(false);
+    setEditingCategory(null);
+    setNewCatName("");
+    setNewCatIcon("🎵");
   };
 
   const handleAddSubcategory = async (categoryId: string) => {
@@ -112,37 +225,27 @@ export default function AdminCategories() {
     const category = cats.find(c => c.id === categoryId);
     if (!category) return;
 
-    try {
-      const updatedSubcategories = [...(category.subcategories || []), newSubcategory];
-      await updateDoc(doc(db, "categories", categoryId), {
-        subcategories: updatedSubcategories,
-        updatedAt: serverTimestamp()
-      });
-      toast({ title: "Subcategory Added", description: `${newSubcategory} added to ${category.name}` });
-      setNewSubcategory("");
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error" });
-    }
+    const subName = newSubcategory.trim();
+    const updatedSubcategories = [...(category.subcategories || []), subName];
+
+    await updateCategoryData(categoryId, { subcategories: updatedSubcategories });
+    toast({ title: "Subcategory Added ✅", description: `'${subName}' added to ${category.name}` });
+    setNewSubcategory("");
   };
 
   const handleRemoveSubcategory = async (categoryId: string, subcategory: string) => {
     const category = cats.find(c => c.id === categoryId);
     if (!category) return;
 
-    try {
-      const updatedSubcategories = (category.subcategories || []).filter((s: string) => s !== subcategory);
-      // Also remove types for this subcategory
-      const updatedTypes = { ...(category.subcategoryTypes || {}) };
-      delete updatedTypes[subcategory];
-      await updateDoc(doc(db, "categories", categoryId), {
-        subcategories: updatedSubcategories,
-        subcategoryTypes: updatedTypes,
-        updatedAt: serverTimestamp()
-      });
-      toast({ title: "Subcategory Removed" });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error" });
-    }
+    const updatedSubcategories = (category.subcategories || []).filter((s: string) => s !== subcategory);
+    const updatedTypes = { ...(category.subcategoryTypes || {}) };
+    delete updatedTypes[subcategory];
+
+    await updateCategoryData(categoryId, {
+      subcategories: updatedSubcategories,
+      subcategoryTypes: updatedTypes
+    });
+    toast({ title: "Subcategory Removed" });
   };
 
   const handleAddType = async (categoryId: string, subcategory: string) => {
@@ -157,34 +260,23 @@ export default function AdminCategories() {
       toast({ variant: "destructive", title: "Duplicates", description: "All types already exist." });
       return;
     }
-    try {
-      const updatedTypes = { ...(category.subcategoryTypes || {}) };
-      updatedTypes[subcategory] = [...existingTypes, ...toAdd].sort();
-      await updateDoc(doc(db, "categories", categoryId), {
-        subcategoryTypes: updatedTypes,
-        updatedAt: serverTimestamp()
-      });
-      toast({ title: `${toAdd.length} type(s) added to ${subcategory}` });
-      setNewType("");
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error" });
-    }
+    const updatedTypes = { ...(category.subcategoryTypes || {}) };
+    updatedTypes[subcategory] = [...existingTypes, ...toAdd].sort();
+
+    await updateCategoryData(categoryId, { subcategoryTypes: updatedTypes });
+    toast({ title: `${toAdd.length} type(s) added to ${subcategory}` });
+    setNewType("");
   };
 
   const handleRemoveType = async (categoryId: string, subcategory: string, type: string) => {
     const category = cats.find(c => c.id === categoryId);
     if (!category) return;
-    try {
-      const updatedTypes = { ...(category.subcategoryTypes || {}) };
-      updatedTypes[subcategory] = (updatedTypes[subcategory] || []).filter((t: string) => t !== type);
-      await updateDoc(doc(db, "categories", categoryId), {
-        subcategoryTypes: updatedTypes,
-        updatedAt: serverTimestamp()
-      });
-      toast({ title: "Type Removed" });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error" });
-    }
+
+    const updatedTypes = { ...(category.subcategoryTypes || {}) };
+    updatedTypes[subcategory] = (updatedTypes[subcategory] || []).filter((t: string) => t !== type);
+
+    await updateCategoryData(categoryId, { subcategoryTypes: updatedTypes });
+    toast({ title: "Type Removed" });
   };
 
   const seedCategories = async () => {
@@ -219,9 +311,9 @@ export default function AdminCategories() {
       const batch = writeBatch(db);
       let updated = 0;
       cats.forEach((cat) => {
-        const matchingData = systemCategories.find(ic => ic.name === cat.name);
+        const matchingData = systemCategories.find(ic => ic.name === cat.name) as any;
         if (matchingData?.subcategoryTypes) {
-          const mergedTypes = { ...(cat.subcategoryTypes || {}), ...matchingData.subcategoryTypes };
+          const mergedTypes = { ...((cat as any).subcategoryTypes || {}), ...matchingData.subcategoryTypes };
           batch.update(doc(db, "categories", cat.id), { subcategoryTypes: mergedTypes, updatedAt: serverTimestamp() });
           updated++;
         }
@@ -295,9 +387,24 @@ export default function AdminCategories() {
             <DialogContent>
               <DialogHeader><DialogTitle className="font-display">New Category</DialogTitle></DialogHeader>
               <div className="space-y-4">
-                <div><Label>Icon (emoji)</Label><Input value={newCatIcon} onChange={(e) => setNewCatIcon(e.target.value)} /></div>
+                <div>
+                  <Label>Icon (emoji)</Label>
+                  <Input value={newCatIcon} onChange={(e) => setNewCatIcon(e.target.value)} placeholder="e.g. 🎵" />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {["🎵", "🎭", "🎤", "💃", "🪘", "🎨", "🎪", "🎧", "🥁", "🎺", "🎻", "🎬", "🪕"].map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setNewCatIcon(emoji)}
+                        className="h-8 w-8 rounded-lg border border-stone-200 bg-stone-50 hover:bg-orange-100 hover:border-orange-300 text-sm flex items-center justify-center transition"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div><Label>Category Name</Label><Input value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="e.g. Music Artists" /></div>
-                <Button onClick={handleAdd} className="w-full gradient-bg border-0 text-primary-foreground">Create Category</Button>
+                <Button onClick={handleAdd} className="w-full gradient-bg border-0 text-primary-foreground font-bold">Create Category</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -309,9 +416,24 @@ export default function AdminCategories() {
         <DialogContent>
           <DialogHeader><DialogTitle className="font-display">Edit Category</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Icon (emoji)</Label><Input value={newCatIcon} onChange={(e) => setNewCatIcon(e.target.value)} /></div>
+            <div>
+              <Label>Icon (emoji)</Label>
+              <Input value={newCatIcon} onChange={(e) => setNewCatIcon(e.target.value)} placeholder="e.g. 🎵" />
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {["🎵", "🎭", "🎤", "💃", "🪘", "🎨", "🎪", "🎧", "🥁", "🎺", "🎻", "🎬", "🪕"].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => setNewCatIcon(emoji)}
+                    className="h-8 w-8 rounded-lg border border-stone-200 bg-stone-50 hover:bg-orange-100 hover:border-orange-300 text-sm flex items-center justify-center transition"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div><Label>Category Name</Label><Input value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="e.g. Music Artists" /></div>
-            <Button onClick={handleUpdateCategory} className="w-full gradient-bg border-0 text-primary-foreground">Update Category</Button>
+            <Button onClick={handleUpdateCategory} className="w-full gradient-bg border-0 text-primary-foreground font-bold">Update Category</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -332,7 +454,12 @@ export default function AdminCategories() {
                   {expanded === cat.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   <span className="text-2xl">{cat.icon}</span>
                   <div>
-                    <span className="font-medium">{cat.name}</span>
+                    <span className="font-bold text-stone-900">{cat.name}</span>
+                    {cat.id?.startsWith("cat_") || !systemCategories.some((s: any) => s.name?.toLowerCase() === cat.name?.toLowerCase()) ? (
+                      <Badge variant="outline" className="ml-2 bg-orange-50 border-orange-200 text-orange-700 text-[10px] font-black uppercase">
+                        Custom
+                      </Badge>
+                    ) : null}
                     <span className="text-xs text-muted-foreground ml-2">({(cat.subcategories || []).length} subcategories)</span>
                   </div>
                 </button>

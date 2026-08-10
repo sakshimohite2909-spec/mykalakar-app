@@ -85,6 +85,7 @@ export default function AdminDashboard() {
   const [counts, setCounts] = useState({
     totalArtists: 0,
     pendingArtists: 0,
+    pendingBriefs: 0,
     todayRegistrations: 0,
     totalBookings: 0,
     categories: 0,
@@ -96,6 +97,7 @@ export default function AdminDashboard() {
   const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>([]);
   const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([]);
   const [pendingList, setPendingList] = useState<any[]>([]);
+  const [pendingBriefsList, setPendingBriefsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(true);
 
@@ -132,6 +134,18 @@ export default function AdminDashboard() {
         setCounts(prev => ({ ...prev, pendingArtists: snap.size, todayRegistrations: todayCount }));
         setPendingList(snap.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() })));
       }, (err) => console.warn("pending apps:", err)));
+    } catch (e) { console.warn(e); }
+
+    // ── Pending Event Briefs moderation count ────────────────────────────
+    try {
+      const qBriefs = query(
+        collection(db, "event_briefs"),
+        where("status", "==", "pending")
+      );
+      unsubs.push(onSnapshot(qBriefs, (snap) => {
+        setCounts(prev => ({ ...prev, pendingBriefs: snap.size }));
+        setPendingBriefsList(snap.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() })));
+      }, (err) => console.warn("pending briefs stats:", err)));
     } catch (e) { console.warn(e); }
 
     // ── All Bookings subscription ──────────────────────────────────────────
@@ -236,12 +250,10 @@ export default function AdminDashboard() {
   }, [allBookings]);
 
   const stats = [
-    { label: "Active Artists", value: counts.totalArtists, icon: Users, color: "text-primary" },
-    { label: "New Today", value: counts.todayRegistrations, icon: UserPlus, color: "text-green-500" },
-    { label: "Total Bookings", value: counts.totalBookings, icon: CalendarDays, color: "text-accent" },
-    { label: "Disputes Escrow", value: escrowMetrics.locked.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }), icon: Lock, color: "text-rose-500" },
-    { label: "Held Escrow", value: escrowMetrics.held.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }), icon: Layers, color: "text-amber-500" },
-    { label: "Total SLA Items", value: pendingSlaBookings.length, icon: Clock, color: "text-[#FF6B00]" },
+    { label: "Active Artists", value: counts.totalArtists, icon: Users, color: "text-primary", href: "/admin/artists" },
+    { label: "Pending Approvals", value: counts.pendingArtists, icon: UserPlus, color: "text-amber-500", href: "/admin/pending" },
+    { label: "Total Bookings", value: counts.totalBookings, icon: CalendarDays, color: "text-accent", href: "/admin/bookings" },
+    { label: "Escrow Balance", value: escrowMetrics.held.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }), icon: Lock, color: "text-emerald-600", href: "/admin/bookings" },
   ];
 
   return (
@@ -249,35 +261,35 @@ export default function AdminDashboard() {
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold mb-1">Platform Control Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Monitor bookings, SLAs, notifications, and security compliance</p>
+          <p className="text-sm text-muted-foreground">Manage artists, bookings, customer accounts, and event requirements</p>
         </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 min-w-0 max-w-full">
         {stats.map((s) => (
-          <Card key={s.label} className="shadow-sm border-border/60">
-            <CardContent className="p-4 text-center">
-              <s.icon className={`h-6 w-6 mx-auto mb-2 ${s.color}`} />
-              <p className="text-xl font-display font-black truncate">{s.value}</p>
-              <p className="text-[10px] font-black uppercase text-stone-400 mt-1">{s.label}</p>
-            </CardContent>
-          </Card>
+          <Link key={s.label} to={s.href} className="group transition-transform hover:-translate-y-0.5 min-w-0">
+            <Card className="shadow-sm border-border/60 transition-colors group-hover:border-orange-500/50">
+              <CardContent className="p-4 text-center">
+                <s.icon className={`h-6 w-6 mx-auto mb-2 ${s.color}`} />
+                <p className="text-xl font-display font-black truncate">{s.value}</p>
+                <p className="text-[11px] font-black uppercase text-stone-400 mt-1 group-hover:text-stone-700 transition-colors truncate">{s.label}</p>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
       {/* Dashboard Sub-Suite Tabs */}
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="mb-4 bg-slate-100 p-1 rounded-xl">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="clients">Clients ({clients.length})</TabsTrigger>
-          <TabsTrigger value="escrow">Escrow Analytics</TabsTrigger>
-          <TabsTrigger value="sla">SLA Monitoring ({pendingSlaBookings.length})</TabsTrigger>
-          <TabsTrigger value="events">Events Moderation</TabsTrigger>
-          <TabsTrigger value="calendar">Master Calendar</TabsTrigger>
-          <TabsTrigger value="notifications">Notification logs</TabsTrigger>
-          <TabsTrigger value="audit">Audit Logs</TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="overview" className="w-full min-w-0 max-w-full">
+        <div className="w-full overflow-x-auto pb-1 min-w-0">
+          <TabsList className="mb-4 bg-slate-100/90 p-1.5 rounded-2xl flex flex-wrap sm:flex-nowrap justify-start w-full border border-slate-200/60 gap-1">
+            <TabsTrigger value="overview" className="text-xs font-bold px-4 py-2 rounded-xl">Overview</TabsTrigger>
+            <TabsTrigger value="clients" className="text-xs font-bold px-4 py-2 rounded-xl">Clients ({clients.length})</TabsTrigger>
+            <TabsTrigger value="escrow" className="text-xs font-bold px-4 py-2 rounded-xl">Escrow Analytics</TabsTrigger>
+            <TabsTrigger value="events" className="text-xs font-bold px-4 py-2 rounded-xl">Events Moderation</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
@@ -335,6 +347,34 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
+          {/* Pending Event Briefs Moderation preview */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-semibold text-sm uppercase text-stone-400">Pending Event Briefs (Requirements)</h3>
+                <Link to="/admin/event-briefs">
+                  <Button variant="outline" size="sm" className="text-xs font-bold">Moderate Briefs →</Button>
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {pendingBriefsList.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4 font-bold">No pending event briefs to moderate</p>
+                )}
+                {pendingBriefsList.map((b) => (
+                  <div key={b.id} className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+                    <div>
+                      <p className="font-bold text-sm text-stone-900">{b.eventName || "Event Requirement"}</p>
+                      <p className="text-xs text-muted-foreground">{b.performanceType || b.category || "General"} · {b.location || "Pune"} · Budget: ₹{(b.totalBudget || b.budget || 0).toLocaleString("en-IN")}</p>
+                    </div>
+                    <Link to="/admin/event-briefs">
+                      <Button variant="outline" size="sm" className="h-8 text-xs font-bold rounded-xl bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100">Moderate</Button>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Tools */}
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="p-6">
@@ -363,7 +403,8 @@ export default function AdminDashboard() {
         <TabsContent value="clients">
           <Card>
             <CardContent className="p-4">
-              <Table>
+              <div className="overflow-x-auto w-full">
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Customer Details</TableHead>
@@ -414,6 +455,7 @@ export default function AdminDashboard() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -478,49 +520,6 @@ export default function AdminDashboard() {
           </Card>
         </TabsContent>
 
-        {/* SLA Monitoring Tab */}
-        <TabsContent value="sla">
-          <Card>
-            <CardContent className="p-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Artist</TableHead>
-                    <TableHead>Event Logistics</TableHead>
-                    <TableHead>SLA Clock Remaining</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingSlaBookings.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-stone-400 font-bold">
-                        No booking requests are currently pending artist response.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                  {pendingSlaBookings.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell>
-                        <p className="font-bold text-stone-900">{b.clientName}</p>
-                        <p className="text-xs text-stone-400">{b.customerEmail}</p>
-                      </TableCell>
-                      <TableCell className="font-bold text-[#FF6B00]">{b.artistName || "Artist"}</TableCell>
-                      <TableCell>
-                        <p className="font-bold text-xs">{b.performanceType}</p>
-                        <p className="text-[10px] text-stone-400">{b.eventDate} ({b.eventStartTime} - {b.eventEndTime})</p>
-                      </TableCell>
-                      <TableCell>
-                        <SlaCountdown deadline={b.slaDeadlineTime} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* Events Moderation Tab */}
         <TabsContent value="events">
           <Card>
@@ -530,128 +529,6 @@ export default function AdminDashboard() {
                 <p className="text-xs text-muted-foreground">Manage and deep-edit user event requirements.</p>
               </div>
               <AdminEventsList />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Master Calendar Tab */}
-        <TabsContent value="calendar">
-          <Card>
-            <CardContent className="p-6">
-              <div className="mb-4">
-                <h3 className="font-display font-semibold text-sm uppercase text-stone-400">Master Platform Calendar</h3>
-                <p className="text-xs text-muted-foreground">Aggregated view of bookings across all artists</p>
-              </div>
-              <ArtistCalendarView bookings={allBookings} availability={[]} onBookingSelect={() => {}} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Notification Logs Tab */}
-        <TabsContent value="notifications">
-          <Card>
-            <CardContent className="p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h3 className="font-display font-semibold text-sm uppercase text-stone-400">Multi-Channel Delivery Audit</h3>
-                  <p className="text-xs text-muted-foreground">Log of simulated notification dispatches</p>
-                </div>
-              </div>
-
-              <div className="border border-border/60 rounded-2xl overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Notification Details</TableHead>
-                      <TableHead>Channel</TableHead>
-                      <TableHead>Delivered To</TableHead>
-                      <TableHead>Priority</TableHead>
-                      <TableHead>Timestamp</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {notificationLogs.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-stone-400 font-bold">
-                          No notification dispatch logs recorded.
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                    {notificationLogs.slice(0, 50).map((n) => {
-                      const channelIcons = {
-                        IN_APP: Mail,
-                        PUSH: Smartphone,
-                        EMAIL: Mail,
-                        SMS: Smartphone,
-                        WHATSAPP: Smartphone,
-                      };
-                      const Icon = channelIcons[n.channel] || Smartphone;
-
-                      return (
-                        <TableRow key={n.id}>
-                          <TableCell className="max-w-md">
-                            <p className="font-semibold text-stone-900">{n.message}</p>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="flex items-center gap-1 w-fit bg-slate-50 font-bold text-xs uppercase">
-                              <Icon className="h-3 w-3" /> {n.channel}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-stone-500 font-bold truncate max-w-[150px]">{n.recipient}</TableCell>
-                          <TableCell>
-                            <Badge className={cn(
-                              "text-[9px] font-black uppercase tracking-wider",
-                              n.priority === "HIGH" ? "bg-rose-600" : "bg-stone-500"
-                            )}>
-                              {n.priority || "NORMAL"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-stone-400">{new Date(n.timestamp).toLocaleString("en-IN")}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Audit logs Tab */}
-        <TabsContent value="audit">
-          <Card>
-            <CardContent className="p-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Admin actor</TableHead>
-                    <TableHead>Security Action</TableHead>
-                    <TableHead>Description Details</TableHead>
-                    <TableHead>Timestamp</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {auditLogs.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-stone-400 font-bold">
-                        No administrative audit logs available.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                  {auditLogs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="font-extrabold text-stone-700">{log.adminEmail}</TableCell>
-                      <TableCell>
-                        <Badge className="bg-indigo-600 text-[9px] font-black tracking-widest uppercase">
-                          {log.action}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-stone-600 font-semibold">{log.details}</TableCell>
-                      <TableCell className="text-xs text-stone-400">{new Date(log.timestamp).toLocaleString("en-IN")}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
             </CardContent>
           </Card>
         </TabsContent>

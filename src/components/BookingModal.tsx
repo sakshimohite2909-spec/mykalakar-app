@@ -175,12 +175,12 @@ export default function BookingModal({
       return;
     }
 
-    const phoneValidation = validatePhoneNumber(formData.customerPhone);
-    if (!phoneValidation.valid) {
+    const isValidPhone = validatePhoneNumber(formData.customerPhone);
+    if (!isValidPhone) {
       toast({
         variant: "destructive",
         title: t("common.error"),
-        description: phoneValidation.error || "Please enter a valid mobile number.",
+        description: "Please enter a valid 10-digit mobile number.",
       });
       return;
     }
@@ -515,11 +515,11 @@ export default function BookingModal({
                 {checkingAvailability ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Verifying Artist Availability...
+                    Processing Request...
                   </>
                 ) : (
                   <>
-                    Check Availability & Continue <ArrowRight className="ml-2 h-4 w-4" />
+                    Continue to Booking Request <ArrowRight className="ml-2 h-4 w-4" />
                   </>
                 )}
               </Button>
@@ -535,11 +535,11 @@ export default function BookingModal({
               exit={{ opacity: 0, x: -20 }}
               className="space-y-5 mt-2"
             >
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-center">
-                <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600 mb-1.5" />
-                <h3 className="text-sm font-extrabold text-emerald-950">Artist is Available!</h3>
-                <p className="text-xs text-emerald-700 mt-0.5">
-                  The date <span className="font-bold">{formData.eventDate}</span> is open. Secure this slot by setting up payment authorization hold.
+              <div className="rounded-2xl border border-orange-200 bg-orange-50/80 p-4 text-center">
+                <CalendarDays className="mx-auto h-7 w-7 text-orange-600 mb-1.5" />
+                <h3 className="text-sm font-extrabold text-stone-900">Send Request to {artistName}</h3>
+                <p className="text-xs text-stone-600 mt-0.5">
+                  Your request for <span className="font-bold text-stone-900">{formData.eventDate}</span> will be sent to the artist. {artistName} will review their schedule and decide to accept or decline.
                 </p>
               </div>
 

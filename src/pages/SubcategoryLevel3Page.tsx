@@ -30,80 +30,7 @@ interface ArtistCardData {
   subCategory: string;
 }
 
-const MOCK_ARTISTS: ArtistCardData[] = [
-  {
-    id: "rahul-photography",
-    name: "Rahul Photography",
-    isVerified: true,
-    rating: 4.8,
-    reviewsCount: 230,
-    location: "Pune, Maharashtra",
-    experience: "8+ Years Experience",
-    startingPrice: "25,000",
-    image: "https://images.unsplash.com/photo-1537633552985-df8429e8048b?q=80&w=800&auto=format&fit=crop",
-    subCategory: "Wedding Photographer",
-  },
-  {
-    id: "dream-studio",
-    name: "Dream Studio",
-    isVerified: false,
-    rating: 4.7,
-    reviewsCount: 180,
-    location: "Pune, Maharashtra",
-    experience: "6+ Years Experience",
-    startingPrice: "18,000",
-    image: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=800&auto=format&fit=crop",
-    subCategory: "Wedding Photographer",
-  },
-  {
-    id: "capture-moments",
-    name: "Capture Moments",
-    isVerified: true,
-    rating: 4.9,
-    reviewsCount: 210,
-    location: "Pune, Maharashtra",
-    experience: "10+ Years Experience",
-    startingPrice: "22,000",
-    image: "https://images.unsplash.com/photo-1583939003579-730e3918a45a?q=80&w=800&auto=format&fit=crop",
-    subCategory: "Candid Photographer",
-  },
-  {
-    id: "focus-king-studio",
-    name: "Focus King Studio",
-    isVerified: true,
-    rating: 4.6,
-    reviewsCount: 150,
-    location: "Pune, Maharashtra",
-    experience: "5+ Years Experience",
-    startingPrice: "20,000",
-    image: "https://images.pexels.com/photos/32538906/pexels-photo-32538906.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop",
-    subCategory: "Drone Photography",
-  },
-  {
-    id: "royal-lens-creations",
-    name: "Royal Lens Creations",
-    isVerified: true,
-    rating: 4.9,
-    reviewsCount: 310,
-    location: "Pune, Maharashtra",
-    experience: "12+ Years Experience",
-    startingPrice: "35,000",
-    image: "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=800&auto=format&fit=crop",
-    subCategory: "Pre-Wedding Shoot",
-  },
-  {
-    id: "vivid-frame-pictures",
-    name: "Vivid Frame Pictures",
-    isVerified: true,
-    rating: 4.8,
-    reviewsCount: 195,
-    location: "Mumbai, Maharashtra",
-    experience: "7+ Years Experience",
-    startingPrice: "28,000",
-    image: "https://images.unsplash.com/photo-1520854221256-17451cc331bf?q=80&w=800&auto=format&fit=crop",
-    subCategory: "Wedding Photographer",
-  },
-];
+const MOCK_ARTISTS: ArtistCardData[] = [];
 
 export default function SubcategoryLevel3Page() {
   const { eventName, categoryName, subCategoryName } = useParams<{
@@ -147,7 +74,7 @@ export default function SubcategoryLevel3Page() {
       .then((res) => {
         if (!isMounted) return;
         if (res.items && res.items.length > 0) {
-          const mapped: ArtistCardData[] = res.items.map((item: any) => ({
+          const mapped: (ArtistCardData & { rawItem: any })[] = res.items.map((item: any) => ({
             id: item.uid || item.id || String(Math.random()),
             name: item.displayName || item.name || item.stageName || "Professional Artist",
             isVerified: Boolean(item.isVerified || item.verified),
@@ -157,7 +84,8 @@ export default function SubcategoryLevel3Page() {
             experience: item.experience ? `${item.experience}+ Years Experience` : "6+ Years Experience",
             startingPrice: item.startingPrice ? String(item.startingPrice) : "25,000",
             image: item.profilePhoto || item.avatar || item.coverPhoto || "https://images.unsplash.com/photo-1537633552985-df8429e8048b?q=80&w=800&auto=format&fit=crop",
-            subCategory: item.subCategory || item.category || decodedSubcategory,
+            subCategory: item.subCategory || item.subcategory || item.artForm || item.category || "Artist",
+            rawItem: item,
           }));
           setRealArtists(mapped);
         }
@@ -181,13 +109,42 @@ export default function SubcategoryLevel3Page() {
   }, [queryParam, decodedSubcategory]);
 
   const displayArtists = useMemo(() => {
-    const combined = [...realArtists, ...MOCK_ARTISTS];
-    const unique = new Map<string, ArtistCardData>();
+    const combined = [...realArtists];
+    const unique = new Map<string, ArtistCardData & { rawItem?: any }>();
     combined.forEach((art) => {
       if (!unique.has(art.id)) unique.set(art.id, art);
     });
 
     let list = Array.from(unique.values());
+
+    // Filter strictly by the current Subcategory / Category
+    if (decodedSubcategory && decodedSubcategory !== "All" && decodedSubcategory !== "Explore") {
+      const subLower = decodedSubcategory.trim().toLowerCase();
+      list = list.filter((a) => {
+        const item = a.rawItem || {};
+        const allCategoryValues = [
+          a.subCategory,
+          item.subCategory,
+          item.subcategory,
+          item.artForm,
+          item.primaryArtForm,
+          item.category,
+          item.mainCategory,
+          item.discipline,
+          ...(Array.isArray(item.categories) ? item.categories : []),
+          ...(Array.isArray(item.services) ? item.services : []),
+          ...(Array.isArray(item.artsList) ? item.artsList.flatMap((x: any) => [x.category, x.mainCategory]) : []),
+        ]
+          .filter(Boolean)
+          .map((v) => String(v).trim().toLowerCase());
+
+        if (allCategoryValues.length === 0) return true; // If no categories specified, show by default
+
+        return allCategoryValues.some(
+          (v) => v === subLower || v.includes(subLower) || subLower.includes(v)
+        );
+      });
+    }
 
     if (queryParam) {
       const qLower = queryParam.toLowerCase();
@@ -259,7 +216,7 @@ export default function SubcategoryLevel3Page() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50/50 flex flex-col font-sans antialiased">
+    <div className="min-h-screen bg-stone-50/50 flex flex-col font-sans antialiased pt-20">
       <Navbar />
 
       <main className="flex-1 max-w-[1240px] w-full mx-auto px-4 md:px-6 py-4 md:py-6">
@@ -358,8 +315,21 @@ export default function SubcategoryLevel3Page() {
 
         {/* ─── Count Subheading ─── */}
         <h2 className="text-base sm:text-lg font-extrabold text-stone-900 mb-5 tracking-tight">
-          {displayArtists.length > 6 ? `${displayArtists.length * 50}+` : "1,450+"} {displayTitle} in {selectedCity}
+          {displayArtists.length > 0 ? `${displayArtists.length} Verified` : "No"} {displayTitle} in {selectedCity}
         </h2>
+
+        {/* ─── Empty State if No Database Artists ─── */}
+        {displayArtists.length === 0 && !loading && (
+          <div className="flex flex-col items-center justify-center py-16 text-center bg-white rounded-2xl border border-stone-200 p-8 my-6">
+            <div className="h-14 w-14 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 mb-3">
+              <Search className="h-7 w-7" />
+            </div>
+            <h3 className="text-lg font-extrabold text-stone-900 mb-1">कोणतेही कलाकार उपलब्ध नाहीत (No Artists Available)</h3>
+            <p className="text-xs font-semibold text-stone-500 max-w-md">
+              या श्रेणीमध्ये किंवा शोधलेल्या फिल्टरनुसार अद्याप कोणतेही नोंदणीकृत कलाकार डेटाबेसमध्ये नाहीत.
+            </p>
+          </div>
+        )}
 
         {/* ─── Artist Result Cards (Vertical List) ─── */}
         <div className="space-y-4 sm:space-y-5 mb-10">

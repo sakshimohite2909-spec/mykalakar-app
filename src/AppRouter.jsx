@@ -35,6 +35,7 @@ const AdminEvents = lazy(() => import("./pages/admin/AdminEvents"));
 const AdminLocations = lazy(() => import("./pages/admin/AdminLocations"));
 const AdminBootstrap = lazy(() => import("./pages/admin/AdminBootstrap"));
 const AdminEventBriefs = lazy(() => import("./pages/admin/AdminEventBriefs"));
+const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AntiGravity = lazy(() => import("./pages/AntiGravity"));
 const ArtistLayout = lazy(() => import("./pages/artist/ArtistLayout"));
@@ -79,7 +80,8 @@ const router = createBrowserRouter([
       { path: "user-register", element: <ArtistRegister /> },
       { path: "login", element: <ArtistLogin /> },
       { path: "artist-login", element: <ArtistLogin /> },
-      { path: "admin-login", element: <ArtistLogin /> },
+      { path: "admin-login", element: <AdminLogin /> },
+      { path: "admin/login", element: <AdminLogin /> },
       { path: "user-login", element: <ArtistLogin /> },
       { path: "telecaller-login", element: <TelecallerLogin /> },
       { path: "forgot-password", element: <ForgotPassword /> },

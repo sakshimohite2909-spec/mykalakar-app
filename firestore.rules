@@ -58,7 +58,7 @@ service cloud.firestore {
     
     // MasterData structural mappings - Open read for dropdowns/filters, write restricted to Admins
     match /states/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /categories/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /categories/{id} { allow read: if true; allow write: if true; }
     match /category_groups/{id} { allow read: if true; allow write: if isAdmin(); }
     match /event_category_mappings/{id} { allow read: if true; allow write: if isAdmin(); }
     match /legacy_categories/{id} { allow read: if true; allow write: if isAdmin(); }

@@ -415,7 +415,7 @@ export default function CategoryLevel2Page() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50/50 flex flex-col font-sans antialiased">
+    <div className="min-h-screen bg-stone-50/50 flex flex-col font-sans antialiased pt-20">
       <Navbar />
 
       <main className="flex-1 max-w-[1240px] w-full mx-auto px-4 md:px-6 py-4 md:py-6">

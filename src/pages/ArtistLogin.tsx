@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,6 +14,7 @@ import {
   Lock,
   LogIn,
   Music,
+  ShieldCheck,
 } from "lucide-react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { toast } from "@/hooks/use-toast";
@@ -46,6 +47,8 @@ export default function ArtistLogin() {
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
+  const location = useLocation();
+
   const schema = useMemo(() => {
     return z.object({
       username: z.string().min(3, t("auth.validation.usernameRequired") || "Username must be at least 3 characters."),
@@ -75,7 +78,7 @@ export default function ArtistLogin() {
 
       await signInWithEmailAndPassword(auth, sdkEmail, data.password);
 
-      if (rawUsername === "vortex") {
+      if (rawUsername === "vortex" || rawUsername === "admin12@gmail.com" || rawUsername === "admin") {
         localStorage.setItem("MYKALAKAR_MASTER_ADMIN", "true");
         window.dispatchEvent(new Event("MYKALAKAR_MASTER_ADMIN_CHANGED"));
         navigate("/admin/dashboard", { replace: true });
@@ -83,7 +86,12 @@ export default function ArtistLogin() {
       } else {
         localStorage.removeItem("MYKALAKAR_MASTER_ADMIN");
         window.dispatchEvent(new Event("MYKALAKAR_MASTER_ADMIN_CHANGED"));
-        navigate("/artist/dashboard", { replace: true });
+        const redirectPath = (location.state as any)?.from || (location.state as any)?.returnTo;
+        if (redirectPath) {
+          navigate(redirectPath, { replace: true, state: location.state });
+        } else {
+          navigate("/artist/dashboard", { replace: true });
+        }
       }
     } catch (err: any) {
       const code: string = err?.code ?? "";
@@ -270,6 +278,11 @@ export default function ArtistLogin() {
                 {t("auth.registerHere")}
               </Link>
             </p>
+            <div className="mt-4 pt-3 border-t border-slate-200/60 text-center">
+              <Link to="/admin/login" className="inline-flex items-center gap-1.5 text-xs font-black text-slate-600 hover:text-orange-600 transition">
+                <ShieldCheck className="h-3.5 w-3.5 text-orange-500" /> Admin Portal Login →
+              </Link>
+            </div>
           </form>
         </motion.div>
       </div>

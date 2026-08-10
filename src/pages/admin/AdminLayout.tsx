@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Users, FolderOpen, CalendarDays, UserPlus, Settings, LogOut, Menu, X, MapPin, ShieldCheck, Search, UserCircle, Loader2, FileText } from "lucide-react";
+import { LayoutDashboard, Users, FolderOpen, CalendarDays, Settings, LogOut, Menu, X, ShieldCheck, Search, UserCircle, Loader2 } from "lucide-react";
 import { useState, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { STATIC_IMAGES } from "@/services/ImageRegistryService";
@@ -8,12 +8,8 @@ import { STATIC_IMAGES } from "@/services/ImageRegistryService";
 const sidebarItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Artists", href: "/admin/artists", icon: Users },
-  { label: "Pending Artists", href: "/admin/pending", icon: UserPlus },
-  { label: "Event Briefs", href: "/admin/event-briefs", icon: FileText },
-  { label: "Categories", href: "/admin/categories", icon: FolderOpen },
-  { label: "Events", href: "/admin/events", icon: CalendarDays },
-  { label: "Inquiries", href: "/admin/bookings", icon: CalendarDays },
-  { label: "Locations", href: "/admin/locations", icon: MapPin },
+  { label: "Categories & Events", href: "/admin/categories", icon: FolderOpen },
+  { label: "Bookings", href: "/admin/bookings", icon: CalendarDays },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
@@ -31,10 +27,10 @@ export default function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="admin-layout min-h-screen bg-transparent flex">
+    <div className="admin-layout min-h-screen bg-transparent flex w-full max-w-full overflow-x-hidden">
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 border-r border-border/50 bg-card/50 backdrop-blur-xl p-4 flex flex-col transition-all duration-300 lg:translate-x-0 lg:static",
+        "fixed inset-y-0 left-0 z-50 border-r border-border/50 bg-card/50 backdrop-blur-xl p-4 flex flex-col transition-all duration-300 lg:translate-x-0 lg:static shrink-0",
         collapsed ? "w-64 lg:w-24" : "w-64",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
@@ -98,16 +94,16 @@ export default function AdminLayout() {
       {sidebarOpen && <div className="fixed inset-0 bg-slate-900/35 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-h-screen">
-        <header className="h-16 border-b border-border/50 bg-card/50 backdrop-blur-xl flex items-center justify-between gap-4 px-4 lg:px-8 sticky top-0 z-30">
-          <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen max-w-full overflow-x-hidden">
+        <header className="h-16 border-b border-border/50 bg-card/50 backdrop-blur-xl flex items-center justify-between gap-4 px-4 lg:px-8 sticky top-0 z-30 max-w-full min-w-0">
+          <div className="flex items-center gap-3 shrink-0">
             <button className="lg:hidden rounded-lg p-2 transition hover:bg-secondary/50" onClick={() => setSidebarOpen(true)}><Menu className="h-5 w-5" /></button>
-            <h2 className="font-display font-semibold text-lg">
+            <h2 className="font-display font-semibold text-lg truncate">
               {sidebarItems.find((i) => i.href === location.pathname)?.label || "Admin"}
             </h2>
           </div>
-          <div className="ml-auto hidden w-full max-w-md items-center gap-3 md:flex">
-            <div className="relative flex-1">
+          <div className="ml-auto hidden w-full max-w-md items-center gap-3 md:flex min-w-0">
+            <div className="relative flex-1 min-w-0">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 aria-label="Admin search"
@@ -115,18 +111,18 @@ export default function AdminLayout() {
                 className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.06] pl-10 pr-3 text-sm font-semibold outline-none transition focus:border-cyan-300/50 focus:ring-4 focus:ring-cyan-300/10"
               />
             </div>
-            <div className="flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-xs font-extrabold text-muted-foreground">
+            <div className="flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-xs font-extrabold text-muted-foreground shrink-0">
               <UserCircle className="h-4 w-4 text-cyan-200" />
               Admin
             </div>
           </div>
-          <Link to="/" className="hidden rounded-lg border border-border/60 bg-white/50 px-3 py-2 text-xs font-bold text-muted-foreground transition hover:bg-white/80 hover:text-foreground sm:inline-flex">
+          <Link to="/" className="hidden rounded-lg border border-border/60 bg-white/50 px-3 py-2 text-xs font-bold text-muted-foreground transition hover:bg-white/80 hover:text-foreground sm:inline-flex shrink-0">
             Website
           </Link>
         </header>
-        <main className="flex-1 p-4 lg:p-8">
+        <main className="flex-1 min-w-0 p-4 lg:p-6 max-w-full overflow-x-hidden">
           <Suspense fallback={<AdminDashboardLoader />}>
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={location.pathname}>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={location.pathname} className="min-w-0 max-w-full">
               <Outlet />
             </motion.div>
           </Suspense>

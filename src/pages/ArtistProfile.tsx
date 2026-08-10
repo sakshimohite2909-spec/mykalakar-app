@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import {
   BadgeCheck,
@@ -23,6 +23,7 @@ import { saveArtist, unsaveArtist, getSavedArtistIds } from "@/services/savedArt
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import BookingModal from "@/components/BookingModal";
+import { AuthModal } from "@/components/AuthModal";
 import ArtistCalendar from "@/components/artist-bookings/ArtistCalendar";
 import { ArtistVideoEmbed } from "@/components/ArtistVideoEmbed";
 import { AdminEditArtistModal } from "@/components/AdminEditArtistModal";
@@ -346,6 +347,8 @@ function RatingStarInput({
 export default function ArtistProfile() {
   const { formatNumber, t } = useI18n(); // ADDED FOR i18n
   const { id } = useParams();
+  const navigate = useNavigate();
+  const pageLocation = useLocation();
   const { currentUser } = useAuth();
   const [artist, setArtist] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -357,6 +360,23 @@ export default function ArtistProfile() {
   const [isRatingSubmitting, setIsRatingSubmitting] = useState(false);
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const executeProtectedAction = (actionType: "book" | "save" | "rate", callback?: () => void) => {
+    if (!currentUser) {
+      toast({
+        title: t("artist.loginRequiredTitle") || "लॉगिन आवश्यक आहे",
+        description: t("artist.loginRequiredText") || "पुढील प्रक्रियेसाठी कृपया प्रथम लॉगिन करा.",
+      });
+      navigate("/login", {
+        state: {
+          from: pageLocation.pathname,
+          action: actionType,
+        },
+      });
+      return;
+    }
+    if (callback) callback();
+  };
 
   // Determine privilege level for the current user
   const isPrivileged = Boolean(
@@ -431,6 +451,14 @@ export default function ArtistProfile() {
     };
   }, [currentUser, id]);
 
+  // Auto-resume action after successful login redirect
+  useEffect(() => {
+    if (currentUser && pageLocation.state?.action === "book") {
+      setBookingOpen(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, [currentUser, pageLocation.state]);
+
   useEffect(() => {
     setActiveVideoIndex(0);
   }, [id]);
@@ -503,7 +531,7 @@ export default function ArtistProfile() {
 
   const handleSaveArtist = async () => {
     if (!currentUser) {
-      toast({ title: t("artist.loginRequiredTitle"), description: t("artist.loginRequiredText") }); // ADDED FOR i18n
+      executeProtectedAction("save");
       return;
     }
     if (!artist || isSaving) return;
@@ -548,7 +576,7 @@ export default function ArtistProfile() {
 
   const handleSubmitRating = async () => {
     if (!currentUser) {
-      toast({ title: t("artist.loginRequiredTitle"), description: t("artist.loginToRate") }); // ADDED FOR i18n
+      executeProtectedAction("rate");
       return;
     }
     if (!artist) return;
@@ -1054,7 +1082,7 @@ export default function ArtistProfile() {
 
                 {/* CTA */}
                 <button
-                  onClick={() => setBookingOpen(true)}
+                  onClick={() => executeProtectedAction("book", () => setBookingOpen(true))}
                   className="mt-4 w-full rounded-xl bg-orange-600 py-3 text-sm font-extrabold uppercase tracking-widest text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-orange-700 hover:shadow-md active:scale-[0.98]"
                 >
                   {t("artist.sendInquiry")} {/* ADDED FOR i18n */}
