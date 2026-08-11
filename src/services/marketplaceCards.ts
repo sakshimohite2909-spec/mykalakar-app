@@ -9,8 +9,9 @@ import {
   type SmartFilters,
 } from "@/services/filterEngine";
 import { validateUniqueImages } from "@/utils/imageAllocator";
-import { correctTypo, normalizeCategory, safeString, safeNumber, safeBoolean } from "@/services/dataNormalizer";
+import { correctTypo, normalizeCategory, safeString, safeNumber, safeBoolean, resolveArtistProfilePhoto } from "@/services/dataNormalizer";
 import { getArtistRatingSummary } from "@/services/ratingUtils";
+import { imageRegistry } from "@/services/ImageRegistryService";
 
 export type ArtistService = {
   category: string;
@@ -73,11 +74,12 @@ function isGenericAvatar(url: string) {
 }
 
 function isUploadedMedia(url: string) {
-  return /^https?:\/\//i.test(url) && !isGenericAvatar(url);
+  const src = String(url || "").trim();
+  return Boolean(src) && !isGenericAvatar(src) && /^(https?:\/\/|data:image\/|blob:|\/)/i.test(src);
 }
 
 function getUploadedImages(artist: any) {
-  const profileImage = artist.profileImage?.thumbnail || artist.profileImage?.url || artist.artistProfile?.profileImage || artist.media?.profilePhoto || artist.profilePhoto || "";
+  const profileImage = resolveArtistProfilePhoto(artist);
   const coverImage = artist.coverImage?.thumbnail || artist.coverImage?.url || artist.media?.coverPhoto || artist.coverPhoto || "";
   const gallery = Array.isArray(artist.gallery)
     ? artist.gallery.map((item: Record<string, unknown> | string) => typeof item === "string" ? item : item?.thumbnail || item?.url || item).filter(Boolean)
@@ -88,7 +90,7 @@ function getUploadedImages(artist: any) {
       ? artist.galleryPhotos
       : [];
 
-  return compactUnique([coverImage, profileImage, ...gallery, ...galleryPhotos]).filter(isUploadedMedia);
+  return compactUnique([profileImage, coverImage, ...gallery, ...galleryPhotos]).filter(isUploadedMedia);
 }
 
 function getPriceRange(artist: any, service: any) {
@@ -113,28 +115,22 @@ export function getArtistServices(artist: any): ArtistService[] {
         : [{ category: getArtistSubCategory(artist) || artist.subCategory || artist.category }];
 
   const seen = new Set<string>();
+
   return candidates
-    .map((service: Record<string, unknown>, index: number) => {
-      const subCategory = normalize(service.subCategory || service.subcategory || service.category || service.name || service.type);
-      if (!subCategory) return null;
-      const rawCategory = normalize(
-        service.mainCategory ||
-          service.categoryGroup ||
-          getParentCategoryForSubCategory(subCategory) ||
-          getArtistCategory({ ...artist, subCategory }) ||
-          artist.category ||
-          "Artists"
-      );
-      const category = normalizeCategory(rawCategory);
-      const serviceId = normalize(service.serviceId || service.id || `${slug(category)}-${slug(subCategory)}-${index}`);
-      const dedupeKey = `${normalizeKey(category)}:${normalizeKey(subCategory)}:${normalizeKey(serviceId)}`;
-      if (seen.has(dedupeKey)) return null;
-      seen.add(dedupeKey);
+    .map((item: Record<string, unknown> | string, index: number) => {
+      const category = typeof item === "string" ? getArtistCategory(artist) || "Performers" : normalize(item.category || item.mainCategory || getArtistCategory(artist) || "Performers");
+      const subCategory = typeof item === "string" ? item : normalize(item.subCategory || item.name || item.artForm || getArtistSubCategory(artist) || "Artist");
+      const serviceId = slug(subCategory || category || index);
+      const key = `${category}:${subCategory}`.toLowerCase();
+
+      if (seen.has(key)) return null;
+      seen.add(key);
+
       return {
         category,
         subCategory,
+        priceRange: getPriceRange(artist, typeof item === "string" ? {} : item),
         serviceId,
-        priceRange: getPriceRange(artist, service),
       };
     })
     .filter(Boolean) as ArtistService[];
@@ -156,13 +152,18 @@ export function buildArtistCards(artists: any[], maxCards?: number): ArtistCardV
 
     services.forEach((service, serviceIndex) => {
       const cardId = `${artistId}_${service.serviceId}`;
-      const image = uploadedImages[serviceIndex] || "";
+      const categoryName = service.subCategory || service.category || "Performers";
+      const image = uploadedImages[serviceIndex] || uploadedImages[0] || imageRegistry.getUniqueImage({
+        category: categoryName,
+        type: "artist",
+        key: `${artistId}_${service.serviceId}`,
+      });
       cards.push({
         cardId,
         artistId,
         uid: safeString(artist.uid || artistId),
         serviceId: service.serviceId,
-        name: correctTypo(safeString(artist.name || artist.professionalName, "Premium Artist")),
+        name: correctTypo(safeString(artist.displayName || artist.name || artist.stageName || artist.professionalName, "Premium Artist")),
         category: normalizeCategory(service.category),
         subCategory: correctTypo(service.subCategory),
         priceRange: service.priceRange,

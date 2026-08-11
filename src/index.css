@@ -1,8 +1,8 @@
 /* Google Fonts are now loaded via <link> in index.html with preconnect + display=swap for optimal FCP. */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
 :root {
   /* 8-Point Spacing System */
@@ -75,7 +75,7 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
     box-sizing: border-box;
   }
 
@@ -87,7 +87,6 @@
   }
 
   body {
-    @apply font-sans antialiased;
     min-height: 100vh;
     overflow-x: hidden;
     max-width: 100%;
@@ -95,6 +94,8 @@
     color: hsl(var(--foreground));
     font-family: "Montserrat", "Noto Sans Devanagari", system-ui, sans-serif;
     text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   #root {
@@ -115,7 +116,7 @@
   h1, h2, h3, h4, h5, h6 {
     color: inherit;
     font-family: "Poppins", "Montserrat", "Noto Sans Devanagari", system-ui, sans-serif;
-    @apply font-extrabold;
+    font-weight: 800;
     letter-spacing: 0;
   }
 
@@ -137,14 +138,31 @@
   }
 
   .btn-premium {
-    @apply rounded-lg font-bold transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    border-radius: 0.5rem;
+    font-weight: 700;
+    transition: all 200ms ease;
+    outline: none;
     color: #fff;
     background: var(--brand-gradient);
     box-shadow: var(--glow-primary);
   }
 
+  .btn-premium:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-premium:active {
+    transform: scale(0.98);
+  }
+
   .input-premium {
-    @apply rounded-lg px-4 py-2 text-sm transition-all focus:outline-none;
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    transition: all 150ms ease;
+    outline: none;
     border: 1px solid var(--border-glass);
     background: rgba(255, 255, 255, 0.07);
     color: hsl(var(--foreground));
@@ -153,7 +171,7 @@
   }
 
   .form-subcard {
-    @apply p-6;
+    padding: 1.5rem;
     border-radius: 8px;
     border: 1px solid var(--border-glass);
     background: rgba(255, 255, 255, 0.055);

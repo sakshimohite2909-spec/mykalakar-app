@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Plus, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import NewRequirementModal from "@/components/NewRequirementModal";
 import { useMasterData } from "@/contexts/MasterDataContext";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
@@ -35,6 +36,7 @@ export default function EventRequirements() {
   const [ready, setReady] = useState(false);
   const [artists, setArtists] = useState<Record<string, unknown>[]>([]);
   const [artistsLoading, setArtistsLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(searchParams.get("openModal") === "true");
 
   const eventId = searchParams.get("eventId") || "";
   const eventType = searchParams.get("eventType") || searchParams.get("event") || "";
@@ -115,22 +117,56 @@ export default function EventRequirements() {
     return (
       <div className="event-requirements-page min-h-screen w-full font-sans" style={{ background: "var(--app-background)" }}>
         <Navbar />
-        <main className="page-shell container-shell flex min-h-[70vh] flex-col items-center justify-center gap-4 text-center">
-          <Sparkles className="h-10 w-10 text-orange-600" />
-          <h1 className="text-2xl font-black text-stone-950">{t("event.notFoundTitle")}</h1> {/* ADDED FOR i18n */}
-          <p className="max-w-sm text-sm font-semibold leading-6 text-stone-500">
-            {t("requirements.invalidEventText")} {/* ADDED FOR i18n */}
-          </p>
-          <button
-            type="button"
-            onClick={() => navigate("/events")}
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-orange-600 px-5 text-xs font-extrabold text-white"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {t("event.backToEvents")} {/* ADDED FOR i18n */}
-          </button>
+        <main className="page-shell container-shell py-12 px-4 max-w-5xl mx-auto min-h-[75vh]">
+          <div className="text-center max-w-2xl mx-auto mb-10">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-xs font-extrabold uppercase tracking-widest text-orange-600">
+              <Sparkles className="h-4 w-4 text-orange-600 animate-pulse" />
+              Event Requirement
+            </span>
+            <h1 className="mt-3 text-3xl font-extrabold text-stone-950 sm:text-4xl">Select Event Type</h1>
+            <p className="mt-2 text-sm font-semibold text-stone-600">
+              Choose your event type to find verified artists, performers, and event services.
+            </p>
+            <div className="mt-5 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-6 py-3 text-xs font-extrabold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700 active:scale-95 cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                Post Event Requirement Form
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {EVENTS.map((evt) => (
+              <div
+                key={evt.id}
+                onClick={() => navigate(`/event-requirements?eventId=${evt.id}&eventType=${encodeURIComponent(evt.name)}`)}
+                className="group relative cursor-pointer flex flex-col justify-between rounded-2xl border border-stone-200 bg-white p-6 shadow-sm transition-all duration-300 hover:border-orange-500 hover:shadow-xl hover:-translate-y-1"
+              >
+                <div>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-3xl transition-transform duration-300 group-hover:scale-110">
+                    {evt.icon}
+                  </div>
+                  <h3 className="mt-4 text-xl font-black text-stone-950 group-hover:text-orange-600 transition-colors">
+                    {getArtLabel(t, evt.name)}
+                  </h3>
+                  <p className="mt-2 text-xs font-semibold leading-relaxed text-stone-500">
+                    {evt.description}
+                  </p>
+                </div>
+                <div className="mt-6 flex items-center gap-2 text-xs font-extrabold text-orange-600">
+                  Select Event
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </div>
+              </div>
+            ))}
+          </div>
         </main>
         <Footer />
+        <NewRequirementModal open={modalOpen} onClose={() => setModalOpen(false)} />
       </div>
     );
   }
@@ -151,6 +187,16 @@ export default function EventRequirements() {
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-stone-600">
               {t(`requirements.event.${selectedEvent.id}.description`)} {t("requirements.subtitle")} {/* ADDED FOR i18n */}
             </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => setModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md shadow-orange-600/20 transition hover:bg-orange-700 active:scale-95 cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                Post Event Requirement Form
+              </button>
+            </div>
           </div>
           <div className="hidden items-center justify-center rounded-lg bg-orange-50 text-7xl md:flex">
             {selectedEvent.icon}
@@ -232,6 +278,7 @@ export default function EventRequirements() {
       </main>
 
       <Footer />
+      <NewRequirementModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </div>
   );
 }

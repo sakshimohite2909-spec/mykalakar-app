@@ -65,7 +65,7 @@ export function useApprovedBriefs(): BriefFeedState {
 
     const q = query(
       collection(db, "eventBriefs"),
-      where("status", "==", "approved")
+      where("status", "in", ["approved", "pending", "active"])
     );
 
     const unsub = onSnapshot(

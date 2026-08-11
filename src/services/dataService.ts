@@ -2,7 +2,7 @@ import { addDoc, collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, q
 import { CATEGORY_GROUP_OPTIONS, normalizeArtistRecord } from "@/constants/artistSystem";
 import { db } from "@/lib/firebase";
 import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, withTimeout } from "@/lib/firebaseSafe";
-import { normalizeRecord, isRenderSafe } from "@/services/dataNormalizer";
+import { normalizeRecord, isRenderSafe, resolveArtistProfilePhoto } from "@/services/dataNormalizer";
 
 type CacheEntry<T> = {
   value?: T;
@@ -68,9 +68,9 @@ function isPublicEvent(event: Record<string, any>) {
 function readyArtistMedia(artist: Record<string, any>) {
   if (!isRenderSafe(artist, "readyArtistMedia")) return {} as Record<string, any>;
   const rawArtist = artist as Record<string, any>;
-  const profilePhoto = rawArtist.media?.profilePhoto || rawArtist.profilePhoto || rawArtist.profilePicUrl || "";
-  const coverPhoto = rawArtist.media?.coverPhoto || rawArtist.coverPhoto || rawArtist.coverImages?.[0] || "";
-  const galleryPhotos: string[] = rawArtist.media?.galleryPhotos || rawArtist.galleryPhotos || [];
+  const profilePhoto = resolveArtistProfilePhoto(rawArtist);
+  const coverPhoto = rawArtist.media?.coverPhoto || rawArtist.coverPhoto || rawArtist.coverImages?.[0] || rawArtist.artistProfile?.coverImage || "";
+  const galleryPhotos: string[] = rawArtist.media?.galleryPhotos || rawArtist.galleryPhotos || rawArtist.artistProfile?.galleryPhotos || [];
   const base = normalizeArtistRecord({ ...rawArtist, profilePhoto, coverPhoto, galleryPhotos });
   return { ...base, ...normalizeRecord(base) };
 }
@@ -226,7 +226,7 @@ export async function getApprovedEvents(maxCount?: number) {
     try {
       const eventsQuery = query(
         collection(db, EVENT_BRIEF_COLLECTION),
-        where("status", "==", "approved")
+        where("status", "in", ["approved", "pending", "active"])
       );
       const snap = await getDocs(eventsQuery);
       
@@ -250,7 +250,7 @@ export function subscribeApprovedEvents(maxCount: number | undefined, onData: (e
   const pageSize = clampPageSize(maxCount);
   const eventsQuery = query(
     collection(db, EVENT_BRIEF_COLLECTION),
-    where("status", "==", "approved")
+    where("status", "in", ["approved", "pending", "active"])
   );
   return onSnapshot(
     eventsQuery,

@@ -1,14 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowUpRight,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query } from "firebase/firestore";
 import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
 
 const LOCAL_CUSTOM_CATS_KEY = "mykalakar_custom_categories";
@@ -120,18 +121,19 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.05,
+      staggerChildren: 0.08,
     },
   },
 };
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 15 },
+  hidden: { opacity: 0, y: 20, scale: 0.95 },
   visible: {
     opacity: 1,
     y: 0,
+    scale: 1,
     transition: {
-      duration: 0.4,
+      duration: 0.45,
       ease: [0.25, 0.1, 0.25, 1.0] as [number, number, number, number],
     },
   },
@@ -183,8 +185,83 @@ export default function BrowseAndPopularCategories() {
     return () => unsub();
   }, []);
 
+  const [artistCounts, setArtistCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const q = query(collection(db, "artists"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const counts: Record<string, number> = {};
+        snap.docs.forEach((docSnap) => {
+          const data = docSnap.data();
+          const status = String(data.status || "active").toLowerCase();
+          if (status !== "active" && status !== "approved" && status !== "") return;
+
+          const catStr = String(
+            data.categoryGroup || data.category || data.primaryCategory || data.artForm || data.subCategory || ""
+          ).toLowerCase();
+          const categoriesArr = Array.isArray(data.categories)
+            ? data.categories.map((c: any) => String(c).toLowerCase())
+            : [];
+          const eventsArr = Array.isArray(data.events)
+            ? data.events.map((e: any) => String(e).toLowerCase())
+            : [];
+
+          BROWSE_EVENTS.forEach((evt) => {
+            const titleLower = evt.title.toLowerCase();
+            const keyword = titleLower.split(" ")[0]; // e.g. "wedding", "varkari", "birthday", "corporate", "cultural"
+
+            const isMatch =
+              catStr.includes(keyword) ||
+              categoriesArr.some((c: string) => c.includes(keyword)) ||
+              eventsArr.some((e: string) => e.includes(keyword));
+
+            if (isMatch) {
+              counts[evt.title] = (counts[evt.title] || 0) + 1;
+            }
+          });
+        });
+        setArtistCounts(counts);
+      },
+      (err) => console.warn("Artist count snapshot warning:", err)
+    );
+    return () => unsub();
+  }, []);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    if (isPaused) return;
+    const interval = setInterval(() => {
+      if (scrollRef.current) {
+        const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+        if (scrollLeft + clientWidth >= scrollWidth - 30) {
+          scrollRef.current.scrollTo({ left: 0, behavior: "smooth" });
+        } else {
+          scrollRef.current.scrollBy({ left: 230, behavior: "smooth" });
+        }
+      }
+    }, 2200);
+    return () => clearInterval(interval);
+  }, [isPaused]);
+
+  const handleScrollLeft = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: -240, behavior: "smooth" });
+    }
+  };
+
+  const handleScrollRight = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: 240, behavior: "smooth" });
+    }
+  };
+
   const INITIAL_VISIBLE_COUNT = 7;
   const visibleCategories = isExpanded ? categories : categories.slice(0, INITIAL_VISIBLE_COUNT);
+  const displayEvents = [...BROWSE_EVENTS, ...BROWSE_EVENTS, ...BROWSE_EVENTS];
 
   return (
     <section className="mx-auto w-full max-w-[1240px] px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6 overflow-hidden">
@@ -197,58 +274,98 @@ export default function BrowseAndPopularCategories() {
             </h2>
             <span className="h-2 w-2 rounded-full bg-orange-500 animate-ping hidden sm:inline-block" />
           </div>
-          <Link
-            to="/events"
-            className="group inline-flex items-center gap-1 text-xs md:text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors"
-          >
-            <span>View All</span>
-            <ChevronRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-          </Link>
+
+          <div className="flex items-center gap-3">
+            {/* Scroll controls */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleScrollLeft}
+                aria-label="Previous events"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-xs hover:border-orange-500 hover:text-orange-600 hover:bg-orange-50 transition active:scale-90"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleScrollRight}
+                aria-label="Next events"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-xs hover:border-orange-500 hover:text-orange-600 hover:bg-orange-50 transition active:scale-90"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            <Link
+              to="/events"
+              className="group inline-flex items-center gap-1 text-xs md:text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors ml-1"
+            >
+              <span>View All</span>
+              <ChevronRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+            </Link>
+          </div>
         </div>
 
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-50px" }}
-          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 md:gap-5"
+        <div
+          ref={scrollRef}
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={() => setIsPaused(false)}
+          onTouchStart={() => setIsPaused(true)}
+          onTouchEnd={() => setIsPaused(false)}
+          className="flex items-center gap-4 md:gap-5 overflow-x-auto no-scrollbar scroll-smooth py-2 px-1 snap-x snap-mandatory"
         >
-          {BROWSE_EVENTS.map((evt) => (
-            <motion.div key={evt.title} variants={cardVariants}>
-              <Link
-                to={evt.link}
-                className="group relative flex flex-col overflow-hidden rounded-2xl bg-white p-2 border border-stone-200/80 shadow-xs hover:border-orange-500/70 hover:shadow-xl transition-all duration-500 cursor-pointer"
-              >
-                <div className="relative aspect-[1.2/1] w-full overflow-hidden rounded-xl bg-stone-100">
-                  <img
-                    src={evt.image}
-                    alt={evt.title}
-                    className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+          {displayEvents.map((evt, idx) => {
+            const count = artistCounts[evt.title] || 0;
+            const countText = count > 0 ? `${count} ${count === 1 ? "Artist" : "Artists"}` : "0 Artists";
 
-                  <span className="absolute top-2 left-2 rounded-full bg-black/40 backdrop-blur-md px-2.5 py-0.5 text-[10px] font-bold text-white shadow-xs">
-                    {evt.subtitle}
+            return (
+              <motion.div
+                key={`${evt.title}-${idx}`}
+                whileTap={{ scale: 0.95 }}
+                className="flex-shrink-0 snap-start pt-2 pb-4"
+              >
+                <Link
+                  to={evt.link}
+                  className="group relative flex aspect-square w-44 h-44 sm:w-48 sm:h-48 md:w-52 md:h-52 shrink-0 flex-col items-center justify-center rounded-full border-4 border-white bg-stone-900 shadow-md ring-4 ring-orange-500/10 transition-all duration-500 hover:scale-105 hover:ring-orange-500/40 hover:shadow-2xl cursor-pointer"
+                >
+                  {/* Floating Bottom-Rim Badge */}
+                  <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-md border-2 border-white">
+                    {countText}
                   </span>
 
-                  <div className="absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-orange-600 text-white shadow-md opacity-0 translate-y-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0">
-                    <ArrowUpRight className="h-4 w-4 stroke-[2.5]" />
+                  {/* Inner Circular Image Container */}
+                  <div className="absolute inset-0 overflow-hidden rounded-full">
+                    <img
+                      src={evt.image}
+                      alt={evt.title}
+                      className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                      loading="lazy"
+                    />
+                    {/* Dark gradient overlay for text readability */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/10 group-hover:from-black/85 group-hover:via-black/45 transition-all duration-300" />
                   </div>
-                </div>
 
-                <div className="px-1 pt-3 pb-1">
-                  <h3 className="text-sm md:text-base font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors leading-tight truncate">
-                    {evt.title}
-                  </h3>
-                  <p className="mt-0.5 text-xs font-semibold text-stone-500 group-hover:text-stone-700 transition-colors">
-                    Explore services →
-                  </p>
-                </div>
-              </Link>
-            </motion.div>
-          ))}
-        </motion.div>
+                  {/* Content inside full circle */}
+                  <div className="relative z-10 flex flex-col items-center justify-center p-3 text-center text-white">
+                    <h3 className="text-base sm:text-lg font-black leading-tight drop-shadow-md text-white group-hover:text-orange-300 transition-colors">
+                      {evt.title}
+                    </h3>
+                    <p className="mt-1 text-xs font-bold text-orange-200/90 flex items-center justify-center gap-1">
+                      <span>Explore</span>
+                      <motion.span
+                        animate={{ x: [0, 3, 0] }}
+                        transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                        className="inline-block text-orange-400 font-bold"
+                      >
+                        →
+                      </motion.span>
+                    </p>
+                  </div>
+                </Link>
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
 
       {/* ─── 2. Categories Section (Matches User Reference Design) ─── */}
@@ -283,6 +400,7 @@ export default function BrowseAndPopularCategories() {
                 <motion.div
                   key={cat.id || catName}
                   variants={cardVariants}
+                  whileTap={{ scale: 0.95 }}
                   layout
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}

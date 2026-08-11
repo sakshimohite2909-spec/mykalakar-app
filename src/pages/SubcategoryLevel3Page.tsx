@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getActiveArtistsPage } from "@/services/dataService";
+import { getActiveArtistsPage, clearDataCache } from "@/services/dataService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { resolveArtistProfilePhoto } from "@/services/dataNormalizer";
+import { imageRegistry } from "@/services/ImageRegistryService";
 
 interface ArtistCardData {
   id: string;
@@ -41,17 +43,13 @@ export default function SubcategoryLevel3Page() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const decodedEvent = eventName
-    ? decodeURIComponent(eventName)
-    : searchParams.get("category") || "Wedding";
+  const rawEvent = eventName || searchParams.get("event") || searchParams.get("category");
+  const rawCategory = categoryName || searchParams.get("group") || searchParams.get("categoryGroup");
+  const rawSubcategory = subCategoryName || searchParams.get("subCategory") || searchParams.get("subcategory");
 
-  const decodedCategory = categoryName
-    ? decodeURIComponent(categoryName)
-    : searchParams.get("group") || searchParams.get("categoryGroup") || "Photography";
-
-  const decodedSubcategory = subCategoryName
-    ? decodeURIComponent(subCategoryName)
-    : searchParams.get("subCategory") || searchParams.get("subcategory") || "Wedding Photographer";
+  const decodedEvent = rawEvent ? decodeURIComponent(rawEvent) : null;
+  const decodedCategory = rawCategory ? decodeURIComponent(rawCategory) : null;
+  const decodedSubcategory = rawSubcategory ? decodeURIComponent(rawSubcategory) : null;
 
   const [selectedCity, setSelectedCity] = useState("Pune");
   const [selectedSort, setSelectedSort] = useState("Recommended");
@@ -70,23 +68,34 @@ export default function SubcategoryLevel3Page() {
 
   useEffect(() => {
     let isMounted = true;
+    clearDataCache();
     getActiveArtistsPage(30)
       .then((res) => {
         if (!isMounted) return;
         if (res.items && res.items.length > 0) {
-          const mapped: (ArtistCardData & { rawItem: any })[] = res.items.map((item: any) => ({
-            id: item.uid || item.id || String(Math.random()),
-            name: item.displayName || item.name || item.stageName || "Professional Artist",
-            isVerified: Boolean(item.isVerified || item.verified),
-            rating: item.rating ? Number(item.rating) : 4.8,
-            reviewsCount: item.reviewsCount ? Number(item.reviewsCount) : 120,
-            location: item.location || item.city || "Pune, Maharashtra",
-            experience: item.experience ? `${item.experience}+ Years Experience` : "6+ Years Experience",
-            startingPrice: item.startingPrice ? String(item.startingPrice) : "25,000",
-            image: item.profilePhoto || item.avatar || item.coverPhoto || "https://images.unsplash.com/photo-1537633552985-df8429e8048b?q=80&w=800&auto=format&fit=crop",
-            subCategory: item.subCategory || item.subcategory || item.artForm || item.category || "Artist",
-            rawItem: item,
-          }));
+          const mapped: (ArtistCardData & { rawItem: any })[] = res.items.map((item: any) => {
+            const subCat = item.subCategory || item.subcategory || item.artForm || item.category || "Artist";
+            const uploadedImage = resolveArtistProfilePhoto(item);
+            const fallbackImage = imageRegistry.getUniqueImage({
+              category: subCat,
+              type: "artist",
+              key: item.uid || item.id || item.displayName || item.name || "artist-card",
+            });
+
+            return {
+              id: item.uid || item.id || String(Math.random()),
+              name: item.displayName || item.name || item.stageName || item.artistName || "Professional Artist",
+              isVerified: Boolean(item.isVerified || item.verified),
+              rating: item.rating ? Number(item.rating) : 4.8,
+              reviewsCount: item.reviewsCount ? Number(item.reviewsCount) : 120,
+              location: item.location || item.city || "Pune, Maharashtra",
+              experience: item.experience ? `${item.experience}+ Years Experience` : "6+ Years Experience",
+              startingPrice: item.startingPrice ? String(item.startingPrice) : "25,000",
+              image: uploadedImage || fallbackImage,
+              subCategory: subCat,
+              rawItem: item,
+            };
+          });
           setRealArtists(mapped);
         }
       })
@@ -99,14 +108,17 @@ export default function SubcategoryLevel3Page() {
     return () => {
       isMounted = false;
     };
-  }, [decodedSubcategory]);
+  }, [decodedSubcategory, decodedCategory, decodedEvent]);
 
   const queryParam = searchParams.get("q") || searchParams.get("query") || "";
 
   const displayTitle = useMemo(() => {
     if (queryParam) return `Artists matching "${queryParam}"`;
-    return decodedSubcategory;
-  }, [queryParam, decodedSubcategory]);
+    if (decodedSubcategory) return decodedSubcategory;
+    if (decodedCategory) return `${decodedCategory} Artists`;
+    if (decodedEvent) return `${decodedEvent} Artists`;
+    return "All Artists";
+  }, [queryParam, decodedSubcategory, decodedCategory, decodedEvent]);
 
   const displayArtists = useMemo(() => {
     const combined = [...realArtists];
@@ -117,9 +129,9 @@ export default function SubcategoryLevel3Page() {
 
     let list = Array.from(unique.values());
 
-    // Filter strictly by the current Subcategory / Category
-    if (decodedSubcategory && decodedSubcategory !== "All" && decodedSubcategory !== "Explore") {
-      const subLower = decodedSubcategory.trim().toLowerCase();
+    // Filter strictly by the current Subcategory / Category if provided
+    const categoryFilter = (decodedSubcategory || decodedCategory || "").trim().toLowerCase();
+    if (categoryFilter && categoryFilter !== "all" && categoryFilter !== "explore" && categoryFilter !== "artists") {
       list = list.filter((a) => {
         const item = a.rawItem || {};
         const allCategoryValues = [
@@ -141,7 +153,7 @@ export default function SubcategoryLevel3Page() {
         if (allCategoryValues.length === 0) return true; // If no categories specified, show by default
 
         return allCategoryValues.some(
-          (v) => v === subLower || v.includes(subLower) || subLower.includes(v)
+          (v) => v === categoryFilter || v.includes(categoryFilter) || categoryFilter.includes(v)
         );
       });
     }
@@ -196,7 +208,7 @@ export default function SubcategoryLevel3Page() {
     }
 
     return list;
-  }, [realArtists, selectedCity, queryParam, filterVerifiedOnly, filterMinRating, filterMinExp, selectedPrice, selectedSort]);
+  }, [realArtists, decodedSubcategory, decodedCategory, selectedCity, queryParam, filterVerifiedOnly, filterMinRating, filterMinExp, selectedPrice, selectedSort]);
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => {
@@ -226,16 +238,33 @@ export default function SubcategoryLevel3Page() {
             <Link to="/" className="hover:text-stone-900 transition-colors shrink-0">
               Home
             </Link>
-            <span className="shrink-0">&gt;</span>
-            <Link to={`/events/${encodeURIComponent(decodedEvent)}`} className="hover:text-stone-900 transition-colors shrink-0">
-              {decodedEvent}
-            </Link>
-            <span className="shrink-0">&gt;</span>
-            <Link to={`/events/${encodeURIComponent(decodedEvent)}/${encodeURIComponent(decodedCategory)}`} className="hover:text-stone-900 transition-colors shrink-0">
-              {decodedCategory}
-            </Link>
-            <span className="shrink-0">&gt;</span>
-            <span className="text-stone-900 font-bold shrink-0">{decodedSubcategory}</span>
+            {decodedEvent && (
+              <>
+                <span className="shrink-0">&gt;</span>
+                <Link to={`/events/${encodeURIComponent(decodedEvent)}`} className="hover:text-stone-900 transition-colors shrink-0">
+                  {decodedEvent}
+                </Link>
+              </>
+            )}
+            {decodedCategory && (
+              <>
+                <span className="shrink-0">&gt;</span>
+                <Link to={`/events/${encodeURIComponent(decodedEvent || "Wedding")}/${encodeURIComponent(decodedCategory)}`} className="hover:text-stone-900 transition-colors shrink-0">
+                  {decodedCategory}
+                </Link>
+              </>
+            )}
+            {decodedSubcategory ? (
+              <>
+                <span className="shrink-0">&gt;</span>
+                <span className="text-stone-900 font-bold shrink-0">{decodedSubcategory}</span>
+              </>
+            ) : !decodedEvent && !decodedCategory ? (
+              <>
+                <span className="shrink-0">&gt;</span>
+                <span className="text-stone-900 font-bold shrink-0">All Artists</span>
+              </>
+            ) : null}
           </div>
           <button
             onClick={() => navigate("/search")}
@@ -347,6 +376,17 @@ export default function SubcategoryLevel3Page() {
                     alt={artist.name}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     loading="lazy"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      const fallback = imageRegistry.getUniqueImage({
+                        category: artist.subCategory || "Performers",
+                        type: "artist",
+                        key: artist.id,
+                      });
+                      if (target.src !== fallback) {
+                        target.src = fallback;
+                      }
+                    }}
                   />
                 </div>
 

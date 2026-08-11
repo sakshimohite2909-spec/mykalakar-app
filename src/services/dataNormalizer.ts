@@ -142,11 +142,15 @@ export function resolveSubCategory(data: Record<string, unknown>): string {
  * This is the SINGLE SOURCE OF TRUTH for category across the entire UI.
  */
 export function resolveCategory(data: Record<string, unknown>): string {
+  const firstCategory = Array.isArray(data.categories) && data.categories.length > 0 ? data.categories[0] : "";
   let raw =
     data.primaryCategory ||
     data.mainCategory ||
     data.categoryGroup ||
     data.category ||
+    data.performanceType ||
+    firstCategory ||
+    data.eventName ||
     "";
 
   if (!raw) {
@@ -317,3 +321,102 @@ export function sanitizeBio(value: unknown): string {
     .replace(/<[^>]*>/g, "")
     .trim();
 }
+
+// ─── PROFILE PHOTO RESOLVER ───────────────────────────────────────────────────
+/**
+ * Resolves the primary uploaded profile photo for an artist document from Firestore.
+ * Fallbacks through all possible field names where artists or registration forms store photos.
+ */
+export function resolveArtistProfilePhoto(artist: any): string {
+  if (!artist) return "";
+
+  const isValidUrl = (val: unknown): string => {
+    if (typeof val === "string") {
+      const src = val.trim();
+      if (!src || /ui-avatars\.com|placeholder\.svg|api\/\?name=/i.test(src)) {
+        return "";
+      }
+      if (/^(https?:\/\/|data:image\/|blob:|\/)/i.test(src)) {
+        return src;
+      }
+    } else if (val && typeof val === "object") {
+      const obj = val as Record<string, unknown>;
+      const src = (
+        typeof obj.url === "string"
+          ? obj.url
+          : typeof obj.thumbnail === "string"
+          ? obj.thumbnail
+          : typeof obj.src === "string"
+          ? obj.src
+          : ""
+      ).trim();
+      if (src && !/ui-avatars\.com|placeholder\.svg|api\/\?name=/i.test(src) && /^(https?:\/\/|data:image\/|blob:|\/)/i.test(src)) {
+        return src;
+      }
+    }
+    return "";
+  };
+
+  const getFirstInArray = (arr: unknown): any => {
+    return Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
+  };
+
+  const categoryMediaFirst = getFirstInArray(artist.media?.categoryMedia);
+  const categoriesArrayFirst = getFirstInArray(artist.categoriesArray);
+  const artsListFirst = getFirstInArray(artist.artsList);
+
+  const candidateSources = [
+    // Top-level & direct media fields
+    artist.media?.profilePhoto,
+    artist.media?.profileImageUrl,
+    artist.media?.profileImage,
+    artist.media?.avatar,
+    artist.profilePhoto,
+    artist.profileImageUrl,
+    artist.profilePicUrl,
+    artist.profileImage?.url,
+    artist.profileImage?.thumbnail,
+    artist.profileImage,
+    artist.artistProfile?.profileImage,
+    artist.artistProfile?.profilePhoto,
+    artist.artistProfile?.profileImageUrl,
+    artist.artistProfile?.avatar,
+    artist.photoURL,
+    artist.imageUrl,
+    artist.avatar,
+    // Category Media nested arrays (from multi-art form registration)
+    categoryMediaFirst?.profilePhotos?.[0],
+    categoryMediaFirst?.performancePhotos?.[0],
+    categoriesArrayFirst?.profilePhotos?.[0],
+    categoriesArrayFirst?.performancePhotos?.[0],
+    categoriesArrayFirst?.profilePhoto,
+    artsListFirst?.profilePhoto,
+    artsListFirst?.performancePhoto,
+    artsListFirst?.profilePhotos?.[0],
+    artsListFirst?.performancePhotos?.[0],
+    // Cover & Performance fallbacks
+    artist.media?.coverPhoto,
+    artist.media?.coverImageUrl,
+    artist.coverPhoto,
+    artist.coverImageUrl,
+    artist.coverImage?.url,
+    artist.coverImage?.thumbnail,
+    artist.coverImage,
+    // Gallery & Portfolio fallbacks
+    getFirstInArray(artist.media?.galleryPhotos),
+    getFirstInArray(artist.galleryPhotos),
+    getFirstInArray(artist.gallery),
+    getFirstInArray(artist.media?.performancePhotos),
+    getFirstInArray(artist.performancePhotos),
+    getFirstInArray(artist.portfolioPhotos),
+    getFirstInArray(artist.portfolio),
+  ];
+
+  for (const candidate of candidateSources) {
+    const resolved = isValidUrl(candidate);
+    if (resolved) return resolved;
+  }
+
+  return "";
+}
+

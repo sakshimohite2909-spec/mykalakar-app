@@ -34,6 +34,7 @@ export interface EventBriefFormData {
   /** Array of selected category / tag strings */
   categories: string[];
   professionalRequirements: string;
+  imageUrl?: string;
 }
 
 /** Firestore document structure as written to `eventBriefs/{id}`. */
@@ -45,9 +46,10 @@ export interface EventBriefDocument {
   performanceType: string;
   categories: string[];
   professionalRequirements: string;
+  imageUrl?: string;
   createdBy: string;
   createdAt: ReturnType<typeof serverTimestamp>;
-  status: "pending";
+  status: "approved";
 }
 
 /** Response returned after a successful or failed write. */
@@ -125,6 +127,7 @@ export async function submitEventBrief(
     ];
 
     const professionalRequirements = cleanStr(formData.professionalRequirements);
+    const imageUrl = cleanStr(formData.imageUrl);
 
     // ── 3. Build the Firestore payload ─────────────────────────────────────
     const payload: EventBriefDocument = {
@@ -135,9 +138,10 @@ export async function submitEventBrief(
       performanceType,
       categories,
       professionalRequirements,
+      ...(imageUrl ? { imageUrl } : {}),
       createdBy: currentUser.uid,   // bound to authenticated identity
       createdAt: serverTimestamp(),  // authoritative server-side stamp
-      status: "pending",            // immutable by client — admin-only field
+      status: "approved",            // Auto-approved for instant publishing
     };
 
     // ── 4. Write to Firestore ──────────────────────────────────────────────

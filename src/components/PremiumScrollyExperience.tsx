@@ -28,6 +28,7 @@ import { buildArtistCards } from "@/services/marketplaceCards";
 import { SpotlightSearch } from "@/components/search/SpotlightSearch";
 import { AnimatePresence, LuxuryArtistCard, LuxuryEventCard } from "@/components/discovery/LuxuryDiscovery";
 import BrowseAndPopularCategories from "@/components/home/BrowseAndPopularCategories";
+import NewRequirementModal from "@/components/NewRequirementModal";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
 
@@ -439,7 +440,7 @@ function FeaturedArtistsSection({ artists, loading }: { artists: ShowcaseArtist[
         <div ref={scrollRef} className="artist-scroll-container">
           <AnimatePresence mode="popLayout">
             {cards.map((artist, index) => (
-              <div key={artist.cardId} className="artist-scroll-item">
+              <div key={`${artist.cardId}_${index}`} className="artist-scroll-item">
                 <LuxuryArtistCard artist={artist} index={index} />
               </div>
             ))}
@@ -495,33 +496,76 @@ function UpcomingEventsSection({ events, loading }: { events: CulturalEvent[]; l
 
 function CTASection() {
   const { t } = useI18n(); // ADDED FOR i18n
-  return (
-    <section className="home-cta-section container-shell app-section rhythm-full pb-24 relative overflow-hidden">
-      {/* Ambient glowing gradient orbs */}
-      <div className="absolute left-[10%] top-[10%] h-[240px] w-[240px] rounded-full bg-[radial-gradient(circle,rgba(249,115,22,0.18)_0%,rgba(245,158,11,0.08)_50%,transparent_100%)] blur-2xl pointer-events-none -z-10" />
-      <div className="absolute right-[15%] bottom-[5%] h-[260px] w-[260px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.18)_0%,rgba(234,88,12,0.06)_50%,transparent_100%)] blur-2xl pointer-events-none -z-10" />
+  const [modalOpen, setModalOpen] = useState(false);
 
-      <div className="home-cta-panel grid gap-4 rounded-3xl p-6 md:p-10 shadow-lg md:grid-cols-[1fr_340px] relative z-10">
-        <div className="py-3">
-          <p className="eyebrow-text text-[11px] font-extrabold uppercase tracking-widest text-orange-600">{t("home.cta.eyebrow")}</p> {/* ADDED FOR i18n */}
-          <h2 className="mt-2 max-w-2xl text-3xl font-extrabold leading-tight text-stone-900 md:text-[36px]">{t("home.cta.title")}</h2> {/* ADDED FOR i18n */}
-          <p className="sub-text mt-3 max-w-xl text-sm font-semibold leading-6 text-stone-600">
-            {t("home.cta.text")} {/* ADDED FOR i18n */}
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Link to="/register?role=artist" className="btn-join-artist inline-flex h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-extrabold text-orange-600 border border-orange-200/50 shadow-sm transition-all duration-300 hover:bg-orange-600 hover:text-white hover:border-orange-600 hover:shadow-lg hover:shadow-orange-500/20 active:scale-[0.98]">
-              <Users className="h-4 w-4" />
-              {t("nav.joinArtist")} {/* ADDED FOR i18n */}
-            </Link>
-            <Link to="/events" className="btn-post-event inline-flex h-11 items-center gap-2 rounded-full border border-stone-200 bg-stone-100/40 px-5 text-sm font-extrabold text-stone-900 transition-all duration-300 hover:bg-stone-200/60 active:scale-[0.98]">
-              {t("events.postEvent")} {/* ADDED FOR i18n */}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+  return (
+    <>
+      <section className="home-cta-section container-shell app-section rhythm-full pb-24 relative overflow-hidden">
+        {/* Ambient glowing gradient orbs */}
+        <div className="absolute left-[5%] top-[10%] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(249,115,22,0.22)_0%,rgba(245,158,11,0.08)_50%,transparent_100%)] blur-3xl pointer-events-none -z-10 animate-pulse" />
+        <div className="absolute right-[10%] bottom-[5%] h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.2)_0%,rgba(234,88,12,0.08)_50%,transparent_100%)] blur-3xl pointer-events-none -z-10" />
+
+        <div className="home-cta-panel grid gap-6 rounded-3xl p-6 md:p-10 shadow-2xl md:grid-cols-[1fr_360px] items-center relative z-10">
+          <div className="py-2">
+            {/* Eyebrow & Badges */}
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="eyebrow-text inline-flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-orange-400 backdrop-blur-md">
+                <Sparkles className="h-3.5 w-3.5 text-orange-400 animate-pulse" />
+                {t("home.cta.eyebrow")}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-bold text-stone-300">
+                ⚡ Quick 2-Min Setup
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-bold text-stone-300">
+                🛡️ Verified Artists
+              </span>
+            </div>
+
+            <h2 className="mt-2 max-w-2xl text-3xl font-black leading-tight text-white md:text-[38px] tracking-tight">
+              One polished profile. <span className="bg-gradient-to-r from-orange-400 to-amber-500 bg-clip-text text-transparent">Faster event discovery.</span>
+            </h2>
+
+            <p className="sub-text mt-3 max-w-xl text-sm font-medium leading-relaxed text-stone-300">
+              {t("home.cta.text")}
+            </p>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link to="/register?role=artist" className="btn-join-artist inline-flex h-12 items-center gap-2 rounded-xl px-6 text-sm font-black text-white transition-all duration-300 focus:outline-none">
+                <Users className="h-4 w-4" />
+                {t("nav.joinArtist")}
+              </Link>
+              <button
+                type="button"
+                onClick={() => setModalOpen(true)}
+                className="btn-post-event inline-flex h-12 items-center gap-2 rounded-xl px-6 text-sm font-black text-white transition-all duration-300 focus:outline-none cursor-pointer"
+              >
+                <CalendarDays className="h-4 w-4" />
+                {t("events.postEvent")}
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Right Image Container with Floating Badge */}
+          <div className="relative group self-center w-full">
+            <SmartImage src={STATIC_IMAGES.profileCover} alt={t("home.hero.altArtist")} usageId="home:cta" category="hero" orientation="landscape" aspectRatio="aspect-video" containerClassName="rounded-2xl overflow-hidden shadow-2xl border border-white/15 group-hover:scale-[1.02] transition-transform duration-500" />
+
+            {/* Floating Glass Rating Badge */}
+            <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-xl border border-white/20 bg-black/60 px-3 py-1.5 shadow-lg backdrop-blur-md">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-500/20 text-orange-400 font-extrabold text-xs">
+                🎭
+              </div>
+              <div>
+                <p className="text-[11px] font-extrabold text-white">Verified Platform</p>
+                <p className="text-[9px] font-medium text-stone-300">100% Authentic Talent</p>
+              </div>
+            </div>
           </div>
         </div>
-        <SmartImage src={STATIC_IMAGES.profileCover} alt={t("home.hero.altArtist")} usageId="home:cta" category="hero" orientation="landscape" aspectRatio="aspect-video" containerClassName="self-center rounded-2xl overflow-hidden shadow-lg border border-white/20" /> {/* ADDED FOR i18n */}
-      </div>
-    </section>
+      </section>
+
+      <NewRequirementModal open={modalOpen} onClose={() => setModalOpen(false)} />
+    </>
   );
 }
 

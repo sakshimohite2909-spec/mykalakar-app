@@ -1,410 +1,30 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Plus,
-  Search,
-  Filter,
   Calendar,
   MapPin,
   IndianRupee,
-  Mic2,
-  Tag,
-  ClipboardList,
-  X,
-  Loader2,
   Sparkles,
-  CheckCircle2,
   ArrowRight,
-  Clock,
-  SlidersHorizontal,
-  Inbox,
-  AlertTriangle,
-  FileText,
 } from "lucide-react";
 import {
   collection,
-  addDoc,
   onSnapshot,
   query,
   where,
-  orderBy,
-  serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import NewRequirementModal from "@/components/NewRequirementModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { ImageRegistryService } from "@/services/ImageRegistryService";
 import { useI18n } from "@/i18n/I18nProvider";
-
-const PERFORMANCE_TYPES = [
-  "Singer",
-  "Dancer",
-  "DJ",
-  "Band",
-  "Anchor",
-  "Other",
-];
-
-import { useCategories } from "@/hooks/useCategories";
-
-interface NewBriefModalProps {
-  open: boolean;
-  onClose: () => void;
-}
-
-function NewBriefModal({ open, onClose }: NewBriefModalProps) {
-  const { currentUser, userRole } = useAuth();
-  const { categories } = useCategories();
-  const { t } = useI18n();
-  const [eventName, setEventName] = useState("");
-  const [totalBudget, setTotalBudget] = useState("");
-  const [location, setLocation] = useState("");
-  const [eventDate, setEventDate] = useState("");
-  const [performanceType, setPerformanceType] = useState("");
-  const [selectedChips, setSelectedChips] = useState<string[]>([]);
-  const [requirements, setRequirements] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-
-  const toggleChip = (tag: string) => {
-    setSelectedChips((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
-  };
-
-  const handleClose = () => {
-    if (submitting) return;
-    setEventName("");
-    setTotalBudget("");
-    setLocation("");
-    setEventDate("");
-    setPerformanceType("");
-    setSelectedChips([]);
-    setRequirements("");
-    setSuccess(false);
-    onClose();
-  };
-
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && open) {
-        handleClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUser) {
-      toast({
-        variant: "destructive",
-        title: t("events.toast.signinRequired"),
-        description: t("events.toast.signinRequiredText"),
-      });
-      return;
-    }
-
-    if (userRole === "artist") {
-      toast({
-        variant: "destructive",
-        title: t("events.toast.failed") || "Restricted Action",
-        description: t("events.toast.artistCannotPost"),
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    toast({
-      title: t("events.toast.submitting"),
-      description: t("events.toast.connecting"),
-    });
-
-    try {
-      const budgetNum = Number(totalBudget) || 0;
-      let dateTimestamp: Timestamp;
-      if (eventDate) {
-        dateTimestamp = Timestamp.fromDate(new Date(eventDate));
-      } else {
-        dateTimestamp = Timestamp.fromDate(new Date());
-      }
-
-      const payload = {
-        eventName: eventName.trim(),
-        title: eventName.trim(),
-        name: eventName.trim(),
-        totalBudget: budgetNum,
-        budget: budgetNum,
-        location: location.trim(),
-        city: location.trim(),
-        eventDate: dateTimestamp,
-        date: eventDate,
-        performanceType: performanceType,
-        type: performanceType,
-        categories: selectedChips,
-        requirements: requirements.trim(),
-        professionalRequirements: requirements.trim(),
-        postedBy: currentUser.uid,
-        createdBy: currentUser.uid,
-        postedByName: currentUser.displayName || currentUser.email || "Anonymous",
-        postedByEmail: currentUser.email || "",
-        status: "pending", // submitted briefs must be pending admin approval
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      await addDoc(collection(db, "eventBriefs"), payload);
-
-      setSuccess(true);
-      toast({
-        title: t("events.toast.success"),
-        description: t("events.toast.successText"),
-      });
-      setTimeout(() => {
-        handleClose();
-      }, 2000);
-    } catch (err: any) {
-      console.error("Firebase write error:", err);
-      toast({
-        variant: "destructive",
-        title: t("events.toast.failed"),
-        description: err?.message || t("events.toast.failedText"),
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-4 py-6">
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-white/30 backdrop-blur-md"
-            onClick={handleClose}
-          />
-
-          {/* Dialog Panel */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative z-10 w-full max-w-xl rounded-3xl border border-white/60 bg-white/90 p-6 shadow-2xl backdrop-blur-xl max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Top Accent Line */}
-            <div className="absolute top-0 inset-x-0 h-1 w-full bg-gradient-to-r from-[#E25C1D] to-orange-400 rounded-t-3xl" />
-
-            {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-stone-100">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-[#E25C1D]" />
-                <h3 className="text-base font-extrabold text-stone-900">{t("events.modal.title")}</h3>
-              </div>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="rounded-full p-1 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {success ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 border border-emerald-250">
-                  <CheckCircle2 className="h-10 w-10 text-emerald-500 animate-bounce" />
-                </div>
-                <h4 className="mt-4 text-lg font-black text-stone-900">{t("events.modal.successTitle")}</h4>
-                <p className="mt-1 text-xs font-semibold text-stone-550 max-w-xs">
-                  {t("events.modal.successText")}
-                </p>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="mt-4 space-y-4 text-left">
-                {/* Event Name */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                    {t("events.modal.eventName")} <span className="text-[#E25C1D]">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder={t("events.modal.eventNamePlaceholder")}
-                    value={eventName}
-                    onChange={(e) => setEventName(e.target.value)}
-                    className="w-full h-10 rounded-xl border border-stone-200 bg-white/50 px-3.5 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition"
-                  />
-                </div>
-
-                {/* Budget + Location */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                      {t("events.modal.totalBudget")} <span className="text-[#E25C1D]">*</span>
-                    </label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3.5 text-xs font-bold text-stone-500">₹</span>
-                      <input
-                        type="number"
-                        required
-                        min="0"
-                        placeholder={t("events.modal.totalBudgetPlaceholder")}
-                        value={totalBudget}
-                        onChange={(e) => setTotalBudget(e.target.value)}
-                        className="w-full h-10 rounded-xl border border-stone-200 bg-white/50 pl-7 pr-3.5 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                      {t("events.modal.location")} <span className="text-[#E25C1D]">*</span>
-                    </label>
-                    <div className="relative flex items-center">
-                      <MapPin className="absolute left-3.5 h-3.5 w-3.5 text-stone-400" />
-                      <input
-                        type="text"
-                        required
-                        placeholder={t("events.modal.locationPlaceholder")}
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        className="w-full h-10 rounded-xl border border-stone-200 bg-white/50 pl-9 pr-3.5 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Date + Performance Type */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                      {t("events.modal.date")} <span className="text-[#E25C1D]">*</span>
-                    </label>
-                    <div className="relative flex items-center">
-                      <Calendar className="absolute left-3.5 h-3.5 w-3.5 text-stone-450" />
-                      <input
-                        type="date"
-                        required
-                        value={eventDate}
-                        onChange={(e) => setEventDate(e.target.value)}
-                        className="w-full h-10 rounded-xl border border-stone-200 bg-white/50 pl-9 pr-3.5 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                      {t("events.modal.performanceType")} <span className="text-[#E25C1D]">*</span>
-                    </label>
-                    <div className="relative flex items-center">
-                      <Mic2 className="absolute left-3.5 h-3.5 w-3.5 text-stone-450" />
-                      <select
-                        required
-                        value={performanceType}
-                        onChange={(e) => setPerformanceType(e.target.value)}
-                        className="w-full h-10 rounded-xl border border-stone-200 bg-white/50 pl-9 pr-3.5 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition cursor-pointer"
-                      >
-                        <option value="">{t("events.modal.selectType")}</option>
-                        {PERFORMANCE_TYPES.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Categorized Chips */}
-                <div className="flex flex-col gap-1.5 pt-1">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                    <Tag className="h-3.5 w-3.5 text-[#E25C1D]" />
-                    {t("events.modal.categories")}
-                  </label>
-                  <div className="space-y-3 mt-1.5 max-h-[160px] overflow-y-auto border border-stone-100/80 rounded-2xl p-3 bg-stone-50/50">
-                    {categories.map((group) => (
-                      <div key={group.heading} className="space-y-1">
-                        <span className="block text-[9px] font-extrabold text-stone-400 uppercase tracking-wider">
-                          {group.heading}
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {group.tags?.map((tag) => {
-                            const isSelected = selectedChips.includes(tag);
-                            return (
-                              <button
-                                key={tag}
-                                type="button"
-                                onClick={() => toggleChip(tag)}
-                                className={`rounded-full border px-4 py-1 text-[10px] font-extrabold transition-all duration-150 ${
-                                  isSelected
-                                    ? "bg-[#E25C1D] text-white border-[#E25C1D] shadow-sm"
-                                    : "bg-white text-stone-600 border-stone-200 hover:border-orange-300"
-                                }`}
-                              >
-                                {tag}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Professional Requirements */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 flex items-center gap-1">
-                    <ClipboardList className="h-3.5 w-3.5 text-[#E25C1D]" />
-                    {t("events.modal.requirements")} <span className="text-[#E25C1D]">*</span>
-                  </label>
-                  <textarea
-                    rows={3}
-                    required
-                    placeholder={t("events.modal.requirementsPlaceholder")}
-                    value={requirements}
-                    onChange={(e) => setRequirements(e.target.value)}
-                    className="w-full rounded-xl border border-stone-200 bg-white/50 p-3 text-xs font-semibold text-stone-900 outline-none focus:border-[#E25C1D] focus:ring-2 focus:ring-[#E25C1D]/20 transition resize-none leading-relaxed"
-                  />
-                </div>
-
-                {/* Submit button */}
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full flex h-11 items-center justify-center gap-2 rounded-xl bg-[#E25C1D] text-xs font-extrabold uppercase tracking-widest text-white shadow-lg shadow-orange-500/25 hover:bg-[#c94e17] transition active:scale-[0.98]"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {t("events.modal.submitting")}
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      {t("events.modal.submit")}
-                    </>
-                  )}
-                </button>
-              </form>
-            )}
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-}
 
 // Stat badge helper
 function StatBadge({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
@@ -463,7 +83,7 @@ function EventsInner() {
     setLoading(true);
     const q = query(
       collection(db, "eventBriefs"),
-      where("status", "==", "approved")
+      where("status", "in", ["approved", "pending", "active"])
     );
     const unsubscribe = onSnapshot(
       q,
@@ -631,7 +251,7 @@ function EventsInner() {
                 }
 
                 // Curated background cover matching category
-                const coverImage = ImageRegistryService.getBestImage(ev?.performanceType || "Marriage", "event");
+                const coverImage = ev?.imageUrl || ev?.image || ImageRegistryService.getBestImage(ev?.performanceType || "Marriage", "event");
 
                 return (
                   <Link
@@ -737,7 +357,7 @@ function EventsInner() {
       </section>
 
       {/* New Requirement Modal */}
-      <NewBriefModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <NewRequirementModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   );
 }
