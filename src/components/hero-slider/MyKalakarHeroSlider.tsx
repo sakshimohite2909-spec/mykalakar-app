@@ -63,8 +63,6 @@ export default function MyKalakarHeroSlider() {
         {/* Fullscreen Background Slider */}
         <div className="absolute inset-0 w-full h-full z-0">
           <SliderBackground slides={HERO_SLIDES} activeIndex={slider.activeIndex} />
-          {/* Extra dark overlay to ensure readability */}
-          <div className="absolute inset-0 bg-black/40 z-10" />
         </div>
 
         {/* Previous Button (Left Margin of Image) */}
@@ -98,13 +96,19 @@ export default function MyKalakarHeroSlider() {
                 onClick={() => slider.goTo(index)}
                 className={`flex-1 min-w-0 flex items-center gap-3 p-3 rounded-2xl border transition-all duration-300 ${
                   isActive
-                    ? "bg-[#25180f]/90 border-orange-500/80 shadow-[0_4px_25px_rgba(249,115,22,0.2)] scale-[1.03]"
-                    : "bg-black/40 border-white/5 hover:border-white/15 hover:bg-black/55"
+                    ? "bg-[#1f150e]/90 border-orange-500 shadow-[0_0_18px_rgba(249,115,22,0.4)] ring-2 ring-orange-500/50 scale-[1.02]"
+                    : "bg-black/40 border-white/10 opacity-75 hover:opacity-100 hover:border-white/25 hover:bg-black/60"
                 }`}
               >
                 {/* Mini Thumbnail Image */}
                 <div className="w-12 h-10 rounded-lg overflow-hidden shrink-0">
-                  <img src={slide.image} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={slide.image}
+                    alt=""
+                    className={`w-full h-full object-cover transition-all duration-300 ${
+                      isActive ? "brightness-110 saturate-110 scale-105" : "brightness-90 opacity-80"
+                    }`}
+                  />
                 </div>
                 
                 {/* Thumbnail Info */}

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +46,7 @@ export default function ManualLeadModal({ open, onOpenChange, onLeadCreated }: P
         customerName,
         customerPhone,
         customerEmail,
+        leadType: "post_requirement",
         eventType,
         category: eventType,
         subCategory,
@@ -84,6 +85,9 @@ export default function ManualLeadModal({ open, onOpenChange, onLeadCreated }: P
             </span>
             Log Incoming Phone Lead
           </DialogTitle>
+          <DialogDescription className="text-xs text-stone-500 font-medium">
+            Enter details of the incoming phone inquiry to log it into the telecaller workbench.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">

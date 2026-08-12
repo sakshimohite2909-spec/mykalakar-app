@@ -149,6 +149,13 @@ export default function Navbar() {
         </nav>
 
         <div className="ml-auto hidden items-center gap-2 md:flex">
+          <a
+            href="tel:+919876543210"
+            className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-100/90 text-orange-700 text-xs font-black border border-orange-200 hover:bg-orange-200/80 transition shadow-xs"
+          >
+            <PhoneCall className="h-3.5 w-3.5 text-orange-600" />
+            <span>Helpline: +91 98765 43210</span>
+          </a>
           <LanguageSwitcher />
           {currentUser ? (
             <DropdownMenu>

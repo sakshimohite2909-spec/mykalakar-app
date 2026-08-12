@@ -108,6 +108,10 @@ export default function Footer() {
             
             {/* Quick Contact Badge */}
             <div className="flex flex-col gap-1.5 text-xs text-stone-500 font-semibold my-1">
+              <a href="tel:+919876543210" className="inline-flex items-center gap-2 text-orange-600 font-extrabold hover:underline">
+                <Phone className="h-3.5 w-3.5 text-orange-600 shrink-0" />
+                Helpline: +91 98765 43210
+              </a>
               <span className="inline-flex items-center gap-2">
                 <MapPin className="h-3.5 w-3.5 text-orange-600 shrink-0" />
                 Pune, Maharashtra, India
