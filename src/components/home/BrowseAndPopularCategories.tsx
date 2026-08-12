@@ -340,44 +340,38 @@ export default function BrowseAndPopularCategories() {
               <motion.div
                 key={`${evt.title}-${idx}`}
                 whileTap={{ scale: 0.95 }}
-                className="flex-shrink-0 snap-start pt-2 pb-4"
+                className="flex-shrink-0 snap-start py-1"
               >
                 <Link
                   to={evt.link}
-                  className="group relative flex aspect-square w-44 h-44 sm:w-48 sm:h-48 md:w-52 md:h-52 shrink-0 flex-col items-center justify-center rounded-full border-4 border-white bg-stone-900 shadow-md ring-4 ring-orange-500/10 transition-all duration-500 hover:scale-105 hover:ring-orange-500/40 hover:shadow-2xl cursor-pointer"
+                  className="group flex flex-col items-center justify-center w-28 sm:w-36 md:w-40 text-center cursor-pointer"
                 >
-                  {/* Floating Bottom-Rim Badge */}
-                  <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-md border-2 border-white">
-                    {countText}
-                  </span>
-
-                  {/* Inner Circular Image Container */}
-                  <div className="absolute inset-0 overflow-hidden rounded-full">
+                  {/* Circular Image Container (Compact & Clean) */}
+                  <div className="relative aspect-square w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-full border-2 border-white bg-stone-900 shadow-md ring-2 ring-orange-500/15 transition-all duration-300 group-hover:scale-105 group-hover:ring-orange-500/50 group-hover:shadow-xl overflow-hidden">
                     <img
                       src={evt.image}
                       alt={evt.title}
-                      className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                       loading="lazy"
                     />
-                    {/* Dark gradient overlay for text readability */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/10 group-hover:from-black/85 group-hover:via-black/45 transition-all duration-300" />
+                    {/* Subtle bottom vignette gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                    
+                    {/* Floating Bottom Badge */}
+                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-sm border border-white">
+                      {countText}
+                    </span>
                   </div>
 
-                  {/* Content inside full circle */}
-                  <div className="relative z-10 flex flex-col items-center justify-center p-3 text-center text-white">
-                    <h3 className="text-base sm:text-lg font-black leading-tight drop-shadow-md text-white group-hover:text-orange-300 transition-colors">
+                  {/* Text Below the Circle */}
+                  <div className="mt-2.5 flex flex-col items-center px-1">
+                    <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 leading-tight group-hover:text-orange-600 transition-colors line-clamp-1">
                       {evt.title}
                     </h3>
-                    <p className="mt-1 text-xs font-bold text-orange-200/90 flex items-center justify-center gap-1">
+                    <span className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] sm:text-xs font-bold text-orange-600 group-hover:text-orange-700">
                       <span>Explore</span>
-                      <motion.span
-                        animate={{ x: [0, 3, 0] }}
-                        transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                        className="inline-block text-orange-400 font-bold"
-                      >
-                        →
-                      </motion.span>
-                    </p>
+                      <span className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
+                    </span>
                   </div>
                 </Link>
               </motion.div>
