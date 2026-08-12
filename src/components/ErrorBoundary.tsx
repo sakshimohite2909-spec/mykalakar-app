@@ -18,6 +18,20 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    // If dynamic chunk failed to load (e.g., after new Vercel deployment), auto-reload once to fetch fresh assets
+    if (
+      error?.message &&
+      (error.message.includes("Failed to fetch dynamically imported module") ||
+       error.message.includes("Loading chunk") ||
+       error.message.includes("Importing a module script failed"))
+    ) {
+      const storageKey = "mykalakar_chunk_reload_timestamp";
+      const lastReload = Number(sessionStorage.getItem(storageKey) || "0");
+      if (Date.now() - lastReload > 10000) {
+        sessionStorage.setItem(storageKey, String(Date.now()));
+        window.location.reload();
+      }
+    }
     return { hasError: true, error };
   }
 

@@ -47,17 +47,17 @@ export default function MyKalakarHeroSlider() {
   const activeSlide = HERO_SLIDES[slider.activeIndex];
 
   return (
-    <section className="relative w-full min-h-screen md:h-screen flex flex-col md:block bg-[#0f0b07] overflow-hidden">
+    <section className="relative w-full h-auto md:h-screen flex flex-col md:block bg-[#0f0b07] overflow-hidden">
       <style dangerouslySetInnerHTML={{ __html: heroSliderStyles }} />
 
       {/* Background Glowing Ambient Orbs */}
       <div className="absolute -top-10 left-10 w-96 h-96 rounded-full bg-gradient-to-tr from-orange-500/25 to-amber-400/25 blur-[100px] pointer-events-none" />
       <div className="absolute -bottom-10 right-10 w-[500px] h-[500px] rounded-full bg-gradient-to-br from-pink-500/25 to-purple-500/25 blur-[120px] pointer-events-none" />
 
-      {/* Top Part: Image Slider (Mobile: aspect-[4/3], Desktop: fullscreen absolute) */}
+      {/* Top Part: Image Slider (Mobile: h-[210px] sm:h-[230px], Desktop: fullscreen absolute) */}
       <div
         ref={scope}
-        className="relative w-full aspect-[4/3] md:aspect-none md:h-full overflow-hidden select-none"
+        className="relative w-full h-[210px] sm:h-[230px] md:h-full md:aspect-none overflow-hidden select-none"
         {...slider.touchHandlers}
       >
         {/* Fullscreen Background Slider */}
@@ -250,11 +250,11 @@ export default function MyKalakarHeroSlider() {
       </div>
 
       {/* MOBILE ONLY Content Wrapper (flowing below the image slider) */}
-      <div className="md:hidden w-full bg-[#0f0b07] px-5 pt-6 pb-28 flex flex-col gap-6 relative z-20">
+      <div className="md:hidden w-full bg-[#0f0b07] px-4 pt-3 pb-4 flex flex-col gap-3 relative z-20">
         <GlassSlidePanel slide={activeSlide} activeIndex={slider.activeIndex} slideCount={HERO_SLIDES.length} />
 
         {/* Mobile Thumbnails Row */}
-        <div className="w-full flex overflow-x-auto gap-2 py-1 scrollbar-none snap-x snap-mandatory">
+        <div className="w-full flex overflow-x-auto gap-2 py-0.5 scrollbar-none snap-x snap-mandatory">
           {HERO_SLIDES.map((slide, index) => {
             const isActive = index === slider.activeIndex;
             return (
@@ -262,7 +262,7 @@ export default function MyKalakarHeroSlider() {
                 key={slide.id}
                 type="button"
                 onClick={() => slider.goTo(index)}
-                className={`relative flex-1 min-w-[130px] flex items-center gap-2 p-2.5 rounded-xl border transition-all duration-300 snap-start overflow-hidden ${
+                className={`relative flex-shrink-0 w-[105px] sm:w-[125px] flex items-center gap-1.5 p-2 rounded-xl border transition-all duration-300 snap-start overflow-hidden ${
                   isActive
                     ? "bg-[#1f150e]/95 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]"
                     : "bg-black/30 border-white/10"

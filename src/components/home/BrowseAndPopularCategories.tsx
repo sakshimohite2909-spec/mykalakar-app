@@ -344,10 +344,10 @@ export default function BrowseAndPopularCategories() {
               >
                 <Link
                   to={evt.link}
-                  className="group flex flex-col items-center justify-center w-28 sm:w-36 md:w-40 text-center cursor-pointer"
+                  className="group flex flex-col items-center justify-center w-32 sm:w-38 md:w-44 text-center cursor-pointer"
                 >
-                  {/* Circular Image Container (Compact & Clean) */}
-                  <div className="relative aspect-square w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-full border-2 border-white bg-stone-900 shadow-md ring-2 ring-orange-500/15 transition-all duration-300 group-hover:scale-105 group-hover:ring-orange-500/50 group-hover:shadow-xl overflow-hidden">
+                  {/* Circular Image Container (Perfectly Proportioned) */}
+                  <div className="relative aspect-square w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-full border-2 border-white bg-stone-900 shadow-md ring-2 ring-orange-500/15 transition-all duration-300 group-hover:scale-105 group-hover:ring-orange-500/50 group-hover:shadow-xl overflow-hidden">
                     <img
                       src={evt.image}
                       alt={evt.title}
@@ -358,17 +358,17 @@ export default function BrowseAndPopularCategories() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                     
                     {/* Floating Bottom Badge */}
-                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-sm border border-white">
+                    <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-orange-500 px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-white shadow-sm border border-white">
                       {countText}
                     </span>
                   </div>
 
-                  {/* Text Below the Circle */}
-                  <div className="mt-2.5 flex flex-col items-center px-1">
-                    <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 leading-tight group-hover:text-orange-600 transition-colors line-clamp-1">
+                  {/* Text Below the Circle (Sleek & Proportioned) */}
+                  <div className="mt-2 flex flex-col items-center px-1">
+                    <h3 className="text-[11px] sm:text-xs font-bold text-stone-800 leading-tight group-hover:text-orange-600 transition-colors line-clamp-1">
                       {evt.title}
                     </h3>
-                    <span className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] sm:text-xs font-bold text-orange-600 group-hover:text-orange-700">
+                    <span className="mt-0.5 inline-flex items-center gap-0.5 text-[9px] sm:text-[10px] font-semibold text-orange-600 group-hover:text-orange-700">
                       <span>Explore</span>
                       <span className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
                     </span>
