@@ -19,6 +19,7 @@ import {
   BadgeCheck,
   Star,
   Clock,
+  CalendarDays,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -211,26 +212,26 @@ export default function BookingModal({
 
     setLoading(true);
     try {
-      const uid = requireAuthUid(currentUser?.uid, t("booking.loginToBook"));
+      const uid = requireAuthUid(currentUser);
 
       // 1. Create booking in Firestore
       const booking = await createArtistBooking({
         artistId,
         artistName,
         customerId: uid,
-        customerName: formData.customerName,
+        clientName: formData.customerName,
+        clientPhone: formData.customerPhone,
+        clientAddress: formData.customerAddress,
+        venueLocation: formData.eventLocation,
+        performanceType: formData.eventType,
+        additionalNotes: formData.message,
         customerEmail: formData.customerEmail,
-        customerPhone: formData.customerPhone,
-        eventType: formData.eventType,
         eventDate: formData.eventDate,
         eventStartTime: formData.eventStartTime,
         eventEndTime: formData.eventEndTime,
-        eventLocation: formData.eventLocation,
-        customerAddress: formData.customerAddress,
-        message: formData.message,
         specialRequirements: formData.specialRequirements,
         authorizedAmount: Number(formData.authorizedAmount || 15000),
-        status: "pending_artist_approval",
+        status: "PENDING_ARTIST_RESPONSE",
         paymentGateway: "razorpay",
         paymentStatus: "authorized_hold",
       });

@@ -27,13 +27,6 @@ export default function HeroBanner() {
               >
                 Join as Artist
               </Link>
-              <button
-                type="button"
-                onClick={() => setModalOpen(true)}
-                className="inline-flex h-12 items-center justify-center rounded-lg border border-gray-300 bg-[#F9FAFB] px-6 text-sm font-black text-black transition hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-200 cursor-pointer"
-              >
-                Post Event
-              </button>
             </div>
           </div>
 

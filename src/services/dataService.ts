@@ -3,6 +3,7 @@ import { CATEGORY_GROUP_OPTIONS, normalizeArtistRecord } from "@/constants/artis
 import { db } from "@/lib/firebase";
 import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, withTimeout } from "@/lib/firebaseSafe";
 import { normalizeRecord, isRenderSafe, resolveArtistProfilePhoto } from "@/services/dataNormalizer";
+import { saveCustomerInquiryLead } from "@/services/telecallerService";
 
 type CacheEntry<T> = {
   value?: T;
@@ -350,6 +351,20 @@ export async function postEventBrief(payload: EventBriefPayload): Promise<{ id: 
     FIREBASE_WRITE_TIMEOUT_MS,
     "Could not post your event brief. Please check your connection and try again."
   );
+
+  // Sync event requirement brief to Telecaller Workbench as a new inquiry lead
+  saveCustomerInquiryLead({
+    customerName: payload.postedByName || "Event Host",
+    customerPhone: "",
+    customerEmail: payload.postedByEmail || "",
+    eventType: payload.eventName || payload.performanceType || "Requirement Brief",
+    category: payload.performanceType || "General Event",
+    subCategory: (payload.categories && payload.categories[0]) || payload.performanceType || "Event Requirement",
+    eventDate: eventDate,
+    eventLocation: payload.location,
+    budget: payload.budget,
+    message: payload.requirements,
+  });
 
   // Bust the read-cache so stale data is never served after a write
   clearDataCache();

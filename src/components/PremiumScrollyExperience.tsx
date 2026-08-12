@@ -534,15 +534,6 @@ function CTASection() {
                 <Users className="h-4 w-4" />
                 {t("nav.joinArtist")}
               </Link>
-              <button
-                type="button"
-                onClick={() => setModalOpen(true)}
-                className="btn-post-event inline-flex h-12 items-center gap-2 rounded-xl px-6 text-sm font-black text-white transition-all duration-300 focus:outline-none cursor-pointer"
-              >
-                <CalendarDays className="h-4 w-4" />
-                {t("events.postEvent")}
-                <ArrowRight className="h-4 w-4" />
-              </button>
             </div>
           </div>
 

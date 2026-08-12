@@ -4,7 +4,7 @@ export type ImagePoolItem = {
   id: string;
   url: string;
   category: "singer" | "dj" | "mandal" | "event" | "general";
-  orientation: "landscape" | "portrait";
+  orientation: "landscape" | "portrait" | "square";
   used: false;
   tags?: string[];
 };

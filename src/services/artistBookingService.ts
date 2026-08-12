@@ -49,6 +49,7 @@ export interface CreateBookingInput {
   paymentGateway?: "stripe" | "razorpay" | "paypal" | "adyen";
   authorizedAmount?: number;
   status?: BookingStatus;
+  paymentStatus?: string;
 }
 
 const BOOKING_COLLECTION = "bookings";

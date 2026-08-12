@@ -1,5 +1,5 @@
 export type CuratedVisualCategory = "singer" | "dj" | "mandal" | "event" | "general";
-export type CuratedVisualOrientation = "landscape" | "portrait";
+export type CuratedVisualOrientation = "landscape" | "portrait" | "square";
 
 export type CuratedVisual = {
   id: string;

@@ -21,6 +21,7 @@ import {
   Users,
   Star,
   ExternalLink,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,7 @@ export default function TelecallerDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [artistCategoryFilter, setArtistCategoryFilter] = useState<string>("all");
+  const [leadTypeFilter, setLeadTypeFilter] = useState<"all" | "book_artist" | "post_requirement">("all");
 
   // Call logger form state for selected artist
   const [selectedArtistForCall, setSelectedArtistForCall] = useState<any>(null);
@@ -96,13 +98,15 @@ export default function TelecallerDashboard() {
         !searchQuery ||
         lead.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         lead.customerPhone.includes(searchQuery) ||
+        (lead.requestedArtistName && lead.requestedArtistName.toLowerCase().includes(searchQuery.toLowerCase())) ||
         lead.subCategory.toLowerCase().includes(searchQuery.toLowerCase()) ||
         lead.eventType.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesStatus = statusFilter === "all" || lead.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesType = leadTypeFilter === "all" || lead.leadType === leadTypeFilter;
+      return matchesSearch && matchesStatus && matchesType;
     });
-  }, [leads, searchQuery, statusFilter]);
+  }, [leads, searchQuery, statusFilter, leadTypeFilter]);
 
   // Matching artists for active lead from real active artists list
   const matchingArtists = useMemo(() => {
@@ -202,12 +206,15 @@ export default function TelecallerDashboard() {
   };
 
   const handleStatusChange = async (leadId: string, newStatus: LeadStatus) => {
+    // 1. Optimistic immediate state update in React UI
+    setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l)));
+    if (activeLead && activeLead.id === leadId) {
+      setActiveLead({ ...activeLead, status: newStatus });
+    }
+
     try {
+      // 2. Persist to Firestore and Local Storage
       await updateLeadStatus(leadId, newStatus);
-      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l)));
-      if (activeLead && activeLead.id === leadId) {
-        setActiveLead({ ...activeLead, status: newStatus });
-      }
       toast({ title: "Status Updated", description: `Lead status changed to ${newStatus}` });
     } catch (error) {
       toast({ variant: "destructive", title: "Update Failed", description: "Could not update lead status." });
@@ -282,6 +289,40 @@ export default function TelecallerDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
             {/* Left Column: Leads Feed */}
             <div className="space-y-4">
+              {/* Lead Type Filter Tabs */}
+              <div className="flex items-center gap-1.5 p-1 bg-stone-100 rounded-xl">
+                <button
+                  onClick={() => setLeadTypeFilter("all")}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-extrabold transition-all text-center ${
+                    leadTypeFilter === "all"
+                      ? "bg-white text-stone-900 shadow-sm"
+                      : "text-stone-600 hover:text-stone-900"
+                  }`}
+                >
+                  All ({leads.length})
+                </button>
+                <button
+                  onClick={() => setLeadTypeFilter("book_artist")}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-extrabold transition-all flex items-center justify-center gap-1 ${
+                    leadTypeFilter === "book_artist"
+                      ? "bg-purple-600 text-white shadow-sm"
+                      : "text-purple-700 hover:bg-purple-100/60"
+                  }`}
+                >
+                  <UserCheck className="h-3 w-3" /> Book Artist ({leads.filter((l) => l.leadType === "book_artist").length})
+                </button>
+                <button
+                  onClick={() => setLeadTypeFilter("post_requirement")}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-extrabold transition-all flex items-center justify-center gap-1 ${
+                    leadTypeFilter === "post_requirement"
+                      ? "bg-amber-600 text-white shadow-sm"
+                      : "text-amber-700 hover:bg-amber-100/60"
+                  }`}
+                >
+                  <FileText className="h-3 w-3" /> Requirements ({leads.filter((l) => l.leadType === "post_requirement").length})
+                </button>
+              </div>
+
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
@@ -317,6 +358,7 @@ export default function TelecallerDashboard() {
                 <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                   {filteredLeads.map((lead) => {
                     const isSelected = activeLead?.id === lead.id;
+                    const isBookArtist = lead.leadType === "book_artist";
                     return (
                       <div
                         key={lead.id}
@@ -327,8 +369,15 @@ export default function TelecallerDashboard() {
                             : "bg-white border-stone-200/80 hover:border-orange-300 hover:bg-stone-50/50 shadow-sm"
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-extrabold text-stone-900">{lead.customerName}</span>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <span className="text-xs font-black text-stone-900 block">{lead.customerName || "Customer"}</span>
+                            {lead.customerPhone && (
+                              <span className="text-[11px] font-extrabold text-orange-600 flex items-center gap-1 mt-0.5">
+                                <Phone className="h-3 w-3" /> {lead.customerPhone}
+                              </span>
+                            )}
+                          </div>
                           <span
                             className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
                               lead.status === "new"
@@ -341,6 +390,21 @@ export default function TelecallerDashboard() {
                             {lead.status.replace("_", " ")}
                           </span>
                         </div>
+
+                        {/* Distinct Lead Type Badge */}
+                        {isBookArtist ? (
+                          <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-100/90 text-purple-900 border border-purple-200 text-[11px] font-extrabold w-full">
+                            <UserCheck className="h-3.5 w-3.5 text-purple-700 shrink-0" />
+                            <span className="truncate">
+                              🎯 Booked Artist: <strong className="text-purple-950">{lead.requestedArtistName || lead.confirmedArtistName || "Selected Artist"}</strong>
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100/90 text-amber-900 border border-amber-200 text-[11px] font-extrabold w-full">
+                            <FileText className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                            <span>📋 Event Requirement Brief</span>
+                          </div>
+                        )}
 
                         <div className="mt-2 text-xs text-stone-600 space-y-1">
                           <p className="flex items-center gap-1.5 font-bold text-stone-800">
@@ -371,22 +435,28 @@ export default function TelecallerDashboard() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-4">
                     <div>
                       <h2 className="text-lg font-extrabold text-stone-950 flex items-center gap-2">
-                        {activeLead.customerName}
-                        {activeLead.confirmedArtistName && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            <BadgeCheck className="h-3.5 w-3.5" /> Booked with {activeLead.confirmedArtistName}
+                        {activeLead.customerName || "Customer"}
+                        {activeLead.leadType === "book_artist" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-purple-100 text-purple-900 border border-purple-300">
+                            <UserCheck className="h-3.5 w-3.5 text-purple-700" /> Requested: {activeLead.requestedArtistName || "Artist"}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                            <FileText className="h-3.5 w-3.5 text-amber-700" /> Event Requirement
                           </span>
                         )}
                       </h2>
-                      <p className="text-xs text-stone-500 flex items-center gap-3 mt-1 font-medium">
+                      <p className="text-xs text-stone-500 flex flex-wrap items-center gap-3 mt-1.5 font-medium">
+                        {activeLead.customerPhone && (
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3.5 w-3.5 text-emerald-600" />
+                            <a href={`tel:${activeLead.customerPhone}`} className="hover:underline font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                              Call Customer: {activeLead.customerPhone}
+                            </a>
+                          </span>
+                        )}
                         <span className="flex items-center gap-1">
-                          <Phone className="h-3.5 w-3.5 text-orange-600" />
-                          <a href={`tel:${activeLead.customerPhone}`} className="hover:underline font-bold text-orange-600">
-                            {activeLead.customerPhone}
-                          </a>
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5 text-stone-400" /> {activeLead.eventLocation}
+                          <MapPin className="h-3.5 w-3.5 text-stone-400" /> Location: {activeLead.eventLocation || "Not specified"}
                         </span>
                       </p>
                     </div>

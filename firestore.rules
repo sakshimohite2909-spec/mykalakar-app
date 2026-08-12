@@ -198,6 +198,11 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /telecaller_leads/{id} {
+      allow create: if true;
+      allow read, update, delete: if true;
+    }
+
     // ── 6. GLOBAL CATCH-ALL BLOCK (FALLBACK DEFENSE PERIMETER) ───────────────
     match /{document=**} {
       allow read, write: if isAdmin();

@@ -25,16 +25,16 @@ function getLocalCustomCategories(): any[] {
 
 export const BROWSE_EVENTS = [
   {
-    title: "Wedding",
-    subtitle: "12,000+ Artists",
-    image: "https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=800&q=80",
-    link: "/events/Wedding",
-  },
-  {
     title: "Varkari Sampraday",
     subtitle: "850+ Artists",
     image: "https://images.pexels.com/photos/34193177/pexels-photo-34193177.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop",
     link: "/events/Varkari%20Sampraday",
+  },
+  {
+    title: "Wedding",
+    subtitle: "12,000+ Artists",
+    image: "https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=800&q=80",
+    link: "/events/Wedding",
   },
   {
     title: "Birthday",
@@ -54,7 +54,32 @@ export const BROWSE_EVENTS = [
     image: "https://images.pexels.com/photos/17264037/pexels-photo-17264037.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop",
     link: "/events/Cultural%20Event",
   },
+  {
+    title: "Religious Event",
+    subtitle: "500+ Artists",
+    image: "https://images.unsplash.com/photo-1608613304899-ea8098577e38?auto=format&fit=crop&w=800&q=80",
+    link: "/events/Religious%20Event",
+  },
+  {
+    title: "College Event",
+    subtitle: "350+ Artists",
+    image: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80",
+    link: "/events/College%20Event",
+  },
+  {
+    title: "Festival Event",
+    subtitle: "900+ Artists",
+    image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80",
+    link: "/events/Festival%20Event",
+  },
+  {
+    title: "Other Events",
+    subtitle: "250+ Artists",
+    image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=800&q=80",
+    link: "/events/Other%20Events",
+  },
 ];
+
 
 const CATEGORY_SUBTITLES: Record<string, string> = {
   Photography: "Photos & Cinematic Films",
