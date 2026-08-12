@@ -29,6 +29,10 @@ const heroSliderStyles = `
   @keyframes eq-bar-2 { 0% { height: 30%; } 100% { height: 85%; } }
   @keyframes eq-bar-3 { 0% { height: 15%; } 100% { height: 95%; } }
   @keyframes eq-bar-4 { 0% { height: 25%; } 100% { height: 90%; } }
+  @keyframes hero-progress {
+    0% { width: 0%; }
+    100% { width: 100%; }
+  }
   .scrollbar-none::-webkit-scrollbar { display: none; }
   .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 `;
@@ -54,10 +58,6 @@ export default function MyKalakarHeroSlider() {
       <div
         ref={scope}
         className="relative w-full aspect-[4/3] md:aspect-none md:h-full overflow-hidden select-none"
-        onMouseEnter={() => slider.setIsPaused(true)}
-        onMouseLeave={() => slider.setIsPaused(false)}
-        onFocus={() => slider.setIsPaused(true)}
-        onBlur={() => slider.setIsPaused(false)}
         {...slider.touchHandlers}
       >
         {/* Fullscreen Background Slider */}
@@ -65,11 +65,39 @@ export default function MyKalakarHeroSlider() {
           <SliderBackground slides={HERO_SLIDES} activeIndex={slider.activeIndex} />
         </div>
 
+        {/* MOBILE ONLY Headline Overlay (Small, compact, non-intrusive overlay over the image) */}
+        <div className="md:hidden absolute bottom-3 left-3 right-14 z-25 pointer-events-none select-none">
+          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/40 text-orange-400 text-[10px] font-black tracking-widest uppercase mb-1 backdrop-blur-md shadow-sm">
+            <Sparkles className="h-3 w-3 text-orange-400" />
+            <span>{activeSlide.eyebrow}</span>
+          </div>
+          {(() => {
+            const words = activeSlide.heading.trim().split(" ");
+            if (words.length > 1) {
+              const lastWord = words.pop();
+              const remaining = words.join(" ");
+              return (
+                <h2 className="text-xs sm:text-sm font-black leading-tight uppercase">
+                  <span className="block text-white">{remaining}</span>
+                  <span className="block italic text-orange-500 text-[1.12em] tracking-[0.05em] mt-0.5">
+                    {lastWord}
+                  </span>
+                </h2>
+              );
+            }
+            return (
+              <h2 className="text-xs sm:text-sm font-black leading-tight text-white uppercase">
+                {activeSlide.heading}
+              </h2>
+            );
+          })()}
+        </div>
+
         {/* Previous Button (Left Margin of Image) */}
         <button
           type="button"
           onClick={slider.goPrev}
-          className="absolute left-3 top-1/2 z-35 flex h-10 w-10 md:h-12 md:w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-orange-600 hover:text-white sm:left-5"
+          className="absolute left-3 top-1/2 z-35 flex h-10 w-10 md:h-12 md:w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)] active:scale-95 sm:left-5 cursor-pointer"
           aria-label="Previous slide"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -79,7 +107,7 @@ export default function MyKalakarHeroSlider() {
         <button
           type="button"
           onClick={slider.goNext}
-          className="absolute right-3 top-1/2 z-35 flex h-10 w-10 md:h-12 md:w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-orange-600 hover:text-white sm:right-5"
+          className="absolute right-3 top-1/2 z-35 flex h-10 w-10 md:h-12 md:w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-orange-600 hover:text-white hover:border-orange-500 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)] active:scale-95 sm:right-5 cursor-pointer"
           aria-label="Next slide"
         >
           <ChevronRight className="h-5 w-5" />
@@ -94,10 +122,10 @@ export default function MyKalakarHeroSlider() {
                 key={slide.id}
                 type="button"
                 onClick={() => slider.goTo(index)}
-                className={`flex-1 min-w-0 flex items-center gap-3 p-3 rounded-2xl border transition-all duration-300 ${
+                className={`relative flex-1 min-w-0 flex items-center gap-3 p-3 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden ${
                   isActive
-                    ? "bg-[#1f150e]/90 border-orange-500 shadow-[0_0_18px_rgba(249,115,22,0.4)] ring-2 ring-orange-500/50 scale-[1.02]"
-                    : "bg-black/40 border-white/10 opacity-75 hover:opacity-100 hover:border-white/25 hover:bg-black/60"
+                    ? "bg-[#1f150e]/95 border-orange-500 shadow-[0_0_22px_rgba(249,115,22,0.45)] ring-2 ring-orange-500/50 scale-[1.02]"
+                    : "bg-black/40 border-white/10 opacity-75 hover:opacity-100 hover:border-white/25 hover:bg-black/60 hover:scale-[1.01]"
                 }`}
               >
                 {/* Mini Thumbnail Image */}
@@ -106,7 +134,7 @@ export default function MyKalakarHeroSlider() {
                     src={slide.image}
                     alt=""
                     className={`w-full h-full object-cover transition-all duration-300 ${
-                      isActive ? "brightness-110 saturate-110 scale-105" : "brightness-90 opacity-80"
+                      isActive ? "brightness-110 saturate-115 scale-105" : "brightness-90 opacity-80"
                     }`}
                   />
                 </div>
@@ -123,6 +151,21 @@ export default function MyKalakarHeroSlider() {
                     {t(`hero.slide${slide.id}.thumbnail`)}
                   </p>
                 </div>
+
+                {/* Animated Autoplay Progress Bar */}
+                {isActive && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[3.5px] bg-stone-900/60 rounded-b-[14px] overflow-hidden">
+                    <div
+                      key={`progress-${slider.activeIndex}-${slider.isPaused}`}
+                      className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full"
+                      style={{
+                        animation: slider.isPaused
+                          ? "none"
+                          : `hero-progress ${HERO_SLIDE_INTERVAL_MS}ms linear forwards`,
+                      }}
+                    />
+                  </div>
+                )}
               </button>
             );
           })}
@@ -141,34 +184,80 @@ export default function MyKalakarHeroSlider() {
         </div>
 
         {/* DESKTOP ONLY Content Wrapper */}
-        <div className="hidden md:flex absolute inset-0 z-20 flex-row w-full h-full justify-between items-center px-12 md:px-16 pt-24 pb-24 gap-12">
-          {/* Left Side: Headline Text */}
-          <div className="flex w-full md:w-[50%] flex-col justify-center text-white pointer-events-none select-none">
+        <div className="hidden md:flex absolute inset-0 z-20 flex-row w-full h-full justify-between items-center px-16 lg:px-24 pt-20 pb-20 gap-12">
+          {/* Left Side: Headline Text & Signature Visual Element */}
+          <div className="relative flex w-full md:w-[54%] flex-col justify-center text-white pointer-events-none select-none">
+            {/* MyKalakar Signature Visual Ribbon Trail SVG */}
+            <svg
+              data-signature-trail
+              className="absolute -left-12 -bottom-12 w-[560px] h-[90px] pointer-events-none z-0 opacity-50"
+              viewBox="0 0 560 90"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M 10 70 C 140 90, 240 30, 390 60 C 470 80, 520 50, 550 20"
+                stroke="url(#mykalakar-gold-ribbon)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]"
+              />
+              <defs>
+                <linearGradient id="mykalakar-gold-ribbon" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#f97316" stopOpacity="0.85" />
+                  <stop offset="50%" stopColor="#f59e0b" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#ea580c" stopOpacity="0.2" />
+                </linearGradient>
+              </defs>
+            </svg>
+
             {HERO_SLIDES.map((slide, index) => {
               if (index !== slider.activeIndex) return null;
-              const overlayText = t(`hero.slide${slide.id}.overlay`, { defaultValue: "" });
-              if (!overlayText) return null;
+              const overlayText = t(`hero.slide${slide.id}.overlay`, { defaultValue: slide.heading });
               const parts = overlayText.includes(",") ? overlayText.split(",") : [overlayText];
               return (
                 <div
                   key={slide.id}
-                  data-slide-detail
-                  className="max-w-[420px] md:max-w-[500px] text-white font-sans"
+                  className="relative z-10 max-w-[460px] lg:max-w-[560px] text-white font-sans space-y-2"
                 >
-                  <h2 className="text-3xl sm:text-4xl md:text-[42px] lg:text-[48px] font-black leading-[1.12] drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] uppercase tracking-wide">
+                  {/* Eyebrow Pill Badge */}
+                  <div
+                    data-heading-line
+                    className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-orange-500/15 border border-orange-500/35 text-orange-400 text-xs font-black tracking-widest uppercase mb-1 backdrop-blur-md shadow-sm"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-orange-400 animate-pulse" />
+                    <span>{slide.eyebrow}</span>
+                  </div>
+
+                  {/* Main Headline */}
+                  <h2 className="text-xl sm:text-2xl md:text-[28px] lg:text-[34px] font-black leading-[1.18] tracking-tight uppercase">
                     {parts.map((part, idx) => {
                       const words = part.trim().split(" ");
                       if (idx === 0 && words.length > 1) {
                         const lastWord = words.pop();
                         const remaining = words.join(" ");
                         return (
-                          <span key={idx} className="block mb-1">
-                            {remaining} <span className="text-orange-500">{lastWord}</span>
+                          <span key={idx} data-heading-line className="block mb-0.5">
+                            <span className="block text-white font-black">{remaining}</span>
+                            <span
+                              data-highlight-word
+                              className="block italic font-black text-orange-500 text-[1.12em] tracking-[0.05em] mt-0.5"
+                            >
+                              {lastWord}
+                            </span>
                           </span>
                         );
                       }
                       return (
-                        <span key={idx} className={`block ${idx === 1 ? 'text-stone-200 mt-2 font-semibold text-lg sm:text-xl md:text-2xl normal-case' : ''}`}>
+                        <span
+                          key={idx}
+                          data-heading-line
+                          className={`block ${
+                            idx === 1
+                              ? "text-stone-200 mt-1 font-medium text-xs sm:text-sm md:text-base normal-case tracking-normal"
+                              : "text-white font-black"
+                          }`}
+                        >
                           {part.trim()}
                         </span>
                       );
@@ -201,10 +290,10 @@ export default function MyKalakarHeroSlider() {
                 key={slide.id}
                 type="button"
                 onClick={() => slider.goTo(index)}
-                className={`flex-1 min-w-[130px] flex items-center gap-2 p-2.5 rounded-xl border transition-all duration-300 snap-start ${
+                className={`relative flex-1 min-w-[130px] flex items-center gap-2 p-2.5 rounded-xl border transition-all duration-300 snap-start overflow-hidden ${
                   isActive
-                    ? "bg-[#25180f]/90 border-orange-500/80 shadow-[0_4px_15px_rgba(249,115,22,0.15)]"
-                    : "bg-black/30 border-white/5"
+                    ? "bg-[#1f150e]/95 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]"
+                    : "bg-black/30 border-white/10"
                 }`}
               >
                 <div className="w-9 h-8 rounded-md overflow-hidden shrink-0">
@@ -221,6 +310,21 @@ export default function MyKalakarHeroSlider() {
                     {t(`hero.slide${slide.id}.thumbnail`)}
                   </p>
                 </div>
+
+                {/* Mobile Active Progress Bar */}
+                {isActive && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-stone-900/60 rounded-b-xl overflow-hidden">
+                    <div
+                      key={`mob-prog-${slider.activeIndex}-${slider.isPaused}`}
+                      className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full"
+                      style={{
+                        animation: slider.isPaused
+                          ? "none"
+                          : `hero-progress ${HERO_SLIDE_INTERVAL_MS}ms linear forwards`,
+                      }}
+                    />
+                  </div>
+                )}
               </button>
             );
           })}

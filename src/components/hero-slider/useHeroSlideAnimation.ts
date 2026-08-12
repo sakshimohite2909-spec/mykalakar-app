@@ -9,25 +9,102 @@ export function useHeroSlideAnimation(activeIndex: number) {
 
   useGSAP(
     () => {
-      // 1. Animate horizontal slide track
-      const track = scope.current?.querySelector("[data-slider-track]") as HTMLElement;
+      const container = scope.current;
+      if (!container) return;
+
+      const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+
+      // 1. Horizontal track movement
+      const track = container.querySelector("[data-slider-track]") as HTMLElement;
       if (track) {
         const slideCount = Number(track.dataset.slideCount || 5);
-        gsap.to(track, {
-          xPercent: -activeIndex * (100 / slideCount),
-          duration: 0.8,
-          ease: "power3.out",
-        });
+        tl.to(
+          track,
+          {
+            xPercent: -activeIndex * (100 / slideCount),
+            duration: 0.9,
+            ease: "power3.inOut",
+          },
+          0
+        );
       }
 
-      // 2. Animate details panel (staggered entry)
-      const details = scope.current?.querySelectorAll("[data-slide-detail]");
-      if (details && details.length > 0) {
-        gsap.killTweensOf(details);
-        gsap.fromTo(
-          details,
-          { autoAlpha: 0, y: 15 },
-          { autoAlpha: 1, y: 0, duration: 0.5, stagger: 0.08, ease: "power2.out", delay: 0.1 }
+      // 2. Curtain Sweep Effect (Layered Reveal)
+      const sweep = container.querySelector("[data-slider-sweep]") as HTMLElement;
+      if (sweep) {
+        tl.fromTo(
+          sweep,
+          { opacity: 0.6, xPercent: -100 },
+          {
+            opacity: 0,
+            xPercent: 100,
+            duration: 0.85,
+            ease: "power2.inOut",
+          },
+          0.05
+        );
+      }
+
+      // 3. Heading line-by-line staggered entry
+      const lines = container.querySelectorAll("[data-heading-line]");
+      if (lines.length > 0) {
+        tl.fromTo(
+          lines,
+          { autoAlpha: 0, y: 28 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.65,
+            stagger: 0.1,
+            ease: "power3.out",
+          },
+          0.2
+        );
+      }
+
+      // 4. Highlighted orange word delayed reveal
+      const highlights = container.querySelectorAll("[data-highlight-word]");
+      if (highlights.length > 0) {
+        tl.fromTo(
+          highlights,
+          { autoAlpha: 0, y: 12, scale: 0.95 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.6,
+            stagger: 0.08,
+            ease: "back.out(1.4)",
+          },
+          0.35
+        );
+      }
+
+      // 5. Signature Trail Wave Reveal
+      const signatureTrail = container.querySelector("[data-signature-trail]") as HTMLElement;
+      if (signatureTrail) {
+        tl.fromTo(
+          signatureTrail,
+          { opacity: 0, strokeDashoffset: 300 },
+          { opacity: 1, strokeDashoffset: 0, duration: 1.2, ease: "power2.out" },
+          0.3
+        );
+      }
+
+      // 6. CTA buttons & details staggered entry
+      const ctas = container.querySelectorAll("[data-slide-cta]");
+      if (ctas.length > 0) {
+        tl.fromTo(
+          ctas,
+          { autoAlpha: 0, y: 16 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.55,
+            stagger: 0.08,
+            ease: "power2.out",
+          },
+          0.45
         );
       }
     },

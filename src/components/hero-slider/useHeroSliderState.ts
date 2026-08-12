@@ -33,7 +33,7 @@ export function useHeroSliderState({ slideCount, intervalMs }: UseHeroSliderStat
     }, intervalMs);
 
     return () => window.clearInterval(timer);
-  }, [intervalMs, isPaused, slideCount, activeIndex]);
+  }, [intervalMs, isPaused, slideCount]);
 
   const onTouchStart = useCallback((event: React.TouchEvent) => {
     touchStartX.current = event.touches[0].clientX;

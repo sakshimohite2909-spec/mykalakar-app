@@ -61,5 +61,5 @@ export const HERO_SLIDES: HeroSlide[] = [
   },
 ];
 
-export const HERO_SLIDE_INTERVAL_MS = 2800;
+export const HERO_SLIDE_INTERVAL_MS = 3800;
 
