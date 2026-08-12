@@ -321,13 +321,6 @@ export default function BrowseAndPopularCategories() {
               </button>
             </div>
 
-            <Link
-              to="/events"
-              className="group inline-flex items-center gap-1 text-xs md:text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors ml-1"
-            >
-              <span>View All</span>
-              <ChevronRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-            </Link>
           </div>
         </div>
 
