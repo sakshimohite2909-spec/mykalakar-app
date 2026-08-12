@@ -65,34 +65,6 @@ export default function MyKalakarHeroSlider() {
           <SliderBackground slides={HERO_SLIDES} activeIndex={slider.activeIndex} />
         </div>
 
-        {/* MOBILE ONLY Headline Overlay (Small, compact, non-intrusive overlay over the image) */}
-        <div className="md:hidden absolute bottom-3 left-3 right-14 z-25 pointer-events-none select-none">
-          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/40 text-orange-400 text-[10px] font-black tracking-widest uppercase mb-1 backdrop-blur-md shadow-sm">
-            <Sparkles className="h-3 w-3 text-orange-400" />
-            <span>{activeSlide.eyebrow}</span>
-          </div>
-          {(() => {
-            const words = activeSlide.heading.trim().split(" ");
-            if (words.length > 1) {
-              const lastWord = words.pop();
-              const remaining = words.join(" ");
-              return (
-                <h2 className="text-xs sm:text-sm font-black leading-tight uppercase">
-                  <span className="block text-white">{remaining}</span>
-                  <span className="block italic text-orange-500 text-[1.12em] tracking-[0.05em] mt-0.5">
-                    {lastWord}
-                  </span>
-                </h2>
-              );
-            }
-            return (
-              <h2 className="text-xs sm:text-sm font-black leading-tight text-white uppercase">
-                {activeSlide.heading}
-              </h2>
-            );
-          })()}
-        </div>
-
         {/* Previous Button (Left Margin of Image) */}
         <button
           type="button"
@@ -187,10 +159,10 @@ export default function MyKalakarHeroSlider() {
         <div className="hidden md:flex absolute inset-0 z-20 flex-row w-full h-full justify-between items-center px-16 lg:px-24 pt-20 pb-20 gap-12">
           {/* Left Side: Headline Text & Signature Visual Element */}
           <div className="relative flex w-full md:w-[54%] flex-col justify-center text-white pointer-events-none select-none">
-            {/* MyKalakar Signature Visual Ribbon Trail SVG */}
+            {/* MyKalakar Signature Visual Ribbon Trail SVG (Desktop ONLY) */}
             <svg
               data-signature-trail
-              className="absolute -left-12 -bottom-12 w-[560px] h-[90px] pointer-events-none z-0 opacity-50"
+              className="hidden md:block absolute -left-12 -bottom-12 w-[560px] h-[90px] pointer-events-none z-0 opacity-50"
               viewBox="0 0 560 90"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
