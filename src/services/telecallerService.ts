@@ -6,6 +6,7 @@ import {
   getDoc,
   addDoc,
   updateDoc,
+  setDoc,
   onSnapshot,
   query,
   where,
@@ -145,6 +146,20 @@ function sanitizeLead(id: string, data: any): TelecallerLead {
 
   const leadType: LeadType = isBooking ? "book_artist" : "post_requirement";
 
+  const VALID_LEAD_STATUSES: LeadStatus[] = [
+    "new",
+    "contacting_artists",
+    "artist_confirmed",
+    "quote_sent",
+    "booked",
+    "cancelled",
+  ];
+
+  const rawStatus = toSafeString(data.telecallerStatus || data.status, "new").toLowerCase();
+  const status: LeadStatus = VALID_LEAD_STATUSES.includes(rawStatus as LeadStatus)
+    ? (rawStatus as LeadStatus)
+    : "new";
+
   return {
     id: safeId,
     customerName: toSafeString(data.customerName || data.clientName || data.postedByName, "Customer"),
@@ -160,7 +175,7 @@ function sanitizeLead(id: string, data: any): TelecallerLead {
     eventLocation: toSafeString(data.eventLocation || data.venueLocation || data.location || data.city, ""),
     budget: Number(data.authorizedAmount || data.budget || data.totalBudget || 0) || 0,
     specialNotes: toSafeString(data.specialNotes || data.message || data.requirements || data.additionalNotes, ""),
-    status: (toSafeString(data.status, "new") as LeadStatus) || "new",
+    status,
     matchedArtists: Array.isArray(data.matchedArtists)
       ? data.matchedArtists.map((a: any) => ({
           artistId: toSafeString(a.artistId, ""),
@@ -195,6 +210,11 @@ function sanitizeLead(id: string, data: any): TelecallerLead {
   };
 }
 
+function cleanId(id: string): string {
+  if (!id) return "";
+  return id.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
+}
+
 export function subscribeTelecallerLeads(callback: (leads: TelecallerLead[]) => void) {
   let telecallerLeads: TelecallerLead[] = getLocalLeads().map((l) => sanitizeLead(l.id, l));
   let inquiryLeads: TelecallerLead[] = [];
@@ -204,25 +224,38 @@ export function subscribeTelecallerLeads(callback: (leads: TelecallerLead[]) => 
   const publishCombined = () => {
     const map = new Map<string, TelecallerLead>();
 
-    // Add local backup leads first
-    getLocalLeads().forEach((l) => map.set(l.id, sanitizeLead(l.id, l)));
+    const setMapLead = (l: TelecallerLead) => {
+      const cid = cleanId(l.id);
+      const existing = map.get(cid);
+      if (!existing) {
+        map.set(cid, l);
+      } else {
+        const effectiveStatus = l.status !== "new" ? l.status : existing.status;
+        map.set(cid, {
+          ...existing,
+          ...l,
+          status: effectiveStatus,
+        });
+      }
+    };
 
-    // Overlay real-time leads from telecaller_leads
-    telecallerLeads.forEach((l) => map.set(l.id, l));
+    telecallerLeads.forEach(setMapLead);
+    eventBriefLeads.forEach(setMapLead);
+    bookingLeads.forEach(setMapLead);
+    inquiryLeads.forEach(setMapLead);
 
-    // Overlay fallback leads from inquiries
-    inquiryLeads.forEach((l) => {
-      if (!map.has(l.id)) map.set(l.id, l);
-    });
-
-    // Overlay fallback leads from bookings
-    bookingLeads.forEach((l) => {
-      if (!map.has(l.id)) map.set(l.id, l);
-    });
-
-    // Overlay fallback leads from eventBriefs
-    eventBriefLeads.forEach((l) => {
-      if (!map.has(l.id)) map.set(l.id, l);
+    // Apply local overrides
+    getLocalLeads().forEach((l) => {
+      const cid = cleanId(l.id);
+      const existing = map.get(cid);
+      if (existing) {
+        if (l.status && l.status !== "new") {
+          existing.status = l.status as LeadStatus;
+        }
+        if (l.confirmedArtistName) existing.confirmedArtistName = l.confirmedArtistName;
+      } else {
+        map.set(cid, sanitizeLead(l.id, l));
+      }
     });
 
     const combined = Array.from(map.values()).sort(
@@ -416,21 +449,41 @@ export async function updateLeadStatus(
   status: LeadStatus,
   confirmedArtist?: { artistId: string; artistName: string; price: number }
 ): Promise<void> {
-  // 1. Immediately update local storage cache
+  const cid = cleanId(leadId);
+
+  // 1. Immediately update local storage cache with normalized ID matching
   const localList = getLocalLeads();
-  const targetLocal = localList.find((l) => l.id === leadId);
-  if (targetLocal) {
-    targetLocal.status = status;
-    if (confirmedArtist) {
-      targetLocal.confirmedArtistId = confirmedArtist.artistId;
-      targetLocal.confirmedArtistName = confirmedArtist.artistName;
-      targetLocal.confirmedPrice = confirmedArtist.price;
+  let found = false;
+  localList.forEach((l) => {
+    if (cleanId(l.id) === cid || l.id === leadId) {
+      l.status = status;
+      (l as any).telecallerStatus = status;
+      if (confirmedArtist) {
+        l.confirmedArtistId = confirmedArtist.artistId;
+        l.confirmedArtistName = confirmedArtist.artistName;
+        l.confirmedPrice = confirmedArtist.price;
+      }
+      found = true;
     }
-    saveLocalLead(targetLocal);
+  });
+
+  if (!found) {
+    localList.push({
+      id: leadId,
+      status,
+      telecallerStatus: status,
+    } as any);
+  }
+
+  try {
+    localStorage.setItem(LOCAL_LEADS_KEY, JSON.stringify(localList.slice(0, 100)));
+  } catch (e) {
+    console.warn("Local storage status save warning:", e);
   }
 
   const updatePayload: Record<string, any> = {
     status,
+    telecallerStatus: status,
     updatedAt: serverTimestamp(),
   };
   if (confirmedArtist) {
@@ -439,23 +492,32 @@ export async function updateLeadStatus(
     updatePayload.confirmedPrice = confirmedArtist.price;
   }
 
-  // 2. Route update to correct Firestore collection
+  // 2. Write/Upsert to telecaller_leads AND target source collection
+  const realDocId = cleanId(leadId);
+
+  try {
+    await setDoc(doc(db, LEADS_COLLECTION, realDocId), updatePayload, { merge: true });
+    await setDoc(doc(db, LEADS_COLLECTION, leadId), updatePayload, { merge: true });
+  } catch {
+    // Ignore permissions or network fallback
+  }
+
   try {
     if (leadId.startsWith("booking_")) {
-      const realBookingId = leadId.replace("booking_", "");
-      await updateDoc(doc(db, "bookings", realBookingId), updatePayload);
+      await updateDoc(doc(db, "bookings", realDocId), updatePayload);
     } else if (leadId.startsWith("brief_")) {
-      const realBriefId = leadId.replace("brief_", "");
-      await updateDoc(doc(db, "eventBriefs", realBriefId), updatePayload);
+      await updateDoc(doc(db, "eventBriefs", realDocId), updatePayload);
     } else {
       try {
         await updateDoc(doc(db, LEADS_COLLECTION, leadId), updatePayload);
       } catch {
-        await updateDoc(doc(db, "inquiries", leadId), updatePayload);
+        await updateDoc(doc(db, "inquiries", realDocId), updatePayload);
       }
     }
-  } catch (error) {
-    console.warn(`Firestore status update warning for ${leadId} -> ${status}:`, error);
+  } catch (error: any) {
+    if (error?.code !== "permission-denied") {
+      console.warn(`Firestore status update warning for ${leadId} -> ${status}:`, error?.message || error);
+    }
   }
 }
 

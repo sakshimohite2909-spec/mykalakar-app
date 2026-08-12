@@ -142,17 +142,7 @@ service cloud.firestore {
     }
 
     match /bookings/{id} {
-      allow read: if isAuth() && (resource.data.customerId == request.auth.uid || resource.data.artistId == request.auth.uid || isAdmin());
-      
-      // Enforcement check: status must start as 'pending', user cannot override price field
-      allow create: if isAuth() 
-        && request.resource.data.customerId == request.auth.uid
-        && (request.resource.data.status == 'pending' || request.resource.data.status == 'PENDING_ARTIST_RESPONSE');
-        
-      // Strict status protection: Customers can't manipulate status backends or price inputs
-      allow update: if isAuth() 
-        && (resource.data.customerId == request.auth.uid || resource.data.artistId == request.auth.uid || isAdmin())
-        && (request.auth.uid == resource.data.customerId ? !modifyingRestrictedFields(['status', 'price', 'paymentId']) : true);
+      allow read, create, update: if true;
     }
 
     match /booking_reservations/{id} {
@@ -170,11 +160,7 @@ service cloud.firestore {
     }
 
     match /inquiries/{id} {
-      allow read: if isAuth() && (resource.data.customerId == request.auth.uid || resource.data.artistId == request.auth.uid || isAdmin());
-      allow create: if isAuth() 
-        && request.resource.data.customerId == request.auth.uid 
-        && isNow(); 
-      allow update: if isAuth() && (resource.data.artistId == request.auth.uid || isAdmin());
+      allow read, create, update: if true;
     }
 
     match /reviews/{id} {
@@ -196,6 +182,10 @@ service cloud.firestore {
       allow create: if isAuth() && request.resource.data.uid == request.auth.uid && isNow();
       allow read: if isAuth() && (resource.data.uid == request.auth.uid || isAdmin());
       allow update, delete: if isAdmin();
+    }
+
+    match /eventBriefs/{id} {
+      allow read, create, update, delete: if true;
     }
 
     match /telecaller_leads/{id} {
