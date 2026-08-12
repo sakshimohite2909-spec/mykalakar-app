@@ -1743,8 +1743,8 @@ export default function ArtistRegister() {
             <span className="inline-flex rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-100">
               {t("register.creatorOnboarding")} {/* ADDED FOR i18n */}
             </span>
-            <h2 className="mt-6 text-5xl font-black leading-[0.98] text-white">
-              {t("register.visualTitle")} {/* ADDED FOR i18n */}
+            <h2 className="mt-6 text-3xl xl:text-[34px] font-extrabold leading-snug text-white tracking-tight">
+              {t("register.visualTitle", { defaultValue: "Build a profile that feels stage-ready." })}
             </h2>
           </div>
           <div className="grid gap-3">

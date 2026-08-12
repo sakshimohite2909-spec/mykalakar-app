@@ -135,18 +135,23 @@ export default function BookingModal({
         expiryDate: "",
         cvv: "",
       });
-      setFormData((prev) => ({
-        ...prev,
-        customerName: prev.customerName || (userProfile?.name as string) || currentUser?.displayName || "",
-        customerEmail: prev.customerEmail || currentUser?.email || "",
-        customerPhone: prev.customerPhone || (userProfile?.phone as string) || "",
-        clientWhatsapp: prev.clientWhatsapp || (userProfile?.phone as string) || "",
-        eventLocation: prev.eventLocation || artistLocation,
-        eventType: prev.eventType || "Wedding",
-        authorizedAmount: parsePriceToNumber(startingPrice),
-      }));
+      setFormData({
+        customerName: "",
+        customerEmail: "",
+        customerPhone: "",
+        clientWhatsapp: "",
+        customerAddress: "",
+        eventLocation: "",
+        eventDate: preselectedDate || "",
+        eventStartTime: "",
+        eventEndTime: "",
+        eventType: "",
+        message: "",
+        specialRequirements: "",
+        authorizedAmount: "" as any,
+      });
     }
-  }, [open, currentUser, userProfile, artistLocation, startingPrice]);
+  }, [open, preselectedDate]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -477,8 +482,10 @@ export default function BookingModal({
                     name="authorizedAmount"
                     type="number"
                     min={500}
-                    value={formData.authorizedAmount}
+                    value={formData.authorizedAmount || ""}
                     onChange={handleChange}
+                    placeholder="e.g. 15000"
+                    autoComplete="off"
                     className="h-10 text-xs font-semibold rounded-xl"
                     required
                   />
