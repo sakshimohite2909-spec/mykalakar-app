@@ -4,6 +4,7 @@ import { Search, ChevronDown, Clock, ShieldCheck, UserCheck } from "lucide-react
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import NewRequirementModal from "@/components/NewRequirementModal";
+import { getSubcategoriesForCategory, getCategoriesForEvent } from "@/constants/artistSystem";
 
 export const CATEGORY_LEVEL2_DATA: Record<
   string,
@@ -398,19 +399,27 @@ export default function CategoryLevel2Page() {
   const [briefModalOpen, setBriefModalOpen] = useState(false);
 
   const decodedEvent = eventName ? decodeURIComponent(eventName) : "Wedding";
-  const decodedCategory = categoryName ? decodeURIComponent(categoryName) : "Photography";
+  const decodedCategory = categoryName ? decodeURIComponent(categoryName) : "Photography & Videography";
 
-  const categoryData = CATEGORY_LEVEL2_DATA[decodedCategory] || CATEGORY_LEVEL2_DATA["Photography"];
+  // Dynamic subcategories from master data
+  const masterSubcategories = useMemo(() => {
+    return getSubcategoriesForCategory(decodedEvent, decodedCategory);
+  }, [decodedEvent, decodedCategory]);
+
+  const categoryTitle = decodedCategory;
+  const categorySubtitle = `Explore verified subcategories and artists under ${decodedCategory} for ${decodedEvent}.`;
+  const heroImage =
+    "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=1200&auto=format&fit=crop";
 
   const filteredSubcategories = useMemo(() => {
-    if (!searchQuery.trim()) return categoryData.allSubcategories;
+    if (!searchQuery.trim()) return masterSubcategories;
     const q = searchQuery.toLowerCase();
-    return categoryData.allSubcategories.filter((sub) => sub.toLowerCase().includes(q));
-  }, [searchQuery, categoryData.allSubcategories]);
+    return masterSubcategories.filter((sub) => sub.toLowerCase().includes(q));
+  }, [searchQuery, masterSubcategories]);
 
   const handleSubcategoryClick = (subName: string) => {
     navigate(
-      `/events/${encodeURIComponent(decodedEvent)}/${encodeURIComponent(categoryData.title)}/${encodeURIComponent(subName)}`
+      `/events/${encodeURIComponent(decodedEvent)}/${encodeURIComponent(categoryTitle)}/${encodeURIComponent(subName)}`
     );
   };
 
@@ -430,7 +439,7 @@ export default function CategoryLevel2Page() {
               {decodedEvent}
             </Link>
             <span className="shrink-0">&gt;</span>
-            <span className="text-stone-900 font-bold shrink-0">{categoryData.title}</span>
+            <span className="text-stone-900 font-bold shrink-0">{categoryTitle}</span>
           </div>
           <button
             onClick={() => navigate("/search")}
@@ -445,10 +454,10 @@ export default function CategoryLevel2Page() {
         <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-stone-950 via-stone-900 to-stone-800 text-white p-6 sm:p-8 md:p-10 mb-6 min-h-[220px] sm:min-h-[250px] flex items-center shadow-lg">
           <div className="relative z-10 max-w-lg pb-10">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight">
-              {categoryData.title}
+              {categoryTitle}
             </h1>
             <p className="mt-2 text-sm sm:text-base text-stone-300 font-medium leading-relaxed">
-              {categoryData.subtitle}
+              {categorySubtitle}
             </p>
           </div>
 
@@ -456,8 +465,8 @@ export default function CategoryLevel2Page() {
           <div className="absolute right-0 top-0 bottom-0 w-1/2 md:w-5/12 overflow-hidden pointer-events-none">
             <div className="absolute inset-0 bg-gradient-to-r from-stone-950 via-stone-950/60 to-transparent z-10" />
             <img
-              src={categoryData.heroImage}
-              alt={categoryData.title}
+              src={heroImage}
+              alt={categoryTitle}
               className="h-full w-full object-cover object-center"
             />
           </div>
@@ -502,33 +511,31 @@ export default function CategoryLevel2Page() {
             </ul>
           </div>
 
-          {/* Right Column: Popular Services Cards */}
+          {/* Right Column: Subcategory Cards Grid */}
           <div>
             <h2 className="text-lg md:text-xl font-extrabold text-stone-900 mb-4 tracking-tight">
-              Popular Services
+              {categoryTitle} Subcategories
             </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
-              {categoryData.popularServices.map((service) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+              {filteredSubcategories.map((subName) => (
                 <div
-                  key={service.title}
-                  onClick={() => handleSubcategoryClick(service.queryParam)}
-                  className="group flex flex-col cursor-pointer bg-white rounded-2xl border border-stone-200/80 p-3.5 shadow-xs hover:border-orange-400 hover:shadow-md transition-all duration-300"
+                  key={subName}
+                  onClick={() => handleSubcategoryClick(subName)}
+                  className="group flex flex-col justify-between cursor-pointer bg-white rounded-2xl border border-stone-200/80 p-4 shadow-xs hover:border-orange-500 hover:shadow-md transition-all duration-300 min-h-[110px]"
                 >
-                  <div className="relative aspect-[1.35/1] w-full overflow-hidden rounded-xl bg-stone-100 mb-3">
-                    <img
-                      src={service.image}
-                      alt={service.title}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      loading="lazy"
-                    />
+                  <div>
+                    <h3 className="text-sm sm:text-base font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors leading-snug">
+                      {subName}
+                    </h3>
+                    <p className="mt-1 text-xs font-medium text-stone-500">
+                      Verified artists & vendors
+                    </p>
                   </div>
-                  <h3 className="text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors leading-snug">
-                    {service.title}
-                  </h3>
-                  <p className="mt-0.5 text-xs font-semibold text-stone-400">
-                    {service.artistsCount}
-                  </p>
+                  <div className="mt-3 flex items-center gap-1 text-xs font-bold text-orange-600 group-hover:translate-x-0.5 transition-transform">
+                    <span>Explore Artists</span>
+                    <span>→</span>
+                  </div>
                 </div>
               ))}
             </div>

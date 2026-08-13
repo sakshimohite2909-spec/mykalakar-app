@@ -27,7 +27,7 @@ import {
   filterArtistCardsForEvent,
   filterAvailableArtistCards,
 } from "@/services/eventArtistFiltering";
-import { buildArtistCards, filterArtistCards } from "@/services/marketplaceCards";
+import { buildArtistCards, filterArtistCards, deduplicateCardsByArtist } from "@/services/marketplaceCards";
 import {
   AnimatePresence,
   LuxuryArtistCard,
@@ -316,10 +316,17 @@ export default function SearchPage() {
     () => buildEventRequirementGroups(artistFacetBase, CATEGORY_GROUP_OPTIONS),
     [artistFacetBase],
   );
-  const visibleArtists = useMemo(
+  const rawVisibleArtists = useMemo(
     () => filterArtistCards(locationMatchedArtists, debouncedFilters),
     [debouncedFilters, locationMatchedArtists],
   );
+  const visibleArtists = useMemo(() => {
+    const activeSubCats = getActiveSubCategories(debouncedFilters);
+    if (!activeSubCats.length) {
+      return deduplicateCardsByArtist(rawVisibleArtists);
+    }
+    return rawVisibleArtists;
+  }, [rawVisibleArtists, debouncedFilters]);
   const eventFacetFilters = useMemo(() => withoutArtistFacetFilters(debouncedFilters), [debouncedFilters]);
   const eventFacetBase = useMemo(() => filterEvents(events, eventFacetFilters), [eventFacetFilters, events]);
   const eventCategoryFacets = useMemo(() => buildEventFilterGroups(eventFacetBase), [eventFacetBase]);

@@ -14,7 +14,7 @@ export default function PopularArtists() {
     let mounted = true;
     getActiveArtists(10)
       .then((data) => {
-        if (mounted) setArtists(buildArtistCards(data, 12));
+        if (mounted) setArtists(buildArtistCards(data, 12, { deduplicateByArtist: true }));
       })
       .catch((error) => {
         console.warn("Popular artists unavailable.", error);

@@ -136,28 +136,78 @@ export function getArtistServices(artist: any): ArtistService[] {
     .filter(Boolean) as ArtistService[];
 }
 
-export function buildArtistCards(artists: any[], maxCards?: number): ArtistCardViewModel[] {
-  const cards: ArtistCardViewModel[] = [];
+function resolveCardImage(artist: any, service: ArtistService, serviceIndex: number, cardId: string): string {
+  const categoryName = service.subCategory || service.category || "Performers";
 
-  artists.forEach((artist, artistIndex) => {
+  // 1. Check for category-specific photo upload
+  const categorySpecificPhoto = resolveArtistProfilePhoto(artist, categoryName);
+  if (categorySpecificPhoto && isUploadedMedia(categorySpecificPhoto)) {
+    return categorySpecificPhoto;
+  }
+
+  // 2. Check if service object itself carries an uploaded image
+  const serviceObj = service as any;
+  if (serviceObj.image && isUploadedMedia(serviceObj.image)) return serviceObj.image;
+  if (serviceObj.photo && isUploadedMedia(serviceObj.photo)) return serviceObj.photo;
+  if (serviceObj.profilePhoto && isUploadedMedia(serviceObj.profilePhoto)) return serviceObj.profilePhoto;
+
+  // 3. For primary service (serviceIndex 0), check top-level profile photo or cover image
+  if (serviceIndex === 0) {
+    const primaryPhoto = resolveArtistProfilePhoto(artist);
+    if (primaryPhoto && isUploadedMedia(primaryPhoto)) {
+      return primaryPhoto;
+    }
+    const uploadedImages = getUploadedImages(artist);
+    if (uploadedImages.length > 0) {
+      return uploadedImages[0];
+    }
+  }
+
+  // 4. For secondary services without a matching uploaded photo, use category-appropriate image registry
+  return imageRegistry.getUniqueImage({
+    category: categoryName,
+    type: "artist",
+    key: cardId,
+  });
+}
+
+export function deduplicateCardsByArtist<T extends ArtistCardViewModel>(cards: T[]): T[] {
+  const seen = new Set<string>();
+  return cards.filter((card) => {
+    if (!card.artistId || seen.has(card.artistId)) return false;
+    seen.add(card.artistId);
+    return true;
+  });
+}
+
+export function buildArtistCards(
+  artists: any[],
+  maxCards?: number,
+  options?: { deduplicateByArtist?: boolean }
+): ArtistCardViewModel[] {
+  const cards: ArtistCardViewModel[] = [];
+  const seenArtistIds = new Set<string>();
+
+  artists.forEach((artist) => {
     const artistId = normalize(artist.id || artist.uid);
     if (!artistId) return;
+
+    if (options?.deduplicateByArtist && seenArtistIds.has(artistId)) {
+      return;
+    }
 
     const services = getArtistServices(artist);
     if (!services.length) return;
 
-    const uploadedImages = getUploadedImages(artist);
     const location = compactUnique([artist.district || artist.city, artist.state]).join(", ") || normalize(artist.location) || "Maharashtra";
     const ratingSummary = getArtistRatingSummary(artist);
 
-    services.forEach((service, serviceIndex) => {
+    const servicesToBuild = options?.deduplicateByArtist ? services.slice(0, 1) : services;
+
+    servicesToBuild.forEach((service, serviceIndex) => {
       const cardId = `${artistId}_${service.serviceId}`;
-      const categoryName = service.subCategory || service.category || "Performers";
-      const image = uploadedImages[serviceIndex] || uploadedImages[0] || imageRegistry.getUniqueImage({
-        category: categoryName,
-        type: "artist",
-        key: `${artistId}_${service.serviceId}`,
-      });
+      const image = resolveCardImage(artist, service, serviceIndex, cardId);
+
       cards.push({
         cardId,
         artistId,
@@ -188,6 +238,7 @@ export function buildArtistCards(artists: any[], maxCards?: number): ArtistCardV
         ]),
         artist,
       });
+      seenArtistIds.add(artistId);
     });
   });
 

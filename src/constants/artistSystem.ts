@@ -92,11 +92,17 @@ export const MAIN_EVENT_CARDS = [
 ] as const;
 
 // ─── 3-LEVEL HIERARCHY: Event Type (L1) -> Category Group (L2) -> Subcategory (L3) ───
-export const EVENT_CATEGORY_HIERARCHY = {
+export const EVENT_CATEGORY_HIERARCHY: Record<
+  string,
+  {
+    icon: string;
+    groups: Record<string, { icon: string; subcategories: string[] }>;
+  }
+> = {
   "Varkari Sampraday": {
     icon: "🚩",
     groups: {
-      "Spiritual Speakers & Kathakar": {
+      "Spiritual Speakers": {
         icon: "🎙️",
         subcategories: [
           "Kirtankar",
@@ -125,7 +131,6 @@ export const EVENT_CATEGORY_HIERARCHY = {
           "Tabla Vadak",
           "Harmonium Vadak",
           "Dholki Vadak",
-          "Chiplya Player",
         ],
       },
       "Organizations": {
@@ -299,88 +304,13 @@ export const EVENT_CATEGORY_HIERARCHY = {
       },
     },
   },
-  "Performers": {
-    icon: "🎭",
-    groups: {
-      "Performers": {
-        icon: "🎭",
-        subcategories: [
-          "Karaoke Singers",
-          "Orchestra",
-          "Magicians",
-          "Puppet Show",
-          "DJs",
-          "Anchors / Hosts",
-          "Motivational Speakers",
-          "Actors",
-          "Singers",
-          "Live Bands",
-        ],
-      },
-    },
-  },
-  "Event Services": {
-    icon: "🎥",
-    groups: {
-      "Event Services": {
-        icon: "🎥",
-        subcategories: [
-          "Photography",
-          "Videography",
-          "Makeup Artists",
-          "Mehndi Artists",
-          "Sound System",
-          "Mandap & Decoration",
-        ],
-      },
-    },
-  },
-  "Folk & Traditional Arts": {
-    icon: "🥁",
-    groups: {
-      "Folk & Traditional Arts": {
-        icon: "🥁",
-        subcategories: [
-          "Gondhal",
-          "Jagran",
-          "Bharud",
-          "Shahiri & Powada",
-          "Lezim Pathak",
-          "Zanj Pathak",
-          "Dhol Pathak",
-          "Waghya Murali",
-          "Jalsa & Dashavatar",
-          "Dhagaai & Dholki",
-          "Bahurupiya",
-        ],
-      },
-    },
-  },
   "Birthday": {
     icon: "🎂",
-    groups: {
-      "Performers & Entertainers": {
-        icon: "🎭",
-        subcategories: ["Magicians", "Puppet Show", "Karaoke Singers", "DJs", "Dance Group", "Clowns / Mascot"],
-      },
-      "Decoration & Setup": {
-        icon: "🎈",
-        subcategories: ["Balloon Decoration", "Theme Decoration", "Sound System", "Lighting Decoration"],
-      },
-    },
+    groups: {},
   },
   "Corporate Event": {
     icon: "💼",
-    groups: {
-      "Speakers & Hosts": {
-        icon: "🎙️",
-        subcategories: ["Anchors / Hosts", "Motivational Speakers", "Celebrity Artist"],
-      },
-      "Media & Technical Setup": {
-        icon: "📹",
-        subcategories: ["Photography", "Videography", "LED Wall", "Sound System", "Lighting"],
-      },
-    },
+    groups: {},
   },
   "Cultural Event": {
     icon: "🪕",
@@ -882,3 +812,68 @@ export function normalizeArtistRecord<T extends Record<string, any>>(artist: T):
     userId: artist.userId || artist.uid || artist.id || "",
   };
 }
+
+// ─── RELATIONAL 3-LEVEL HIERARCHY HELPERS ───
+
+export function getEventTypes(): string[] {
+  return [
+    "Varkari Sampraday",
+    "Wedding",
+    "Birthday",
+    "Corporate Event",
+    "Cultural Event",
+    "Religious Event",
+    "College Event",
+    "Festival Event",
+    "Other Events",
+  ];
+}
+
+export function getCategoriesForEvent(eventType: string): Array<{ id: string; name: string; icon: string; eventType: string; subcategories: string[] }> {
+  const normalized = String(eventType ?? "").trim().toLowerCase();
+  for (const [eName, eData] of Object.entries(EVENT_CATEGORY_HIERARCHY)) {
+    if (eName.toLowerCase() === normalized) {
+      return Object.entries(eData.groups).map(([gName, gData]) => ({
+        id: normalizeCategoryKey(gName),
+        name: gName,
+        icon: gData.icon,
+        eventType: eName,
+        subcategories: gData.subcategories,
+      }));
+    }
+  }
+  return [];
+}
+
+export function getSubcategoriesForCategory(eventType: string, categoryName: string): string[] {
+  const normalizedEvent = String(eventType ?? "").trim().toLowerCase();
+  const normalizedCategory = String(categoryName ?? "").trim().toLowerCase();
+
+  for (const [eName, eData] of Object.entries(EVENT_CATEGORY_HIERARCHY)) {
+    if (eName.toLowerCase() === normalizedEvent) {
+      for (const [gName, gData] of Object.entries(eData.groups)) {
+        if (gName.toLowerCase() === normalizedCategory) {
+          return gData.subcategories;
+        }
+      }
+    }
+  }
+  return [];
+}
+
+export function findHierarchyForSubcategory(subCategoryName: string): { eventType: string; category: string; subCategory: string } | null {
+  const normalizedSub = String(subCategoryName ?? "").trim().toLowerCase();
+  if (!normalizedSub) return null;
+
+  for (const [eName, eData] of Object.entries(EVENT_CATEGORY_HIERARCHY)) {
+    for (const [gName, gData] of Object.entries(eData.groups)) {
+      for (const sub of gData.subcategories) {
+        if (sub.toLowerCase() === normalizedSub) {
+          return { eventType: eName, category: gName, subCategory: sub };
+        }
+      }
+    }
+  }
+  return null;
+}
+

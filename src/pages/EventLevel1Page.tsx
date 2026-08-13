@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   Camera,
@@ -15,9 +16,35 @@ import {
   UserCheck,
   Briefcase,
   Headphones,
+  CalendarDays,
+  PlusCircle,
+  Clock,
+  Music2,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import NewRequirementModal from "@/components/NewRequirementModal";
+import { getCategoriesForEvent, MAIN_EVENT_CARDS } from "@/constants/artistSystem";
+
+const CATEGORY_ICON_MAP: Record<string, any> = {
+  "Spiritual Speakers": Sparkles,
+  "Vocal Artists": Music2,
+  "Instrumental Artists": Music2,
+  "Organizations": Building2,
+  "Event Services": Building2,
+  "Venues": Building2,
+  "Bridal & Groom Services": Paintbrush,
+  "Photography & Videography": Camera,
+  "Entertainment": Sparkles,
+  "Catering": Utensils,
+  "Decoration": Flower2,
+  "Event Setup": Building2,
+  "Transportation": Car,
+  "Guest Hospitality": Building2,
+  "Invitations": Mail,
+  "Wedding Essentials": Gift,
+  "Shopping": ShoppingBag,
+};
 
 export const EVENT_LEVEL1_DATA: Record<
   string,
@@ -25,111 +52,78 @@ export const EVENT_LEVEL1_DATA: Record<
     title: string;
     subtitle: string;
     heroImage: string;
-    categories: Array<{
-      name: string;
-      servicesCount: string;
-      icon: any;
-      queryParam: string;
-    }>;
   }
 > = {
-  Wedding: {
-    title: "Wedding",
-    subtitle: "Plan your dream wedding with the best artists and services.",
-    heroImage:
-      "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=1200&auto=format&fit=crop",
-    categories: [
-      { name: "Photography", servicesCount: "24 Services", icon: Camera, queryParam: "Photography" },
-      { name: "Entertainment", servicesCount: "18 Services", icon: Sparkles, queryParam: "Performers" },
-      { name: "Decoration", servicesCount: "20 Services", icon: Flower2, queryParam: "Decoration" },
-      { name: "Venue", servicesCount: "15 Services", icon: Building2, queryParam: "Venue" },
-      { name: "Catering", servicesCount: "15 Services", icon: Utensils, queryParam: "Catering" },
-      { name: "Makeup", servicesCount: "10 Services", icon: Paintbrush, queryParam: "Makeup" },
-      { name: "Transport", servicesCount: "8 Services", icon: Car, queryParam: "Transport" },
-      { name: "Invitation", servicesCount: "6 Services", icon: Mail, queryParam: "Invitation" },
-      { name: "Essentials", servicesCount: "14 Services", icon: Gift, queryParam: "Essentials" },
-      { name: "Shopping", servicesCount: "9 Services", icon: ShoppingBag, queryParam: "Shopping" },
-    ],
-  },
   "Varkari Sampraday": {
     title: "Varkari Sampraday",
     subtitle: "Connect with authentic Kirtankars, Pravachankars, Bhajani Mandals & Mridangam artists.",
     heroImage:
       "https://images.pexels.com/photos/34193177/pexels-photo-34193177.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop",
-    categories: [
-      { name: "Spiritual Speakers", servicesCount: "28 Services", icon: Sparkles, queryParam: "Kirtankar" },
-      { name: "Vocal Artists", servicesCount: "22 Services", icon: Sparkles, queryParam: "Bhajani Mandal" },
-      { name: "Instrumental Artists", servicesCount: "19 Services", icon: Sparkles, queryParam: "Mridangamani" },
-      { name: "Organizations", servicesCount: "12 Services", icon: Building2, queryParam: "Warkari Sanstha" },
-      { name: "Event Services", servicesCount: "15 Services", icon: Building2, queryParam: "Sound System" },
-      { name: "Decoration", servicesCount: "14 Services", icon: Flower2, queryParam: "Decoration" },
-      { name: "Catering", servicesCount: "18 Services", icon: Utensils, queryParam: "Catering" },
-      { name: "Transport", servicesCount: "10 Services", icon: Car, queryParam: "Transport" },
-      { name: "Photography", servicesCount: "12 Services", icon: Camera, queryParam: "Photography" },
-    ],
+  },
+  Wedding: {
+    title: "Wedding",
+    subtitle: "Plan your dream wedding with the best artists and services.",
+    heroImage:
+      "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=1200&auto=format&fit=crop",
   },
   Birthday: {
     title: "Birthday",
     subtitle: "Make birthday celebrations unforgettable with magicians, balloon decorators & DJs.",
     heroImage:
       "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&w=1200&q=80",
-    categories: [
-      { name: "Balloon Decor", servicesCount: "30 Services", icon: Flower2, queryParam: "Balloon Decorators" },
-      { name: "Magicians", servicesCount: "15 Services", icon: Sparkles, queryParam: "Magicians" },
-      { name: "DJs & Music", servicesCount: "25 Services", icon: Sparkles, queryParam: "DJs" },
-      { name: "Tattoo & Face Painting", servicesCount: "12 Services", icon: Paintbrush, queryParam: "Tattoo Artist" },
-      { name: "Catering & Cakes", servicesCount: "20 Services", icon: Utensils, queryParam: "Catering" },
-      { name: "Game Hosts", servicesCount: "10 Services", icon: Sparkles, queryParam: "Anchors / Hosts" },
-      { name: "Photography", servicesCount: "18 Services", icon: Camera, queryParam: "Photography" },
-      { name: "Mascots & Clowns", servicesCount: "8 Services", icon: Sparkles, queryParam: "Clowns" },
-      { name: "Venue", servicesCount: "14 Services", icon: Building2, queryParam: "Venue" },
-      { name: "Return Gifts", servicesCount: "11 Services", icon: Gift, queryParam: "Gifts" },
-    ],
   },
   "Corporate Event": {
     title: "Corporate Event",
     subtitle: "Hire professional anchors, keynote speakers, AV lighting & stage performers.",
     heroImage:
       "https://images.pexels.com/photos/1181396/pexels-photo-1181396.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop",
-    categories: [
-      { name: "Anchors / Hosts", servicesCount: "32 Services", icon: Sparkles, queryParam: "Anchors / Hosts" },
-      { name: "AV & LED Screen", servicesCount: "24 Services", icon: Building2, queryParam: "AV Setup" },
-      { name: "Stage & Sound", servicesCount: "28 Services", icon: Building2, queryParam: "Sound System" },
-      { name: "Keynote Speakers", servicesCount: "15 Services", icon: Sparkles, queryParam: "Speakers" },
-      { name: "Live Bands", servicesCount: "20 Services", icon: Sparkles, queryParam: "Bands" },
-      { name: "Photography & Video", servicesCount: "26 Services", icon: Camera, queryParam: "Photography" },
-      { name: "Catering", servicesCount: "18 Services", icon: Utensils, queryParam: "Catering" },
-      { name: "Venue", servicesCount: "16 Services", icon: Building2, queryParam: "Venue" },
-      { name: "Event Management", servicesCount: "12 Services", icon: Gift, queryParam: "Event Management" },
-      { name: "Gifting & Trophies", servicesCount: "14 Services", icon: Gift, queryParam: "Gifts" },
-    ],
   },
   "Cultural Event": {
     title: "Cultural Event",
     subtitle: "Experience vibrant traditional folk arts, Gondhal, Bharud, Lezim & Dhol Tasha Pathak.",
     heroImage:
       "https://images.pexels.com/photos/17264037/pexels-photo-17264037.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop",
-    categories: [
-      { name: "Folk Dance & Lezim", servicesCount: "26 Services", icon: Sparkles, queryParam: "Lezim Pathak" },
-      { name: "Dhol Tasha Pathak", servicesCount: "20 Services", icon: Sparkles, queryParam: "Dhol-Tasha Pathak" },
-      { name: "Gondhal & Bharud", servicesCount: "18 Services", icon: Sparkles, queryParam: "Gondhal" },
-      { name: "Shahiri & Powada", servicesCount: "14 Services", icon: Sparkles, queryParam: "Powada" },
-      { name: "Traditional Music", servicesCount: "22 Services", icon: Sparkles, queryParam: "Traditional Arts" },
-      { name: "Stage & Sound", servicesCount: "16 Services", icon: Building2, queryParam: "Sound System" },
-      { name: "Costume & Makeup", servicesCount: "15 Services", icon: Paintbrush, queryParam: "Makeup" },
-      { name: "Photography", servicesCount: "19 Services", icon: Camera, queryParam: "Photography" },
-      { name: "Decoration", servicesCount: "17 Services", icon: Flower2, queryParam: "Decoration" },
-      { name: "Catering", servicesCount: "13 Services", icon: Utensils, queryParam: "Catering" },
-    ],
+  },
+  "Religious Event": {
+    title: "Religious Event",
+    subtitle: "Pooja Pandits, Ram Katha Recitations & Spiritual Bhajans.",
+    heroImage:
+      "https://images.unsplash.com/photo-1608613304899-ea8098577e38?q=80&w=1200&auto=format&fit=crop",
+  },
+  "College Event": {
+    title: "College Event",
+    subtitle: "Rock Bands, Pro DJs, Fest Anchors & Dance Troupe Acts.",
+    heroImage:
+      "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=1200&auto=format&fit=crop",
+  },
+  "Festival Event": {
+    title: "Festival Event",
+    subtitle: "Dhol Tasha Pathak, Grand Fireworks & Procession Ensembles.",
+    heroImage:
+      "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop",
+  },
+  "Other Events": {
+    title: "Other Events",
+    subtitle: "Customized Event Setup, Media & Specialty Artist Booking.",
+    heroImage:
+      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1200&auto=format&fit=crop",
   },
 };
 
 export default function EventLevel1Page() {
   const { eventName } = useParams<{ eventName: string }>();
   const navigate = useNavigate();
+  const [showRequirementModal, setShowRequirementModal] = useState(false);
 
   const decodedName = eventName ? decodeURIComponent(eventName) : "Wedding";
-  const eventData = EVENT_LEVEL1_DATA[decodedName] || EVENT_LEVEL1_DATA["Wedding"];
+  const cardMeta = MAIN_EVENT_CARDS.find((c) => c.name.toLowerCase() === decodedName.toLowerCase());
+  const eventMeta = EVENT_LEVEL1_DATA[decodedName] || {
+    title: decodedName,
+    subtitle: cardMeta?.description || `Explore top artists and vendors for ${decodedName}.`,
+    heroImage: cardMeta?.image || "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=1200&auto=format&fit=crop",
+  };
+
+  const dynamicCategories = getCategoriesForEvent(decodedName);
 
   return (
     <div className="min-h-screen bg-stone-50/50 flex flex-col font-sans antialiased pt-20">
@@ -143,7 +137,7 @@ export default function EventLevel1Page() {
               Home
             </Link>
             <span className="shrink-0">&gt;</span>
-            <span className="text-stone-900 font-bold shrink-0">{eventData.title}</span>
+            <span className="text-stone-900 font-bold shrink-0">{eventMeta.title}</span>
           </div>
           <button
             onClick={() => navigate("/search")}
@@ -158,46 +152,69 @@ export default function EventLevel1Page() {
         <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-stone-950 via-stone-900 to-stone-800 text-white p-6 sm:p-8 md:p-10 mb-8 min-h-[220px] sm:min-h-[240px] flex items-center shadow-lg">
           <div className="relative z-10 max-w-lg">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight">
-              {eventData.title}
+              {eventMeta.title}
             </h1>
             <p className="mt-3 text-sm sm:text-base text-stone-300 font-medium leading-relaxed">
-              {eventData.subtitle}
+              {eventMeta.subtitle}
             </p>
           </div>
           {/* Right Image with Fading Mask */}
           <div className="absolute right-0 top-0 bottom-0 w-1/2 md:w-5/12 overflow-hidden pointer-events-none">
             <div className="absolute inset-0 bg-gradient-to-r from-stone-950 via-stone-950/60 to-transparent z-10" />
             <img
-              src={eventData.heroImage}
-              alt={eventData.title}
+              src={eventMeta.heroImage}
+              alt={eventMeta.title}
               className="h-full w-full object-cover object-center"
             />
           </div>
         </div>
 
-        {/* Categories Grid (10 tiles in 5 cols x 2 rows) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5 mb-10">
-          {eventData.categories.map((cat) => {
-            const Icon = cat.icon;
-            return (
-              <Link
-                key={cat.name}
-                to={`/events/${encodeURIComponent(eventData.title)}/${encodeURIComponent(cat.name)}`}
-                className="group flex flex-col items-center justify-center p-4 sm:p-5 rounded-2xl bg-white border border-stone-200/80 shadow-xs hover:border-orange-400 hover:shadow-md hover:-translate-y-1 transition-all duration-300 text-center min-h-[135px]"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-orange-600 group-hover:scale-110 transition-transform mb-3">
-                  <Icon className="h-5 w-5 stroke-[1.75]" />
-                </div>
-                <h3 className="text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors leading-tight">
-                  {cat.name}
-                </h3>
-                <p className="mt-1 text-xs font-semibold text-stone-400">
-                  {cat.servicesCount}
-                </p>
-              </Link>
-            );
-          })}
-        </div>
+        {/* Categories Grid or Empty State */}
+        {dynamicCategories.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5 mb-10">
+            {dynamicCategories.map((cat) => {
+              const Icon = CATEGORY_ICON_MAP[cat.name] || Sparkles;
+              const subCount = cat.subcategories.length;
+
+              return (
+                <Link
+                  key={cat.name}
+                  to={`/events/${encodeURIComponent(eventMeta.title)}/${encodeURIComponent(cat.name)}`}
+                  className="group flex flex-col items-center justify-center p-4 sm:p-5 rounded-2xl bg-white border border-stone-200/80 shadow-xs hover:border-orange-500 hover:shadow-md hover:-translate-y-1 transition-all duration-300 text-center min-h-[135px]"
+                >
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-orange-600 group-hover:scale-110 transition-transform mb-3">
+                    <Icon className="h-5 w-5 stroke-[1.75]" />
+                  </div>
+                  <h3 className="text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors leading-tight">
+                    {cat.name}
+                  </h3>
+                  <p className="mt-1 text-xs font-semibold text-stone-400">
+                    {subCount} {subCount === 1 ? "Subcategory" : "Subcategories"}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-3xl border border-stone-200/80 bg-white p-8 sm:p-12 text-center shadow-xs mb-10 flex flex-col items-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-orange-50 text-orange-600 mb-4">
+              <Clock className="h-8 w-8 stroke-[1.75]" />
+            </div>
+            <h2 className="text-2xl font-extrabold text-stone-900 tracking-tight">
+              Categories coming soon
+            </h2>
+            <p className="mt-2 text-stone-500 max-w-md text-sm font-medium leading-relaxed">
+              Curated categories for <span className="font-bold text-stone-800">{eventMeta.title}</span> are currently being onboarded for Phase 1. Need an artist or service immediately?
+            </p>
+            <button
+              onClick={() => setShowRequirementModal(true)}
+              className="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all active:scale-95"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>Post Requirement</span>
+            </button>
+          </div>
+        )}
 
         {/* Trust Badges Bar */}
         <div className="rounded-2xl border border-stone-200/80 bg-white p-5 md:p-6 shadow-xs grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
@@ -219,6 +236,11 @@ export default function EventLevel1Page() {
           </div>
         </div>
       </main>
+
+      {/* Requirement Modal */}
+      {showRequirementModal && (
+        <NewRequirementModal open={showRequirementModal} onClose={() => setShowRequirementModal(false)} />
+      )}
 
       <Footer />
     </div>

@@ -380,7 +380,7 @@ function CategoryGrid() {
 
 function FeaturedArtistsSection({ artists, loading }: { artists: ShowcaseArtist[]; loading: boolean }) {
   const { t } = useI18n();
-  const cards = useMemo(() => buildArtistCards(artists, 12), [artists]);
+  const cards = useMemo(() => buildArtistCards(artists, 12, { deduplicateByArtist: true }), [artists]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const handleScrollLeft = () => {

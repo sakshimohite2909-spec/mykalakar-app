@@ -100,6 +100,11 @@ service cloud.firestore {
       }
     }
 
+    // ── 3.5 PRIVATE ARTIST INFORMATION ──────────────────────────────────────
+    match /artistPrivate/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
     // ── 4. IDENTITY CORE (USERS & PRIVILEGED ADMINS) ─────────────────────────
     match /users/{uid} {
       // ── CHANGE: Split 'read' into 'get' and 'list' ──────────────────────────

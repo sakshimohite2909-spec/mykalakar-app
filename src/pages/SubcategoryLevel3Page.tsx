@@ -150,10 +150,10 @@ export default function SubcategoryLevel3Page() {
           .filter(Boolean)
           .map((v) => String(v).trim().toLowerCase());
 
-        if (allCategoryValues.length === 0) return true; // If no categories specified, show by default
+        if (allCategoryValues.length === 0) return false; // Strict matching: Do not fallback to showing uncategorized artists in every category
 
         return allCategoryValues.some(
-          (v) => v === categoryFilter || v.includes(categoryFilter) || categoryFilter.includes(v)
+          (v) => v === categoryFilter
         );
       });
     }
@@ -349,14 +349,20 @@ export default function SubcategoryLevel3Page() {
 
         {/* ─── Empty State if No Database Artists ─── */}
         {displayArtists.length === 0 && !loading && (
-          <div className="flex flex-col items-center justify-center py-16 text-center bg-white rounded-2xl border border-stone-200 p-8 my-6">
-            <div className="h-14 w-14 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 mb-3">
-              <Search className="h-7 w-7" />
+          <div className="flex flex-col items-center justify-center py-16 text-center bg-white rounded-3xl border border-stone-200 p-8 sm:p-12 my-6 shadow-xs">
+            <div className="h-16 w-16 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 mb-4">
+              <Search className="h-8 w-8 stroke-[1.75]" />
             </div>
-            <h3 className="text-lg font-extrabold text-stone-900 mb-1">कोणतेही कलाकार उपलब्ध नाहीत (No Artists Available)</h3>
-            <p className="text-xs font-semibold text-stone-500 max-w-md">
-              या श्रेणीमध्ये किंवा शोधलेल्या फिल्टरनुसार अद्याप कोणतेही नोंदणीकृत कलाकार डेटाबेसमध्ये नाहीत.
+            <h3 className="text-xl font-extrabold text-stone-900 mb-2">No artists registered yet</h3>
+            <p className="text-sm font-medium text-stone-500 max-w-md mb-6 leading-relaxed">
+              There are currently no active artists or vendors registered under <span className="font-bold text-stone-800">{displayTitle}</span>. Are you an artist in this category?
             </p>
+            <Link
+              to="/register"
+              className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all active:scale-95"
+            >
+              Be the first artist to register
+            </Link>
           </div>
         )}
 

@@ -327,7 +327,7 @@ export function sanitizeBio(value: unknown): string {
  * Resolves the primary uploaded profile photo for an artist document from Firestore.
  * Fallbacks through all possible field names where artists or registration forms store photos.
  */
-export function resolveArtistProfilePhoto(artist: any): string {
+export function resolveArtistProfilePhoto(artist: any, targetCategory?: string): string {
   if (!artist) return "";
 
   const isValidUrl = (val: unknown): string => {
@@ -361,7 +361,87 @@ export function resolveArtistProfilePhoto(artist: any): string {
     return Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
   };
 
-  const categoryMediaFirst = getFirstInArray(artist.media?.categoryMedia);
+  const normalizeKey = (val: unknown) => String(val || "").trim().toLowerCase();
+
+  if (targetCategory) {
+    const targetKey = normalizeKey(targetCategory);
+
+    // 1. Search categoryMedia
+    const categoryMedia = Array.isArray(artist.media?.categoryMedia)
+      ? artist.media.categoryMedia
+      : Array.isArray(artist.categoryMedia)
+      ? artist.categoryMedia
+      : [];
+
+    const matchedMedia = categoryMedia.find((cm: any) => {
+      const formKey = normalizeKey(cm.artForm || cm.category || cm.mainCategory || cm.subCategory);
+      return formKey && (targetKey.includes(formKey) || formKey.includes(targetKey));
+    });
+
+    if (matchedMedia) {
+      const mediaCandidates = [
+        getFirstInArray(matchedMedia.profilePhotos),
+        getFirstInArray(matchedMedia.performancePhotos),
+        matchedMedia.profilePhoto,
+        matchedMedia.performancePhoto,
+        matchedMedia.photo,
+        matchedMedia.image,
+      ];
+      for (const candidate of mediaCandidates) {
+        const resolved = isValidUrl(candidate);
+        if (resolved) return resolved;
+      }
+    }
+
+    // 2. Search artsList / categoriesArray / services
+    const listCandidates = [
+      ...(Array.isArray(artist.artsList) ? artist.artsList : []),
+      ...(Array.isArray(artist.categoriesArray) ? artist.categoriesArray : []),
+      ...(Array.isArray(artist.services) ? artist.services : []),
+    ];
+
+    const matchedItem = listCandidates.find((item: any) => {
+      const itemKey = normalizeKey(item.subCategory || item.category || item.artForm || item.name);
+      return itemKey && (targetKey.includes(itemKey) || itemKey.includes(targetKey));
+    });
+
+    if (matchedItem) {
+      const itemCandidates = [
+        getFirstInArray(matchedItem.profilePhotos),
+        getFirstInArray(matchedItem.performancePhotos),
+        matchedItem.profilePhoto,
+        matchedItem.performancePhoto,
+        matchedItem.photo,
+        matchedItem.image,
+      ];
+      for (const candidate of itemCandidates) {
+        const resolved = isValidUrl(candidate);
+        if (resolved) return resolved;
+      }
+    }
+
+    // 3. Determine if targetCategory is the artist's primary category
+    const primaryCat = normalizeKey(
+      artist.primaryCategory ||
+      artist.subCategory ||
+      artist.category ||
+      artist.artCategory ||
+      artist.mainCategory ||
+      categoryMedia[0]?.artForm ||
+      artist.artsList?.[0]?.subCategory ||
+      ""
+    );
+
+    const isPrimaryCategory = !primaryCat || targetKey.includes(primaryCat) || primaryCat.includes(targetKey);
+
+    // If targetCategory is NOT primary and no category-specific upload was found, return "" to allow fallback
+    if (!isPrimaryCategory) {
+      return "";
+    }
+  }
+
+  // General fallback through primary profile photo candidates
+  const categoryMediaFirst = getFirstInArray(artist.media?.categoryMedia || artist.categoryMedia);
   const categoriesArrayFirst = getFirstInArray(artist.categoriesArray);
   const artsListFirst = getFirstInArray(artist.artsList);
 

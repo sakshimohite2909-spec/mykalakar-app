@@ -143,7 +143,7 @@ export default function FeaturedArtists() {
     let mounted = true;
     getActiveArtists(10)
       .then((data) => {
-        if (mounted) setArtists(buildArtistCards(data, 12));
+        if (mounted) setArtists(buildArtistCards(data, 12, { deduplicateByArtist: true }));
       })
       .catch((error) => {
         console.warn("Featured artists unavailable.", error);

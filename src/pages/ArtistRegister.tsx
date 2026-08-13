@@ -49,7 +49,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getExternalUrl, getYoutubeThumbnailUrl } from "@/lib/youtube";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
-import { ARTIST_TYPES, CATEGORY_STRUCTURE, MAIN_CATEGORIES, getSubcategoriesForMainCategory, normalizeArtistType } from "@/constants/artistSystem";
+import { ARTIST_TYPES, CATEGORY_STRUCTURE, MAIN_CATEGORIES, getSubcategoriesForMainCategory, normalizeArtistType, getEventTypes, getCategoriesForEvent, getSubcategoriesForCategory } from "@/constants/artistSystem";
 import {
   PHONE_MAX_LENGTH,
   PHONE_PLACEHOLDER,
@@ -155,6 +155,7 @@ const artistRegistrationSchema = z
     dob: z.string().min(1, "Date of birth is required."),
     gender: z.string().min(1, "Gender is required."),
     travelWillingness: z.string().min(1, "Travel willingness is required."),
+    eventType: z.string().min(1, "Event Type is required."),
     mainCategory: z.string().min(1, "Main category is required."),
     artCategory: z.string().min(1, "Subcategory / art form is required."),
     soloPrice: z.string().optional(),
@@ -221,6 +222,7 @@ const artistDefaults: ArtistRegistrationValues = {
   dob: "",
   gender: "",
   travelWillingness: "local",
+  eventType: "Varkari Sampraday",
   mainCategory: "",
   artCategory: "",
   soloPrice: "",
@@ -325,7 +327,9 @@ async function uploadArtistRegistrationImage(uid: string, file: File, folder: st
   const compressedFile = await compressImageUpload(file);
 
   const safeFileName = sanitizeStorageFileName(compressedFile.name);
-  const storagePath = `artists/${uid}/${folder}/${Date.now()}-${safeFileName}`;
+  const storagePath = folder.startsWith("private-documents/")
+    ? `${folder}/${Date.now()}-${safeFileName}`
+    : `artists/${uid}/${folder}/${Date.now()}-${safeFileName}`;
   const storageRef = ref(storage, storagePath);
   const snapshot = await withTimeout<UploadResult>(
     uploadBytes(storageRef, compressedFile, {
@@ -1069,6 +1073,7 @@ export default function ArtistRegister() {
         dob: z.string().min(1, t("register.validation.dobRequired")),
         gender: z.string().min(1, t("register.validation.genderRequired")),
         travelWillingness: z.string().min(1, t("register.validation.travelRequired")),
+        eventType: z.string().min(1, "Event Type is required."),
         mainCategory: z.string().min(1, t("register.validation.mainCategoryRequired")),
         artCategory: z.string().min(1, t("register.validation.artCategoryRequired")),
         soloPrice: z.string().optional(),
@@ -1302,7 +1307,7 @@ export default function ArtistRegister() {
     const profileUpload = await uploadArtistRegistrationImage(uid, profileFile, "profile");
     const [coverUpload, aadharUpload, galleryUploads, extraArtUploads] = await Promise.all([
       uploadOptionalArtistImage(uid, coverFile, "cover"),
-      uploadOptionalArtistImage(uid, aadharFile, "identity"),
+      uploadOptionalArtistImage(uid, aadharFile, `private-documents/${uid}/identity`),
       Promise.all(
         galleryFiles.map((item, index) =>
           uploadArtistRegistrationImage(uid, item.file, `gallery/${index + 1}`)
@@ -1526,8 +1531,26 @@ export default function ArtistRegister() {
         youtubeLinks,
       };
 
+      const privatePayload = sanitizePayload({
+        uid,
+        aadharNumber: values.aadharNumber || "",
+        aadharPhoto: aadharPhoto || "",
+        aadharStoragePath: aadharStoragePath || "",
+        bankName: effectiveBankName || "",
+        ifscCode: values.ifscCode || "",
+        accountNumber: values.accountNumber || "",
+        bankDetails: {
+          bankName: effectiveBankName || "",
+          ifscCode: values.ifscCode || "",
+          accountNumber: values.accountNumber || "",
+        },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
       const payload = sanitizePayload({
         uid,
+        role: "artist",
         username: normalizedUsername,
         email,
         privateEmail: email,
@@ -1551,10 +1574,17 @@ export default function ArtistRegister() {
         languageSpoken: selectedLanguages,
         languages: selectedLanguages,
         languagesSpoken: selectedLanguages,
-        category: artEntries[0]?.mainCategory || values.mainCategory,
-        mainCategory: artEntries[0]?.mainCategory || values.mainCategory,
-        subcategory: artEntries[0]?.artForm || values.artCategory,
-        artForm: artEntries[0]?.artForm || values.artCategory,
+        eventType: values.eventType || "Varkari Sampraday",
+        category: values.mainCategory || "",
+        subcategory: values.artCategory || "",
+        eventTypeId: (values.eventType || "Varkari Sampraday").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        categoryId: (values.mainCategory || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        subcategoryId: (values.artCategory || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        eventTypeName: values.eventType || "Varkari Sampraday",
+        categoryName: values.mainCategory || "",
+        subcategoryName: values.artCategory || "",
+        mainCategory: values.mainCategory || "",
+        artForm: values.artCategory || "",
         types: [],
         categories: categoryNames,
         categoriesArray: artEntries,
@@ -1571,18 +1601,9 @@ export default function ArtistRegister() {
         bio: values.bio || "",
         description: values.bio || "",
         availability: "available",
-        aadharNumber: values.aadharNumber,
-        identity: {
-          aadharNumber: values.aadharNumber,
-        },
         bankName: effectiveBankName,
-        ifscCode: values.ifscCode,
-        accountNumber: values.accountNumber,
-        bankDetails: {
-          bankName: effectiveBankName,
-          ifscCode: values.ifscCode,
-          accountNumber: values.accountNumber,
-        },
+        ifscCode: values.ifscCode ? "XXXX" : "",
+        bankAccountMasked: values.accountNumber ? `XXXX XXXX ${values.accountNumber.slice(-4)}` : "",
         media: {
           profilePhoto,
           profileImageUrl: profilePhoto,
@@ -1592,8 +1613,6 @@ export default function ArtistRegister() {
           coverStoragePath,
           galleryPhotos,
           galleryStoragePaths,
-          aadharPhoto,
-          aadharStoragePath,
           categoryMedia,
         },
         profilePhoto,
@@ -1601,7 +1620,6 @@ export default function ArtistRegister() {
         coverPhoto,
         coverImageUrl: coverPhoto,
         galleryPhotos,
-        aadharPhoto,
         socialLinks,
         youtubeLinks,
         portfolioUrl: socialLinks[0]?.url || values.portfolioUrl || "",
@@ -1625,10 +1643,12 @@ export default function ArtistRegister() {
       const batch = writeBatch(db);
       batch.set(doc(collection(db, "artist_applications")), payload);
       batch.set(doc(db, "artists", uid), payload, { merge: true });
+      batch.set(doc(db, "artistPrivate", uid), privatePayload, { merge: true });
       batch.set(
         doc(db, "users", uid),
         sanitizePayload({
           uid,
+          role: "artist",
           username: normalizedUsername,
           email,
           name: values.fullName,
@@ -1990,37 +2010,69 @@ export default function ArtistRegister() {
                 <div className="form-subcard rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
                   <p className="mb-4 text-sm font-black text-slate-500">{t("register.label.artNumber", { number: 1 })}</p>
                   
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {/* LEVEL 1: Event Type */}
                     <Controller
-                      name="mainCategory"
+                      name="eventType"
                       control={artistForm.control}
                       render={({ field }) => (
                         <SearchableDropdown
-                          label={t("register.label.mainCategory")}
+                          label="Level 1 — Event Type"
                           value={field.value}
-                          options={[...MAIN_CATEGORIES]}
-                          placeholder={t("register.placeholder.mainCategory")}
-                          error={artistForm.formState.errors.mainCategory?.message}
+                          options={getEventTypes()}
+                          placeholder="Select Event Type"
+                          error={artistForm.formState.errors.eventType?.message}
                           onChange={(value) => {
                             field.onChange(value);
+                            artistForm.setValue("mainCategory", "");
                             artistForm.setValue("artCategory", "");
                           }}
                         />
                       )}
                     />
 
+                    {/* LEVEL 2: Category */}
+                    <Controller
+                      name="mainCategory"
+                      control={artistForm.control}
+                      render={({ field }) => {
+                        const evtType = artistForm.watch("eventType");
+                        const categoryOptions = evtType
+                          ? getCategoriesForEvent(evtType).map((c) => c.name)
+                          : [];
+                        return (
+                          <SearchableDropdown
+                            label="Level 2 — Category"
+                            value={field.value}
+                            options={categoryOptions}
+                            placeholder={evtType ? "Select Category" : "Select Event Type first"}
+                            error={artistForm.formState.errors.mainCategory?.message}
+                            disabled={!evtType}
+                            onChange={(value) => {
+                              field.onChange(value);
+                              artistForm.setValue("artCategory", "");
+                            }}
+                          />
+                        );
+                      }}
+                    />
+
+                    {/* LEVEL 3: Subcategory / Art Form */}
                     <Controller
                       name="artCategory"
                       control={artistForm.control}
                       render={({ field }) => {
+                        const evtType = artistForm.watch("eventType");
                         const mainCat = artistForm.watch("mainCategory");
-                        const options = mainCat ? [...CATEGORY_STRUCTURE[mainCat as keyof typeof CATEGORY_STRUCTURE].subcategories] : [];
+                        const subcategoryOptions = evtType && mainCat
+                          ? getSubcategoriesForCategory(evtType, mainCat)
+                          : [];
                         return (
                           <SearchableDropdown
-                            label={t("register.label.artForm")}
+                            label="Level 3 — Subcategory / Art Form"
                             value={field.value}
-                            options={options}
-                            placeholder={t("register.placeholder.artForm")}
+                            options={subcategoryOptions}
+                            placeholder={mainCat ? "Select Subcategory" : "Select Category first"}
                             error={artistForm.formState.errors.artCategory?.message}
                             disabled={!mainCat}
                             allowCustom
