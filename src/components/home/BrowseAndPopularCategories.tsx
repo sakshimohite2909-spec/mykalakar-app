@@ -305,10 +305,10 @@ export default function BrowseAndPopularCategories() {
   return (
     <section className="mx-auto w-full max-w-[1240px] px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6 overflow-hidden">
       {/* ─── 1. Browse by Event ─── */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
+      <div className="mb-10">
+        <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-stone-900 tracking-tight">
+            <h2 className="text-xl md:text-2xl font-extrabold text-stone-900 tracking-tight">
               Browse by Event
             </h2>
             <span className="h-2 w-2 rounded-full bg-orange-500 animate-ping hidden sm:inline-block" />
@@ -344,7 +344,7 @@ export default function BrowseAndPopularCategories() {
           onMouseLeave={() => setIsPaused(false)}
           onTouchStart={() => setIsPaused(true)}
           onTouchEnd={() => setIsPaused(false)}
-          className="flex items-center gap-3 sm:gap-4 md:gap-5 overflow-x-auto no-scrollbar scroll-smooth py-2 px-1 snap-x snap-mandatory"
+          className="flex items-center gap-4 md:gap-5 overflow-x-auto no-scrollbar scroll-smooth py-2 px-1 snap-x snap-mandatory"
         >
           {displayEvents.map((evt, idx) => {
             const count = artistCounts[evt.title] || 0;
@@ -358,10 +358,10 @@ export default function BrowseAndPopularCategories() {
               >
                 <Link
                   to={evt.link}
-                  className="group flex flex-col items-center justify-center w-28 sm:w-36 md:w-44 text-center cursor-pointer"
+                  className="group flex flex-col items-center justify-between w-32 sm:w-38 md:w-44 text-center cursor-pointer h-full"
                 >
                   {/* Circular Image Container (Perfectly Proportioned) */}
-                  <div className="relative aspect-square w-24 h-24 sm:w-34 sm:h-34 md:w-40 md:h-40 rounded-full border-2 border-white bg-stone-900 shadow-md ring-2 ring-orange-500/15 transition-all duration-300 group-hover:scale-105 group-hover:ring-orange-500/50 group-hover:shadow-xl overflow-hidden">
+                  <div className="relative aspect-square w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 shrink-0 rounded-full border-2 border-white bg-stone-900 shadow-md ring-2 ring-orange-500/15 transition-all duration-300 group-hover:scale-105 group-hover:ring-orange-500/50 group-hover:shadow-xl overflow-hidden">
                     <img
                       src={evt.image}
                       alt={evt.title}
@@ -372,14 +372,14 @@ export default function BrowseAndPopularCategories() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                     
                     {/* Floating Bottom Badge */}
-                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-orange-500 px-2 py-0.5 text-[8px] sm:text-[9px] font-extrabold uppercase tracking-wider text-white shadow-sm border border-white">
+                    <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-orange-500 px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-white shadow-sm border border-white">
                       {countText}
                     </span>
                   </div>
 
-                  {/* Text Below the Circle (Sleek & Proportioned) */}
-                  <div className="mt-1.5 flex flex-col items-center px-1">
-                    <h3 className="text-[11px] sm:text-xs font-bold text-stone-800 leading-tight group-hover:text-orange-600 transition-colors">
+                  {/* Text Below the Circle (Fixed Height for Symmetrical Alignment) */}
+                  <div className="mt-2.5 flex flex-col items-center justify-start h-12 w-full px-1">
+                    <h3 className="text-[11px] sm:text-xs font-bold text-stone-800 leading-snug group-hover:text-orange-600 transition-colors text-center line-clamp-2 w-full min-h-[28px]">
                       {evt.title}
                     </h3>
                     <span className="mt-0.5 inline-flex items-center gap-0.5 text-[9px] sm:text-[10px] font-semibold text-orange-600 group-hover:text-orange-700">
@@ -396,9 +396,9 @@ export default function BrowseAndPopularCategories() {
 
       {/* ─── 2. Categories Section (Matches User Reference Design) ─── */}
       <div className="mb-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-stone-900 tracking-tight">
+            <h2 className="text-xl md:text-2xl font-extrabold text-stone-900 tracking-tight">
               Popular Categories
             </h2>
           </div>
@@ -408,7 +408,7 @@ export default function BrowseAndPopularCategories() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-4"
+          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 items-stretch"
         >
           <AnimatePresence>
             {visibleCategories.map((cat: any) => {
@@ -431,22 +431,25 @@ export default function BrowseAndPopularCategories() {
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
+                  className="h-full flex flex-col"
                 >
                   <Link
                     to={categoryLink}
-                    className="group flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/10 hover:-translate-y-1 transition-all duration-300 cursor-pointer min-h-[125px] sm:min-h-[140px] text-center"
+                    className="group flex flex-col items-center justify-between p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/10 hover:-translate-y-1 transition-all duration-300 cursor-pointer h-full min-h-[170px] text-center"
                   >
-                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-stone-100/90 text-xl sm:text-2xl transition-all duration-300 group-hover:bg-orange-500 group-hover:scale-110 shadow-xs">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100/90 text-2xl transition-all duration-300 group-hover:bg-orange-500 group-hover:scale-110 shadow-xs shrink-0">
                       <span>{catIcon}</span>
                     </div>
 
-                    <h3 className="mt-2.5 text-xs sm:text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors leading-tight">
-                      {catName}
-                    </h3>
+                    <div className="mt-3 flex flex-col items-center justify-center flex-1 w-full">
+                      <h3 className="text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors leading-tight line-clamp-2 text-center">
+                        {catName}
+                      </h3>
 
-                    <p className="mt-1 text-[10px] sm:text-[11px] font-medium text-stone-500 leading-snug line-clamp-2">
-                      {catSub}
-                    </p>
+                      <p className="mt-1 text-[11px] font-medium text-stone-500 line-clamp-2 leading-snug text-center">
+                        {catSub}
+                      </p>
+                    </div>
                   </Link>
                 </motion.div>
               );
