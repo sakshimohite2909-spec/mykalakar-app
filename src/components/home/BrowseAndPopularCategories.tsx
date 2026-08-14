@@ -299,7 +299,10 @@ export default function BrowseAndPopularCategories() {
   };
 
   const INITIAL_VISIBLE_COUNT = 7;
-  const visibleCategories = isExpanded ? categories : categories.slice(0, INITIAL_  return (
+  const visibleCategories = isExpanded ? categories : categories.slice(0, INITIAL_VISIBLE_COUNT);
+  const displayEvents = [...BROWSE_EVENTS, ...BROWSE_EVENTS, ...BROWSE_EVENTS];
+
+  return (
     <section className="mx-auto w-full max-w-[1240px] px-3 sm:px-4 md:px-6 pt-3 sm:pt-4 md:pt-6 pb-3 sm:pb-4 md:pb-6 overflow-hidden">
       {/* ─── 1. Browse by Event ─── */}
       <div className="mb-5 sm:mb-8 md:mb-10">
