@@ -18,35 +18,35 @@ html, body {
 
   /* Optimize container padding */
   .container {
-    padding-inline: var(--space-4);
+    padding-inline: 0.75rem;
   }
 
-  /* Typography Scaling */
-  h1 { font-size: 2.25rem !important; }
-  h2 { font-size: 1.875rem !important; }
-  h3 { font-size: 1.5rem !important; }
+  /* Responsive Typography Scaling for Compact Mobile UX */
+  h1 { font-size: clamp(24px, 7vw, 32px); line-height: 1.15; }
+  h2 { font-size: clamp(20px, 5.5vw, 26px); line-height: 1.2; }
+  h3 { font-size: clamp(15px, 4vw, 18px); line-height: 1.25; }
 
-  /* Increase touch target sizes for better UX */
+  /* Compact button styling for mobile touch targets */
   button, 
   [role="button"],
   a.btn-premium {
-    min-height: 48px;
-    padding-block: 0.75rem;
+    min-height: 38px;
+    padding-block: 0.45rem;
   }
 
-  /* Better spacing for stacked elements */
+  /* Compact spacing for stacked elements */
   .section {
-    margin-top: var(--space-5);
+    margin-top: 1.25rem;
   }
 
   .stack > * + * {
-    margin-top: var(--space-3);
+    margin-top: 0.75rem;
   }
 
   /* Refine card padding on small screens */
   .card-premium,
   .form-subcard {
-    padding: var(--space-4) !important;
+    padding: 0.85rem !important;
   }
 
   /* Ensure modals take appropriate screen space but don't overflow */

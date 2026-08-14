@@ -299,16 +299,13 @@ export default function BrowseAndPopularCategories() {
   };
 
   const INITIAL_VISIBLE_COUNT = 7;
-  const visibleCategories = isExpanded ? categories : categories.slice(0, INITIAL_VISIBLE_COUNT);
-  const displayEvents = [...BROWSE_EVENTS, ...BROWSE_EVENTS, ...BROWSE_EVENTS];
-
-  return (
-    <section className="mx-auto w-full max-w-[1240px] px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6 overflow-hidden">
+  const visibleCategories = isExpanded ? categories : categories.slice(0, INITIAL_  return (
+    <section className="mx-auto w-full max-w-[1240px] px-3 sm:px-4 md:px-6 pt-3 sm:pt-4 md:pt-6 pb-3 sm:pb-4 md:pb-6 overflow-hidden">
       {/* ─── 1. Browse by Event ─── */}
-      <div className="mb-8 sm:mb-10">
-        <div className="flex items-center justify-between mb-3 sm:mb-5">
+      <div className="mb-5 sm:mb-8 md:mb-10">
+        <div className="flex items-center justify-between mb-2.5 sm:mb-5">
           <div className="flex items-center gap-2">
-            <h2 className="text-[22px] sm:text-2xl md:text-3xl font-extrabold text-stone-900 tracking-tight">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-stone-900 tracking-tight">
               Browse by Event
             </h2>
             <span className="h-2 w-2 rounded-full bg-orange-500 animate-ping hidden sm:inline-block" />
@@ -316,7 +313,7 @@ export default function BrowseAndPopularCategories() {
 
           <div className="flex items-center gap-3">
             {/* Scroll controls */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={handleScrollLeft}
@@ -343,7 +340,7 @@ export default function BrowseAndPopularCategories() {
           onMouseLeave={() => setIsPaused(false)}
           onTouchStart={() => setIsPaused(true)}
           onTouchEnd={() => setIsPaused(false)}
-          className="flex items-center gap-3 sm:gap-4 md:gap-5 overflow-x-auto no-scrollbar scroll-smooth py-1.5 px-0.5 snap-x snap-mandatory"
+          className="flex items-center gap-2 sm:gap-4 md:gap-5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-0.5 snap-x snap-mandatory"
         >
           {displayEvents.map((evt, idx) => {
             const count = artistCounts[evt.title] || 0;
@@ -357,10 +354,10 @@ export default function BrowseAndPopularCategories() {
               >
                 <Link
                   to={evt.link}
-                  className="group flex flex-col items-center justify-between w-[130px] sm:w-36 md:w-44 text-center cursor-pointer h-full"
+                  className="group flex flex-col items-center justify-between w-[115px] sm:w-36 md:w-44 text-center cursor-pointer h-full"
                 >
                   {/* Circular Image Container (Compact on mobile: 2 to 2.5 visible at once) */}
-                  <div className="relative aspect-square w-24 h-24 sm:w-36 sm:h-36 md:w-40 md:h-40 shrink-0 rounded-full border-2 border-white bg-stone-900 shadow-md ring-2 ring-orange-500/15 transition-all duration-300 group-hover:scale-105 group-hover:ring-orange-500/50 group-hover:shadow-xl overflow-hidden">
+                  <div className="relative aspect-square w-20 h-20 sm:w-32 sm:h-32 md:w-40 md:h-40 shrink-0 rounded-full border-2 border-white bg-stone-900 shadow-md ring-2 ring-orange-500/15 transition-all duration-300 group-hover:scale-105 group-hover:ring-orange-500/50 group-hover:shadow-xl overflow-hidden">
                     <img
                       src={evt.image}
                       alt={evt.title}
@@ -371,17 +368,17 @@ export default function BrowseAndPopularCategories() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
 
                     {/* Floating Bottom Badge */}
-                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-orange-500 px-2 py-0.5 text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider text-white shadow-xs border border-white">
+                    <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-orange-500 px-1.5 py-0.5 text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-white shadow-xs border border-white">
                       {countText}
                     </span>
                   </div>
 
-                  {/* Text Below the Circle (Fixed Height for Symmetrical Alignment) */}
-                  <div className="mt-2 flex flex-col items-center justify-start h-11 sm:h-12 w-full px-0.5">
-                    <h3 className="text-[14px] sm:text-xs font-bold text-stone-800 leading-snug group-hover:text-orange-600 transition-colors text-center line-clamp-2 w-full">
+                  {/* Text Below the Circle */}
+                  <div className="mt-1.5 flex flex-col items-center justify-start h-9 sm:h-12 w-full px-0.5">
+                    <h3 className="text-[12px] sm:text-xs font-bold text-stone-800 leading-tight group-hover:text-orange-600 transition-colors text-center line-clamp-1 w-full">
                       {evt.title}
                     </h3>
-                    <span className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] sm:text-[12px] font-semibold text-orange-600 group-hover:text-orange-700">
+                    <span className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] sm:text-[12px] font-semibold text-orange-600 group-hover:text-orange-700">
                       <span>Explore</span>
                       <span className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
                     </span>
@@ -393,11 +390,11 @@ export default function BrowseAndPopularCategories() {
         </div>
       </div>
 
-      {/* ─── 2. Categories Section (Matches User Reference Design) ─── */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-3 sm:mb-5">
+      {/* ─── 2. Categories Section ─── */}
+      <div className="mb-3 sm:mb-4">
+        <div className="flex items-center justify-between mb-2.5 sm:mb-5">
           <div className="flex items-center gap-2">
-            <h2 className="text-[22px] sm:text-2xl md:text-3xl font-extrabold text-stone-900 tracking-tight">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-stone-900 tracking-tight">
               Popular Categories
             </h2>
           </div>
@@ -407,7 +404,7 @@ export default function BrowseAndPopularCategories() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 items-stretch"
+          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-4 items-stretch"
         >
           <AnimatePresence>
             {visibleCategories.map((cat: any) => {
@@ -434,18 +431,18 @@ export default function BrowseAndPopularCategories() {
                 >
                   <Link
                     to={categoryLink}
-                    className="group flex flex-col items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-stone-200/90 shadow-xs hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/10 hover:-translate-y-1 transition-all duration-300 cursor-pointer h-full min-h-[115px] sm:min-h-[170px] text-center"
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-stone-200/90 shadow-xs hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/10 hover:-translate-y-1 transition-all duration-300 cursor-pointer h-full min-h-[96px] sm:min-h-[170px] text-center"
                   >
-                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl sm:rounded-2xl bg-stone-100/90 text-xl sm:text-2xl transition-all duration-300 group-hover:bg-orange-500 group-hover:scale-110 shadow-xs shrink-0">
+                    <div className="flex h-8 w-8 sm:h-12 sm:w-12 items-center justify-center rounded-lg sm:rounded-2xl bg-stone-100/90 text-lg sm:text-2xl transition-all duration-300 group-hover:bg-orange-500 group-hover:scale-110 shadow-xs shrink-0">
                       <span>{catIcon}</span>
                     </div>
 
-                    <div className="mt-2 sm:mt-3 flex flex-col items-center justify-center flex-1 w-full">
-                      <h3 className="text-[15px] sm:text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors leading-tight line-clamp-1 sm:line-clamp-2 text-center">
+                    <div className="mt-1.5 sm:mt-3 flex flex-col items-center justify-center flex-1 w-full">
+                      <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors leading-tight line-clamp-1 text-center">
                         {catName}
                       </h3>
 
-                      <p className="mt-1 text-[12px] sm:text-[11px] font-medium text-stone-500 line-clamp-1 sm:line-clamp-2 leading-snug text-center">
+                      <p className="mt-0.5 text-[10px] sm:text-[11px] font-medium text-stone-500 line-clamp-1 leading-snug text-center">
                         {catSub}
                       </p>
                     </div>
@@ -458,10 +455,10 @@ export default function BrowseAndPopularCategories() {
 
         {/* ─── Show All Categories Pill Button ─── */}
         {categories.length > INITIAL_VISIBLE_COUNT && (
-          <div className="mt-6 sm:mt-8 flex justify-center">
+          <div className="mt-4 sm:mt-8 flex justify-center">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="inline-flex items-center gap-2 px-6 sm:px-8 py-2.5 sm:py-3 rounded-full bg-stone-100/90 hover:bg-stone-200/80 text-stone-800 font-extrabold text-xs sm:text-base border border-stone-200/90 shadow-xs hover:shadow-md transition-all duration-300 cursor-pointer active:scale-95"
+              className="inline-flex items-center gap-1.5 px-5 sm:px-8 py-2 sm:py-3 rounded-full bg-stone-100/90 hover:bg-stone-200/80 text-stone-800 font-extrabold text-xs sm:text-base border border-stone-200/90 shadow-xs hover:shadow-md transition-all duration-300 cursor-pointer active:scale-95"
             >
               <span>
                 {isExpanded
@@ -469,9 +466,9 @@ export default function BrowseAndPopularCategories() {
                   : `Show all ${categories.length} categories`}
               </span>
               {isExpanded ? (
-                <ChevronUp className="h-4 w-4 stroke-[2.5] text-orange-600" />
+                <ChevronUp className="h-3.5 w-3.5 stroke-[2.5] text-orange-600" />
               ) : (
-                <ChevronDown className="h-4 w-4 stroke-[2.5] text-orange-600" />
+                <ChevronDown className="h-3.5 w-3.5 stroke-[2.5] text-orange-600" />
               )}
             </button>
           </div>
