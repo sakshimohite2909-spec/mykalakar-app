@@ -402,21 +402,58 @@ export default function ArtistProfile() {
     async function loadArtistProfile() {
       setLoading(true);
       try {
-        const artistSnap = await withTimeout(
-          getDoc(doc(db, "artists", id)),
-          FIREBASE_READ_TIMEOUT_MS,
-          "Artist profile is taking too long to load.",
-        );
+        const [artistSnapResult, userSnapResult] = await Promise.allSettled([
+          withTimeout(
+            getDoc(doc(db, "artists", id)),
+            FIREBASE_READ_TIMEOUT_MS,
+            "Artist profile is taking too long to load."
+          ),
+          withTimeout(
+            getDoc(doc(db, "users", id)),
+            FIREBASE_READ_TIMEOUT_MS,
+            "User profile is taking too long to load."
+          ),
+        ]);
 
         if (!mounted) return;
 
-        if (!artistSnap.exists()) {
+        const artistSnap = artistSnapResult.status === "fulfilled" ? artistSnapResult.value : null;
+        const userSnap = userSnapResult.status === "fulfilled" ? userSnapResult.value : null;
+
+        if (!artistSnap?.exists() && !userSnap?.exists()) {
           setArtist(null);
           setIsSaved(false);
           return;
         }
 
-        const artistRecord = mapArtistDocument(artistSnap.id, artistSnap.data() as Record<string, any>);
+        const artistRaw = artistSnap?.exists() ? (artistSnap.data() as Record<string, any>) : {};
+        const userRaw = userSnap?.exists() ? (userSnap.data() as Record<string, any>) : {};
+
+        const artistMedia = artistRaw.media && typeof artistRaw.media === "object" ? artistRaw.media : {};
+        const userPhoto = typeof userRaw.profilePhoto === "string" ? userRaw.profilePhoto : "";
+        const artistPhoto = typeof artistRaw.profilePhoto === "string" ? artistRaw.profilePhoto : "";
+        const mediaPhoto = typeof artistMedia.profilePhoto === "string" ? artistMedia.profilePhoto : "";
+
+        // Pick custom photo (prefer non-unsplash URLs)
+        const customPhoto =
+          (userPhoto && !userPhoto.includes("unsplash.com") ? userPhoto : "") ||
+          (mediaPhoto && !mediaPhoto.includes("unsplash.com") ? mediaPhoto : "") ||
+          (artistPhoto && !artistPhoto.includes("unsplash.com") ? artistPhoto : "") ||
+          userPhoto ||
+          mediaPhoto ||
+          artistPhoto;
+
+        const mergedData = {
+          ...userRaw,
+          ...artistRaw,
+          profilePhoto: customPhoto,
+          media: {
+            ...artistMedia,
+            profilePhoto: customPhoto,
+          },
+        };
+
+        const artistRecord = mapArtistDocument(id, mergedData);
         setArtist(artistRecord);
 
         if (currentUser) {

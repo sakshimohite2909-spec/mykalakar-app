@@ -344,15 +344,16 @@ export default function UserProfile() {
 
   const profilePhoto = useMemo(() => {
     if (photoPreview) return photoPreview;
+    const userPhoto = textValue(userProfile, "profilePhoto");
+    if (userPhoto && !userPhoto.includes("unsplash.com")) return userPhoto;
     const artistMedia = typeof artistData?.media === "object" && artistData.media !== null
       ? artistData.media as Record<string, unknown>
       : null;
-    return (
-      (typeof artistMedia?.profilePhoto === "string" ? artistMedia.profilePhoto : "") ||
-      (typeof artistData?.profilePhoto === "string" ? artistData.profilePhoto : "") ||
-      textValue(userProfile, "profilePhoto") ||
-      ""
-    );
+    const artistMediaPhoto = typeof artistMedia?.profilePhoto === "string" ? artistMedia.profilePhoto : "";
+    if (artistMediaPhoto && !artistMediaPhoto.includes("unsplash.com")) return artistMediaPhoto;
+    const artistPhoto = typeof artistData?.profilePhoto === "string" ? artistData.profilePhoto : "";
+    if (artistPhoto && !artistPhoto.includes("unsplash.com")) return artistPhoto;
+    return userPhoto || artistMediaPhoto || artistPhoto || "";
   }, [artistData, photoPreview, userProfile]);
 
   useEffect(() => {
@@ -384,8 +385,6 @@ export default function UserProfile() {
   }, [photoPreview]);
 
   // ── Real-time admin request status ────────────────────────────────────────
-  // Converted from getDocs (one-shot) to onSnapshot so the UI reflects admin
-  // approval without requiring a page reload.
   useEffect(() => {
     if (!currentUser) return;
     const q = query(
@@ -396,14 +395,12 @@ export default function UserProfile() {
     const unsub = onSnapshot(
       q,
       (snap) => setAdminRequestStatus(snap.empty ? "none" : "pending"),
-      () => setAdminRequestStatus("none") // silent catch — non-admins have no docs here
+      () => setAdminRequestStatus("none")
     );
     return unsub;
   }, [currentUser]);
 
   // ── Real-time artist application status ───────────────────────────────────
-  // Provides direct component-level reactivity: the Pending Review badge
-  // updates immediately when the admin approves or rejects an application.
   useEffect(() => {
     if (!currentUser) return;
     const q = query(
@@ -421,7 +418,7 @@ export default function UserProfile() {
           setLiveApplicationStatus(null);
         }
       },
-      () => setLiveApplicationStatus(null) // silent catch — unapproved artist may lack permission
+      () => setLiveApplicationStatus(null)
     );
     return unsub;
   }, [currentUser]);
@@ -512,6 +509,22 @@ export default function UserProfile() {
           FIREBASE_WRITE_TIMEOUT_MS,
           "Could not save user profile."
         );
+
+        if (userRole === "artist" || artistData) {
+          await Promise.allSettled([
+            setDoc(doc(db, "artists", currentUser.uid), {
+              profilePhoto: uploadedPhoto,
+              profileImageUrl: uploadedPhoto,
+              media: { profilePhoto: uploadedPhoto, profileImageUrl: uploadedPhoto },
+              updatedAt: serverTimestamp(),
+            }, { merge: true }),
+            setDoc(doc(db, "artist_applications", currentUser.uid), {
+              profilePhoto: uploadedPhoto,
+              media: { profilePhoto: uploadedPhoto },
+              updatedAt: serverTimestamp(),
+            }, { merge: true }),
+          ]);
+        }
       }
 
       await Promise.allSettled([refreshRoleProfile(), refreshArtistData()]);
@@ -667,7 +680,7 @@ export default function UserProfile() {
   return (
     <div className="min-h-screen bg-transparent">
       <Navbar />
-      <main className="profile-account-shell page-shell container mx-auto px-4 pb-16">
+      <main className="profile-account-shell page-shell container mx-auto px-4 pt-24 md:pt-28 pb-16">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-5xl space-y-6">
 
           {/* ── Page header ────────────────────────────────────────────────── */}

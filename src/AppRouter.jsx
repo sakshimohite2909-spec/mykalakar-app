@@ -49,6 +49,7 @@ const ArtistAvailabilityPage = lazy(() => import("./pages/artist/ArtistAvailabil
 const ArtistNotifications = lazy(() => import("./pages/artist/ArtistNotifications"));
 const ArtistReviews = lazy(() => import("./pages/artist/ArtistReviews"));
 const ArtistSettings = lazy(() => import("./pages/artist/ArtistSettings"));
+const PendingReview = lazy(() => import("./pages/PendingReview"));
 const SchoolTemplate = lazy(() => import("./components/SchoolTemplate"));
 const TelecallerProtectedRoute = lazy(() => import("./components/TelecallerProtectedRoute"));
 const TelecallerLayout = lazy(() => import("./pages/telecaller/TelecallerLayout"));
@@ -78,6 +79,8 @@ const router = createBrowserRouter([
       { path: "artist-register", element: <ArtistRegister /> },
       { path: "admin-register", element: <ArtistRegister /> },
       { path: "user-register", element: <ArtistRegister /> },
+      { path: "pending-review", element: <PendingReview /> },
+      { path: "artist/pending-review", element: <PendingReview /> },
       { path: "login", element: <ArtistLogin /> },
       { path: "artist-login", element: <ArtistLogin /> },
       { path: "admin-login", element: <AdminLogin /> },

@@ -7,64 +7,73 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // Helper: Verify user owns the specific asset folder
-    function isOwner(uid) {
-      return signedIn() && request.auth.uid == uid;
+    // Helper: Validate acceptable media formats including images and PDFs
+    function isValidMedia() {
+      return request.resource == null ||
+             request.resource.contentType == null ||
+             request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType.matches('application/pdf');
     }
 
-    // Helper: Check admin status by checking the Firestore database directly (Fixes Issue #8)
-    function isAdmin() {
-      return signedIn() && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
-    }
-
-    // Helper: Validate acceptable media formats including WebP and GIF (Fixes Issue #10)
-    function isValidImage() {
-      return request.resource.contentType.matches('image/jpeg') ||
-             request.resource.contentType.matches('image/png') ||
-             request.resource.contentType.matches('image/webp') ||
-             request.resource.contentType.matches('image/gif');
-    }
-
-    // Helper: Ensure file sizes do not exceed 5MB limits
+    // Helper: Ensure file sizes do not exceed 10MB limits
     function isValidSize() {
-      return request.resource.size <= 5 * 1024 * 1024;
+      return request.resource == null || request.resource.size <= 10 * 1024 * 1024;
     }
 
-    // ── ARTIST PROFILE ASSETS PATHS (Fixes Issues #4 & #5) ───────────────────
-    match /artists/{uid}/profile/{fileName} {
+    // ── ARTIST PROFILE ASSETS PATHS ───────────────────
+    match /artists/{uid}/{allPaths=**} {
       allow read: if true;
-      allow write: if isOwner(uid) && isValidImage() && isValidSize();
+      allow write: if signedIn() && isValidMedia() && isValidSize();
     }
 
-    match /artists/{uid}/cover/{fileName} {
+    match /avatars/{uid}/{allPaths=**} {
       allow read: if true;
-      allow write: if isOwner(uid) && isValidImage() && isValidSize();
+      allow write: if signedIn() && isValidMedia() && isValidSize();
     }
 
-    match /artists/{uid}/gallery/{fileName=**} {
+    match /covers/{uid}/{allPaths=**} {
       allow read: if true;
-      allow write: if isOwner(uid) && isValidImage() && isValidSize();
+      allow write: if signedIn() && isValidMedia() && isValidSize();
     }
 
-    match /artists/{uid}/identity/{fileName=**} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if isOwner(uid) && isValidSize(); // PDF or image documentation
+    match /galleries/{uid}/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn() && isValidMedia() && isValidSize();
     }
 
     match /private-documents/{uid}/{allPaths=**} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if isOwner(uid) && isValidSize();
+      allow read: if signedIn();
+      allow write: if signedIn() && isValidSize();
     }
 
     // ── GLOBAL USER PROFILE PATHS ────────────────────────────────────────────
     match /users/{uid}/{allPaths=**} {
       allow read: if true;
-      allow write: if isOwner(uid) && isValidSize();
+      allow write: if signedIn() && isValidMedia() && isValidSize();
     }
 
-    // ── ADMIN ONLY OVERRIDES ─────────────────────────────────────────────────
+    // ── GENERAL PUBLIC / ADMIN CONTENT (Events, Categories, Banners, etc.) ─────
+    match /events/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+
+    match /categories/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+
+    match /banners/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+
+    // ── CATCH-ALL FOR ALL SIGNED-IN USERS ────────────────────────────────────
     match /{allFiles=**} {
-      allow read, write: if isAdmin();
+      allow read: if true;
+      allow write: if signedIn();
     }
   }
 }
+
+

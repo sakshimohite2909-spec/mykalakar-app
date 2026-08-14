@@ -992,17 +992,51 @@ h6 {
 
   .luxury-home-hero,
   .luxury-hero {
-    min-height: auto !important;
+    min-height: 340px !important;
+    max-height: 430px !important;
+    margin-top: 0.75rem !important;
   }
 
   .luxury-home-hero-inner,
   .luxury-hero {
-    padding: 1rem !important;
+    padding: 1.25rem 1rem !important;
+    gap: 1rem !important;
   }
 
   .luxury-home-hero-copy h1,
   .luxury-hero-copy h1 {
-    font-size: clamp(2.6rem, 15vw, 4.5rem) !important;
+    font-size: clamp(28px, 7vw, 34px) !important; /* 28px - 34px responsive mobile heading */
+    font-weight: 800 !important;
+    margin-top: 0.5rem !important;
+    white-space: normal !important;
+    line-height: 1.15 !important;
+  }
+
+  .luxury-home-hero-copy p,
+  .luxury-hero-copy p {
+    font-size: clamp(13px, 3.5vw, 15px) !important;
+    line-height: 1.4 !important;
+    margin-top: 0.4rem !important;
+  }
+
+  .luxury-eyebrow {
+    padding: 0.35rem 0.65rem !important;
+    font-size: clamp(10px, 3vw, 12px) !important;
+  }
+
+  .luxury-hero-actions {
+    margin-top: 0.85rem !important;
+    gap: 0.5rem !important;
+  }
+
+  .luxury-hero-actions a,
+  .luxury-hero-actions button {
+    padding: 0.6rem 1.1rem !important;
+    font-size: clamp(13px, 3.5vw, 15px) !important;
+  }
+
+  .section-heading h2 {
+    font-size: clamp(24px, 6vw, 30px) !important;
   }
 
   .luxury-filter-dock {
@@ -1034,7 +1068,7 @@ h6 {
   }
 
   .luxury-card-body {
-    padding: 0.7rem !important;
+    padding: 0.65rem !important;
   }
 
   .luxury-card-description {
@@ -1047,6 +1081,18 @@ h6 {
 
   .footer-bottom-bar {
     flex-direction: column !important;
+  }
+
+  /* Compact section spacing for mobile page */
+  .app-section,
+  .content-section,
+  .luxury-section {
+    margin-top: 1.5rem !important;
+    padding-block: 0.85rem !important;
+  }
+
+  body {
+    padding-bottom: 5.5rem !important; /* Bottom padding so content is not obscured by mobile nav */
   }
 }
 

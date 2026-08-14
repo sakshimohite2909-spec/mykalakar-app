@@ -20,6 +20,7 @@ export const ROUTES = {
   ARTIST_REGISTER: "/artist-register",
   ADMIN_REGISTER: "/admin-register",
   USER_REGISTER: "/user-register",
+  PENDING_REVIEW: "/pending-review",
   LOGIN: "/login",
   ARTIST_LOGIN: "/artist-login",
   ADMIN_LOGIN: "/admin-login",

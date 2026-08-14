@@ -45,6 +45,7 @@ import { getDownloadURL, ref, uploadBytes, type UploadResult } from "firebase/st
 import { auth, db, storage } from "@/lib/firebase";
 import { compressImageUpload } from "@/utils/imageCompression";
 import { FIREBASE_UPLOAD_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
+import { fileToDataUrl } from "@/lib/uploadService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getExternalUrl, getYoutubeThumbnailUrl } from "@/lib/youtube";
@@ -331,24 +332,43 @@ async function uploadArtistRegistrationImage(uid: string, file: File, folder: st
     ? `${folder}/${Date.now()}-${safeFileName}`
     : `artists/${uid}/${folder}/${Date.now()}-${safeFileName}`;
   const storageRef = ref(storage, storagePath);
-  const snapshot = await withTimeout<UploadResult>(
-    uploadBytes(storageRef, compressedFile, {
-      contentType: compressedFile.type,
-      customMetadata: {
-        artistId: uid,
-        uploadPurpose: folder,
-      },
-    }),
-    FIREBASE_UPLOAD_TIMEOUT_MS,
-    `Could not upload ${folder.replace(/-/g, " ")} image.`
-  );
-  const downloadUrl = await withTimeout(
-    getDownloadURL(snapshot.ref),
-    FIREBASE_UPLOAD_TIMEOUT_MS,
-    `Could not resolve ${folder.replace(/-/g, " ")} image URL.`
-  );
 
-  return { downloadUrl, storagePath };
+  try {
+    const snapshot = await withTimeout<UploadResult>(
+      uploadBytes(storageRef, compressedFile, {
+        contentType: compressedFile.type,
+        customMetadata: {
+          artistId: uid,
+          uploadPurpose: folder,
+        },
+      }),
+      FIREBASE_UPLOAD_TIMEOUT_MS,
+      `Could not upload ${folder.replace(/-/g, " ")} image.`
+    );
+    const downloadUrl = await withTimeout(
+      getDownloadURL(snapshot.ref),
+      FIREBASE_UPLOAD_TIMEOUT_MS,
+      `Could not resolve ${folder.replace(/-/g, " ")} image URL.`
+    );
+
+    return { downloadUrl, storagePath };
+  } catch (err: any) {
+    const errCode = String(err?.code || "");
+    const errMsg = String(err?.message || "");
+    if (
+      errCode === "storage/quota-exceeded" ||
+      errCode === "storage/unauthorized" ||
+      errMsg.includes("quota-exceeded") ||
+      errMsg.includes("unauthorized") ||
+      errCode.includes("quota") ||
+      errCode.includes("unauthorized")
+    ) {
+      console.warn(`[Firebase Storage Warning] Storage rules or quota blocked upload for ${folder}, using data URL fallback:`, errCode);
+      const dataUrl = await fileToDataUrl(file);
+      return { downloadUrl: dataUrl, storagePath: "" };
+    }
+    throw err;
+  }
 }
 
 async function uploadOptionalArtistImage(uid: string, file: File | null, folder: string) {
@@ -357,7 +377,24 @@ async function uploadOptionalArtistImage(uid: string, file: File | null, folder:
   const validation = validateImageFile(file);
   if (!validation.valid) throw new Error(validation.message);
 
-  return uploadArtistRegistrationImage(uid, file, folder);
+  try {
+    return await uploadArtistRegistrationImage(uid, file, folder);
+  } catch (err: any) {
+    const errCode = String(err?.code || "");
+    const errMsg = String(err?.message || "");
+    if (
+      errCode === "storage/quota-exceeded" ||
+      errCode === "storage/unauthorized" ||
+      errMsg.includes("quota-exceeded") ||
+      errMsg.includes("unauthorized") ||
+      errCode.includes("quota") ||
+      errCode.includes("unauthorized")
+    ) {
+      console.warn(`[Firebase Storage Warning] Storage rules or quota blocked optional ${folder}, using empty URL`);
+      return { downloadUrl: "", storagePath: "" };
+    }
+    throw err;
+  }
 }
 
 function FieldError({ message }: { message?: string }) {

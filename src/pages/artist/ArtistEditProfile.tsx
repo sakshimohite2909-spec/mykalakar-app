@@ -86,21 +86,27 @@ export default function ArtistEditProfile() {
             .map((link) => link.url.trim())
             .filter((url) => url && getYoutubeVideoId(url));
 
-    const getCurrentProfileImage = () =>
-        artistData?.media?.profilePhoto ||
-        artistData?.media?.profileImageUrl ||
-        artistData?.profilePhoto ||
-        artistData?.profileImageUrl ||
-        artistData?.artistProfile?.profileImage ||
-        "";
+    const getCurrentProfileImage = () => {
+        const candidate =
+            artistData?.media?.profilePhoto ||
+            artistData?.media?.profileImageUrl ||
+            artistData?.profilePhoto ||
+            artistData?.profileImageUrl ||
+            artistData?.artistProfile?.profileImage ||
+            "";
+        return candidate;
+    };
 
-    const getCurrentCoverImage = () =>
-        artistData?.media?.coverPhoto ||
-        artistData?.media?.coverImageUrl ||
-        artistData?.coverPhoto ||
-        artistData?.coverImageUrl ||
-        artistData?.artistProfile?.coverImage ||
-        "";
+    const getCurrentCoverImage = () => {
+        const candidate =
+            artistData?.media?.coverPhoto ||
+            artistData?.media?.coverImageUrl ||
+            artistData?.coverPhoto ||
+            artistData?.coverImageUrl ||
+            artistData?.artistProfile?.coverImage ||
+            "";
+        return candidate;
+    };
 
     const buildArtistProfile = (mediaOverrides: { profileImage?: string; coverImage?: string } = {}) => ({
         artForms: getArtistArtForms(artistData || {}),
@@ -229,7 +235,9 @@ export default function ArtistEditProfile() {
         const files = e.target.files;
         if (!files || !artistData) return;
 
-        const currentPhotos = artistData.media?.galleryPhotos ?? (Array.isArray(artistData.galleryPhotos) ? artistData.galleryPhotos : []);
+        const rawCurrent = artistData.media?.galleryPhotos ?? (Array.isArray(artistData.galleryPhotos) ? artistData.galleryPhotos : []);
+        const currentPhotos = rawCurrent.filter((u: string) => typeof u === "string" && !u.includes("unsplash.com"));
+
         if (currentPhotos.length + files.length > 10) {
             toast({ variant: "destructive", title: "Limit Exceeded", description: "Maximum 10 gallery photos allowed." });
             return;
@@ -241,7 +249,6 @@ export default function ArtistEditProfile() {
             if (!ownerId) throw new Error("User not authenticated");
             const newUrls = await Promise.all(Array.from(files).map((f) => uploadFile(f, `galleries/${ownerId}`)));
             const updatedGallery = [...currentPhotos, ...newUrls];
-            if (!ownerId) throw new Error("User not authenticated");
             await withTimeout(
                 updateUnifiedArtistProfile({
                     artistId: artistData.id,

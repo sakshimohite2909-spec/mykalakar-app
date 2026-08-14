@@ -111,7 +111,13 @@ export default function Navbar() {
 
 
   return (
-    <header className="site-header fixed top-0 inset-x-0 w-full h-20 flex items-center justify-between z-40 bg-white/70 backdrop-blur-md px-3 md:px-4">
+    <header
+      className={`site-header fixed top-0 inset-x-0 w-full h-20 flex items-center justify-between z-50 transition-all duration-200 px-3 md:px-4 ${
+        scrolled
+          ? "bg-[#FDFBF7] border-b border-stone-200/80 shadow-md"
+          : "bg-[#FDFBF7]/95 backdrop-blur-md border-b border-stone-100/60"
+      }`}
+    >
       <div className="site-nav-shell mx-auto flex w-full max-w-[1200px] items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {location.pathname !== "/" && (

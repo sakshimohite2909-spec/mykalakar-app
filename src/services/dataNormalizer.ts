@@ -333,7 +333,7 @@ export function resolveArtistProfilePhoto(artist: any, targetCategory?: string):
   const isValidUrl = (val: unknown): string => {
     if (typeof val === "string") {
       const src = val.trim();
-      if (!src || /ui-avatars\.com|placeholder\.svg|api\/\?name=/i.test(src)) {
+      if (!src || /ui-avatars\.com|placeholder\.svg|api\/\?name=|unsplash\.com/i.test(src)) {
         return "";
       }
       if (/^(https?:\/\/|data:image\/|blob:|\/)/i.test(src)) {
@@ -350,7 +350,7 @@ export function resolveArtistProfilePhoto(artist: any, targetCategory?: string):
           ? obj.src
           : ""
       ).trim();
-      if (src && !/ui-avatars\.com|placeholder\.svg|api\/\?name=/i.test(src) && /^(https?:\/\/|data:image\/|blob:|\/)/i.test(src)) {
+      if (src && !/ui-avatars\.com|placeholder\.svg|api\/\?name=|unsplash\.com/i.test(src) && /^(https?:\/\/|data:image\/|blob:|\/)/i.test(src)) {
         return src;
       }
     }

@@ -31,7 +31,8 @@ function safeSrc(src?: string | null, fallback = EMPTY_PIXEL) {
 }
 
 function isExternalUrl(src?: string | null) {
-  return /^https?:\/\//i.test(String(src || "").trim());
+  const value = String(src || "").trim();
+  return /^(https?:\/\/|data:image\/|\/|blob:)/i.test(value);
 }
 
 export function SmartImage({
