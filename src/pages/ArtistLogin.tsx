@@ -90,7 +90,8 @@ export default function ArtistLogin() {
         if (redirectPath) {
           navigate(redirectPath, { replace: true, state: location.state });
         } else {
-          navigate("/artist/dashboard", { replace: true });
+          const defaultPath = activeRole === "artist" ? "/artist/dashboard" : "/";
+          navigate(defaultPath, { replace: true });
         }
       }
     } catch (err: any) {

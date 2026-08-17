@@ -2048,13 +2048,13 @@ export default function ArtistRegister() {
                   <p className="mb-4 text-sm font-black text-slate-500">{t("register.label.artNumber", { number: 1 })}</p>
                   
                   <div className="grid gap-4 md:grid-cols-3">
-                    {/* LEVEL 1: Event Type */}
+                    {/* Event Type */}
                     <Controller
                       name="eventType"
                       control={artistForm.control}
                       render={({ field }) => (
                         <SearchableDropdown
-                          label="Level 1 — Event Type"
+                          label="Event Type"
                           value={field.value}
                           options={getEventTypes()}
                           placeholder="Select Event Type"
@@ -2068,7 +2068,7 @@ export default function ArtistRegister() {
                       )}
                     />
 
-                    {/* LEVEL 2: Category */}
+                    {/* Category */}
                     <Controller
                       name="mainCategory"
                       control={artistForm.control}
@@ -2079,7 +2079,7 @@ export default function ArtistRegister() {
                           : [];
                         return (
                           <SearchableDropdown
-                            label="Level 2 — Category"
+                            label="Category"
                             value={field.value}
                             options={categoryOptions}
                             placeholder={evtType ? "Select Category" : "Select Event Type first"}
@@ -2094,7 +2094,7 @@ export default function ArtistRegister() {
                       }}
                     />
 
-                    {/* LEVEL 3: Subcategory / Art Form */}
+                    {/* Subcategory / Art Form */}
                     <Controller
                       name="artCategory"
                       control={artistForm.control}
@@ -2106,7 +2106,7 @@ export default function ArtistRegister() {
                           : [];
                         return (
                           <SearchableDropdown
-                            label="Level 3 — Subcategory / Art Form"
+                            label="Subcategory / Art Form"
                             value={field.value}
                             options={subcategoryOptions}
                             placeholder={mainCat ? "Select Subcategory" : "Select Category first"}
