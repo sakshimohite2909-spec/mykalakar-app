@@ -844,5 +844,14 @@
   "language.konkani": "कोंकणी",
   "language.rajasthani": "राजस्थानी",
   "language.odia": "ओडिया",
-  "language.other": "अन्य"
+  "language.other": "अन्य",
+  "home.browseByEvent": "इवेंट के अनुसार खोजें",
+  "home.popularCategories": "लोकप्रिय श्रेणियां",
+  "home.showFewerCategories": "कम श्रेणियां दिखाएं",
+  "home.showAllCategories": "सभी {{count}} श्रेणियां देखें",
+  "home.cantFindService": "क्या आपको अपनी पसंद की सेवा नहीं मिली?",
+  "home.tellUsNeed": "अपनी आवश्यकता हमें बताएं।",
+  "home.requestService": "सेवा अनुरोध करें",
+  "home.verifiedArtistsVendors": "सत्यापित कलाकार और विक्रेता",
+  "home.exploreArtistsArrow": "कलाकार खोजें →"
 }

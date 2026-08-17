@@ -862,5 +862,14 @@
   "hero.slide2.overlay": "The Joy of Folk, Grace of Tradition!",
   "hero.slide3.overlay": "Soulful Classical Divine Melodies!",
   "hero.slide4.overlay": "Timeless Strings of Our Heritage!",
-  "hero.slide5.overlay": "Vibrant Beats of Cultural Joy!"
+  "hero.slide5.overlay": "Vibrant Beats of Cultural Joy!",
+  "home.browseByEvent": "Browse by Event",
+  "home.popularCategories": "Popular Categories",
+  "home.showFewerCategories": "Show fewer categories",
+  "home.showAllCategories": "Show all {{count}} categories",
+  "home.cantFindService": "Can't find what you're looking for?",
+  "home.tellUsNeed": "Tell us what you need.",
+  "home.requestService": "Request Service",
+  "home.verifiedArtistsVendors": "Verified artists & vendors",
+  "home.exploreArtistsArrow": "Explore Artists →"
 }

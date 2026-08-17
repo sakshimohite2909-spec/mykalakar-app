@@ -18,6 +18,7 @@ import { getActiveArtistsPage, clearDataCache } from "@/services/dataService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { resolveArtistProfilePhoto } from "@/services/dataNormalizer";
 import { imageRegistry } from "@/services/ImageRegistryService";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface ArtistCardData {
   id: string;
@@ -42,6 +43,7 @@ export default function SubcategoryLevel3Page() {
   }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const rawEvent = eventName || searchParams.get("event") || searchParams.get("category");
   const rawCategory = categoryName || searchParams.get("group") || searchParams.get("categoryGroup");
@@ -236,7 +238,7 @@ export default function SubcategoryLevel3Page() {
         <div className="flex items-center justify-between py-2 border-b border-stone-200/60 mb-5">
           <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 overflow-x-auto whitespace-nowrap no-scrollbar pr-2">
             <Link to="/" className="hover:text-stone-900 transition-colors shrink-0">
-              Home
+              {t("nav.home") || "Home"}
             </Link>
             {decodedEvent && (
               <>
@@ -262,7 +264,7 @@ export default function SubcategoryLevel3Page() {
             ) : !decodedEvent && !decodedCategory ? (
               <>
                 <span className="shrink-0">&gt;</span>
-                <span className="text-stone-900 font-bold shrink-0">All Artists</span>
+                <span className="text-stone-900 font-bold shrink-0">{t("common.viewAllArtists") || "All Artists"}</span>
               </>
             ) : null}
           </div>
@@ -304,7 +306,7 @@ export default function SubcategoryLevel3Page() {
             }`}
           >
             <SlidersHorizontal className="h-3.5 w-3.5 text-stone-500" />
-            <span>Filters</span>
+            <span>{t("filters.title") || "Filters"}</span>
             {(filterVerifiedOnly || filterMinRating > 0 || filterMinExp > 0) && (
               <span className="h-2 w-2 rounded-full bg-orange-600" />
             )}
@@ -319,7 +321,7 @@ export default function SubcategoryLevel3Page() {
               onChange={(e) => setSelectedSort(e.target.value)}
               className="bg-transparent border-none outline-none cursor-pointer pr-3 font-bold text-stone-800"
             >
-              <option value="Recommended">Recommended</option>
+              <option value="Recommended">{t("sort.relevant") || "Recommended"}</option>
               <option value="Rating">Rating: High to Low</option>
               <option value="PriceLow">Price: Low to High</option>
               <option value="PriceHigh">Price: High to Low</option>
@@ -328,7 +330,7 @@ export default function SubcategoryLevel3Page() {
 
           {/* Price Pill */}
           <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3.5 py-1.5 text-xs font-bold text-stone-700 shadow-2xs hover:border-stone-400 cursor-pointer">
-            <span className="text-stone-400 font-normal mr-1">Price:</span>
+            <span className="text-stone-400 font-normal mr-1">{t("filters.budget") || "Price:"}</span>
             <select
               value={selectedPrice}
               onChange={(e) => setSelectedPrice(e.target.value)}
@@ -353,15 +355,15 @@ export default function SubcategoryLevel3Page() {
             <div className="h-16 w-16 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 mb-4">
               <Search className="h-8 w-8 stroke-[1.75]" />
             </div>
-            <h3 className="text-xl font-extrabold text-stone-900 mb-2">No artists registered yet</h3>
+            <h3 className="text-xl font-extrabold text-stone-900 mb-2">{t("empty.artistsTitle") || "No artists registered yet"}</h3>
             <p className="text-sm font-medium text-stone-500 max-w-md mb-6 leading-relaxed">
               There are currently no active artists or vendors registered under <span className="font-bold text-stone-800">{displayTitle}</span>. Are you an artist in this category?
             </p>
             <Link
               to="/register"
-              className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all active:scale-95"
+              className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
             >
-              Be the first artist to register
+              {t("cta.artist.button") || "Be the first artist to register"}
             </Link>
           </div>
         )}
@@ -472,13 +474,13 @@ export default function SubcategoryLevel3Page() {
                     to={`/artist/${artist.id}`}
                     className="flex-1 sm:flex-initial inline-flex h-10 items-center justify-center rounded-xl border border-stone-200 bg-white px-4 text-xs font-extrabold text-stone-800 shadow-2xs hover:bg-stone-50 transition text-center"
                   >
-                    View Profile
+                    {t("nav.viewPublicPage") || "View Profile"}
                   </Link>
                   <Link
                     to={`/artist/${artist.id}?book=true`}
                     className="flex-1 sm:flex-initial inline-flex h-10 items-center justify-center rounded-xl bg-orange-600 px-5 text-xs font-extrabold text-white shadow-sm hover:bg-orange-500 transition text-center"
                   >
-                    Book Now
+                    {t("artist.booking") || "Book Now"}
                   </Link>
                 </div>
               </div>

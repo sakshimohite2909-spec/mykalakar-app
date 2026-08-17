@@ -862,5 +862,14 @@
   "hero.slide2.overlay": "लोककलेचा उत्साह, परंपरेचा साज!",
   "hero.slide3.overlay": "आत्मिक सुरांची दिव्य अनुभूती!",
   "hero.slide4.overlay": "सांस्कृतिक वारशाचा अमर सूर!",
-  "hero.slide5.overlay": "लोकसंस्कृतीचा पारंपरिक ढोलनाद!"
+  "hero.slide5.overlay": "लोकसंस्कृतीचा पारंपरिक ढोलनाद!",
+  "home.browseByEvent": "इव्हेंटनुसार शोधा",
+  "home.popularCategories": "लोकप्रिय कला प्रकार",
+  "home.showFewerCategories": "कमी विभाग दाखवा",
+  "home.showAllCategories": "सर्व {{count}} विभाग पहा",
+  "home.cantFindService": "तुम्हाला हवं ते सापडलं नाही का?",
+  "home.tellUsNeed": "तुम्हाला काय हवं आहे ते आम्हाला सांगा.",
+  "home.requestService": "सेवा विनंती करा",
+  "home.verifiedArtistsVendors": "सत्यापित कलाकार आणि विक्रेते",
+  "home.exploreArtistsArrow": "कलाकार शोधा →"
 }

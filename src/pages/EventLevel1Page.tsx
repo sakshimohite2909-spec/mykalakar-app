@@ -25,6 +25,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import NewRequirementModal from "@/components/NewRequirementModal";
 import { getCategoriesForEvent, MAIN_EVENT_CARDS } from "@/constants/artistSystem";
+import { useI18n } from "@/i18n/I18nProvider";
 
 const CATEGORY_ICON_MAP: Record<string, any> = {
   "Spiritual Speakers": Sparkles,
@@ -114,6 +115,7 @@ export default function EventLevel1Page() {
   const { eventName } = useParams<{ eventName: string }>();
   const navigate = useNavigate();
   const [showRequirementModal, setShowRequirementModal] = useState(false);
+  const { t } = useI18n();
 
   const decodedName = eventName ? decodeURIComponent(eventName) : "Wedding";
   const cardMeta = MAIN_EVENT_CARDS.find((c) => c.name.toLowerCase() === decodedName.toLowerCase());
@@ -134,7 +136,7 @@ export default function EventLevel1Page() {
         <div className="flex items-center justify-between py-2 border-b border-stone-200/60 mb-6">
           <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 overflow-x-auto whitespace-nowrap no-scrollbar pr-2">
             <Link to="/" className="hover:text-stone-900 transition-colors shrink-0">
-              Home
+              {t("nav.home") || "Home"}
             </Link>
             <span className="shrink-0">&gt;</span>
             <span className="text-stone-900 font-bold shrink-0">{eventMeta.title}</span>
@@ -189,7 +191,7 @@ export default function EventLevel1Page() {
                     {cat.name}
                   </h3>
                   <p className="mt-1 text-xs font-semibold text-stone-400">
-                    {subCount} {subCount === 1 ? "Subcategory" : "Subcategories"}
+                    {subCount} {t("filters.subcategories") || (subCount === 1 ? "Subcategory" : "Subcategories")}
                   </p>
                 </Link>
               );
@@ -201,17 +203,17 @@ export default function EventLevel1Page() {
               <Clock className="h-8 w-8 stroke-[1.75]" />
             </div>
             <h2 className="text-2xl font-extrabold text-stone-900 tracking-tight">
-              Categories coming soon
+              {t("events.empty.title") || "Categories coming soon"}
             </h2>
             <p className="mt-2 text-stone-500 max-w-md text-sm font-medium leading-relaxed">
               Curated categories for <span className="font-bold text-stone-800">{eventMeta.title}</span> are currently being onboarded for Phase 1. Need an artist or service immediately?
             </p>
             <button
               onClick={() => setShowRequirementModal(true)}
-              className="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all active:scale-95"
+              className="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
             >
               <PlusCircle className="h-4 w-4" />
-              <span>Post Requirement</span>
+              <span>{t("cta.artist.eventButton") || "Post Requirement"}</span>
             </button>
           </div>
         )}
@@ -220,19 +222,19 @@ export default function EventLevel1Page() {
         <div className="rounded-2xl border border-stone-200/80 bg-white p-5 md:p-6 shadow-xs grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
           <div className="flex items-center justify-center gap-2 text-stone-800 font-bold text-xs sm:text-sm">
             <ShieldCheck className="h-5 w-5 text-orange-600 shrink-0" />
-            <span>Trusted Artists</span>
+            <span>{t("trust.opportunityTitle") || "Trusted Artists"}</span>
           </div>
           <div className="flex items-center justify-center gap-2 text-stone-800 font-bold text-xs sm:text-sm">
             <UserCheck className="h-5 w-5 text-orange-600 shrink-0" />
-            <span>Verified Profiles</span>
+            <span>{t("home.hero.tile.verifiedArtists") || "Verified Profiles"}</span>
           </div>
           <div className="flex items-center justify-center gap-2 text-stone-800 font-bold text-xs sm:text-sm">
             <Briefcase className="h-5 w-5 text-orange-600 shrink-0" />
-            <span>Secure Booking</span>
+            <span>{t("features.platform.title") || "Secure Booking"}</span>
           </div>
           <div className="flex items-center justify-center gap-2 text-stone-800 font-bold text-xs sm:text-sm">
             <Headphones className="h-5 w-5 text-orange-600 shrink-0" />
-            <span>24x7 Support</span>
+            <span>{t("features.support.title") || "24x7 Support"}</span>
           </div>
         </div>
       </main>

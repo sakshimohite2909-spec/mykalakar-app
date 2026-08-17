@@ -4,7 +4,8 @@ import { Search, ChevronDown, Clock, ShieldCheck, UserCheck } from "lucide-react
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import NewRequirementModal from "@/components/NewRequirementModal";
-import { getSubcategoriesForCategory, getCategoriesForEvent } from "@/constants/artistSystem";
+import { getSubcategoriesForCategory, getCategoriesForEvent, CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export const CATEGORY_LEVEL2_DATA: Record<
   string,
@@ -397,6 +398,7 @@ export default function CategoryLevel2Page() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [briefModalOpen, setBriefModalOpen] = useState(false);
+  const { t } = useI18n();
 
   const decodedEvent = eventName ? decodeURIComponent(eventName) : "Wedding";
   const decodedCategory = categoryName ? decodeURIComponent(categoryName) : "Photography & Videography";
@@ -405,6 +407,19 @@ export default function CategoryLevel2Page() {
   const masterSubcategories = useMemo(() => {
     return getSubcategoriesForCategory(decodedEvent, decodedCategory);
   }, [decodedEvent, decodedCategory]);
+
+  // Sibling categories within the current event for navigation
+  const siblingCategories = useMemo(() => {
+    const categories = getCategoriesForEvent(decodedEvent);
+    if (categories && categories.length > 0) return categories;
+    return CATEGORY_GROUP_OPTIONS.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      icon: c.icon,
+      eventType: decodedEvent,
+      subcategories: c.subcategories,
+    }));
+  }, [decodedEvent]);
 
   const categoryTitle = decodedCategory;
   const categorySubtitle = `Explore verified subcategories and artists under ${decodedCategory} for ${decodedEvent}.`;
@@ -432,7 +447,7 @@ export default function CategoryLevel2Page() {
         <div className="flex items-center justify-between py-2 border-b border-stone-200/60 mb-5">
           <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 overflow-x-auto whitespace-nowrap no-scrollbar pr-2">
             <Link to="/" className="hover:text-stone-900 transition-colors shrink-0">
-              Home
+              {t("nav.home") || "Home"}
             </Link>
             <span className="shrink-0">&gt;</span>
             <Link to={`/events/${encodeURIComponent(decodedEvent)}`} className="hover:text-stone-900 transition-colors shrink-0">
@@ -479,7 +494,7 @@ export default function CategoryLevel2Page() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search subcategory..."
+                placeholder={t("filters.searchPlaceholder") || "Search subcategory..."}
                 className="w-full text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 bg-transparent border-none outline-none font-medium"
               />
             </div>
@@ -488,33 +503,53 @@ export default function CategoryLevel2Page() {
 
         {/* ─── Main 2-Column Section ─── */}
         <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-6 md:gap-8 mb-8">
-          {/* Left Column: All Subcategories List */}
+          {/* Left Column: Event Categories List */}
           <div className="bg-white rounded-2xl border border-stone-200/80 p-4 sm:p-5 shadow-xs h-fit">
             <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-stone-100">
-              <h2 className="text-sm font-extrabold text-stone-900 uppercase tracking-wider">
-                All Subcategories
+              <h2 className="text-xs sm:text-sm font-extrabold text-stone-900 uppercase tracking-wider">
+                {decodedEvent} {t("nav.categories") || "Categories"}
               </h2>
               <ChevronDown className="h-4 w-4 text-stone-400" />
             </div>
 
             <ul className="space-y-1">
-              {filteredSubcategories.map((sub) => (
-                <li key={sub}>
-                  <button
-                    onClick={() => handleSubcategoryClick(sub)}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-stone-700 hover:text-orange-600 hover:bg-orange-50/80 transition-colors flex items-center justify-between group"
-                  >
-                    <span>{sub}</span>
-                  </button>
-                </li>
-              ))}
+              {siblingCategories.map((cat: any) => {
+                const catName = typeof cat === "string" ? cat : cat.name;
+                const catIcon = cat.icon || "✨";
+                const isActive = catName.toLowerCase() === decodedCategory.toLowerCase();
+
+                return (
+                  <li key={catName}>
+                    <button
+                      onClick={() =>
+                        navigate(
+                          `/events/${encodeURIComponent(decodedEvent)}/${encodeURIComponent(catName)}`
+                        )
+                      }
+                      className={`w-full text-left px-3 py-2.5 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center justify-between group cursor-pointer ${
+                        isActive
+                          ? "bg-orange-50 text-orange-600 font-extrabold border-l-4 border-orange-500 shadow-2xs"
+                          : "text-stone-700 hover:text-orange-600 hover:bg-stone-50 font-semibold"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2.5 truncate">
+                        <span className="text-base shrink-0">{catIcon}</span>
+                        <span className="truncate">{catName}</span>
+                      </span>
+                      {isActive && (
+                        <span className="h-2 w-2 rounded-full bg-orange-500 shrink-0" />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
           {/* Right Column: Subcategory Cards Grid */}
           <div>
             <h2 className="text-lg md:text-xl font-extrabold text-stone-900 mb-4 tracking-tight">
-              {categoryTitle} Subcategories
+              {categoryTitle} {t("filters.subcategories") || "Subcategories"}
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
@@ -529,12 +564,11 @@ export default function CategoryLevel2Page() {
                       {subName}
                     </h3>
                     <p className="mt-1 text-xs font-medium text-stone-500">
-                      Verified artists & vendors
+                      {t("home.verifiedArtistsVendors") || "Verified artists & vendors"}
                     </p>
                   </div>
                   <div className="mt-3 flex items-center gap-1 text-xs font-bold text-orange-600 group-hover:translate-x-0.5 transition-transform">
-                    <span>Explore Artists</span>
-                    <span>→</span>
+                    <span>{t("home.exploreArtistsArrow") || "Explore Artists →"}</span>
                   </div>
                 </div>
               ))}
@@ -550,19 +584,19 @@ export default function CategoryLevel2Page() {
             </div>
             <div>
               <h4 className="text-xs sm:text-sm font-extrabold text-stone-900 leading-tight">
-                Can't find what you're looking for?
+                {t("home.cantFindService") || "Can't find what you're looking for?"}
               </h4>
               <p className="text-xs font-semibold text-stone-600 mt-0.5">
-                Tell us what you need.
+                {t("home.tellUsNeed") || "Tell us what you need."}
               </p>
             </div>
           </div>
 
           <button
             onClick={() => setBriefModalOpen(true)}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-white border border-stone-200 text-xs font-extrabold text-stone-800 shadow-2xs hover:bg-stone-950 hover:text-white hover:border-stone-950 transition-all duration-300"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-white border border-stone-200 text-xs font-extrabold text-stone-800 shadow-2xs hover:bg-stone-950 hover:text-white hover:border-stone-950 transition-all duration-300 cursor-pointer"
           >
-            Request Service
+            {t("home.requestService") || "Request Service"}
           </button>
         </div>
       </main>

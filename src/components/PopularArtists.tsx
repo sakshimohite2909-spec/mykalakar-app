@@ -6,9 +6,12 @@ import { useState, useEffect } from "react";
 import { getActiveArtists } from "@/services/dataService";
 import { buildArtistCards, type ArtistCardViewModel } from "@/services/marketplaceCards";
 
+import { useI18n } from "@/i18n/I18nProvider";
+
 export default function PopularArtists() {
   const [artists, setArtists] = useState<ArtistCardViewModel[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useI18n();
 
   useEffect(() => {
     let mounted = true;
@@ -35,7 +38,7 @@ export default function PopularArtists() {
   return (
     <section className="py-10 bg-background relative z-10">
       <h2 className="section-title flex items-center gap-2 group cursor-pointer inline-flex">
-        Top Picks for You
+        {t("home.topPicks") || "Top Picks for You"}
         <ChevronRight className="h-5 w-5 text-primary opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
       </h2>
 

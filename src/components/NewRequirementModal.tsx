@@ -31,6 +31,7 @@ import { submitEventBrief, type EventBriefFormData } from "@/services/eventBrief
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/I18nProvider";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -116,6 +117,7 @@ interface NewRequirementModalProps {
 
 export default function NewRequirementModal({ open, onClose }: NewRequirementModalProps) {
   const { currentUser } = useAuth();
+  const { t } = useI18n();
   const [form, setForm] = useState<EventBriefFormData>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -236,10 +238,10 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                   </span>
                   <div>
                     <h2 className="text-sm sm:text-base font-bold text-stone-900 tracking-tight">
-                      Post a New Requirement
+                      {t("events.createTitle") || "Post a New Requirement"}
                     </h2>
                     <p className="text-[11px] sm:text-xs font-medium text-stone-500">
-                      Describe your event — we'll match the best artists.
+                      {t("events.createSubtitle") || "Describe your event — we'll match the best artists."}
                     </p>
                   </div>
                 </div>
@@ -247,7 +249,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                   type="button"
                   aria-label="Close modal"
                   onClick={handleClose}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-stone-400 transition-all hover:bg-stone-100 hover:text-stone-700"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-stone-400 transition-all hover:bg-stone-100 hover:text-stone-700 cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -266,17 +268,17 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                     <CheckCircle2 className="h-9 w-9 text-emerald-500" />
                   </span>
                   <h3 className="text-xl font-bold text-stone-900">
-                    Requirement Published!
+                    {t("event.applySuccessTitle") || "Requirement Published!"}
                   </h3>
                   <p className="max-w-xs text-sm font-medium text-stone-500">
-                    Your event brief is now live! Artists can view and apply for your event opportunity.
+                    {t("event.applySuccessText") || "Your event brief is now live! Artists can view and apply for your event opportunity."}
                   </p>
                 </motion.div>
               ) : (
                 /* Form */
                 <form onSubmit={handleSubmit} className="flex flex-col gap-5">
                   {/* Row 1 — Event Name */}
-                  <Field label="Event Name" required icon={FileText}>
+                  <Field label={t("event.detailsTitle") || "Event Name"} required icon={FileText}>
                     <input
                       id="brief-event-name"
                       type="text"
@@ -302,7 +304,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
 
                   {/* Row 2 — Budget + Location */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="Total Budget (₹)" required icon={IndianRupee}>
+                    <Field label={t("event.budget") || "Total Budget (₹)"} required icon={IndianRupee}>
                       <input
                         id="brief-budget"
                         type="number"
@@ -314,7 +316,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                         className={inputCls}
                       />
                     </Field>
-                    <Field label="Location / City" required icon={MapPin}>
+                    <Field label={t("event.location") || "Location / City"} required icon={MapPin}>
                       <input
                         id="brief-location"
                         type="text"
@@ -329,7 +331,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
 
                   {/* Row 3 — Event Date + Performance Type */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="Event Date" required icon={CalendarDays}>
+                    <Field label={t("event.date") || "Event Date"} required icon={CalendarDays}>
                       <input
                         id="brief-event-date"
                         type="date"
@@ -339,7 +341,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                         className={cn(inputCls, "cursor-pointer")}
                       />
                     </Field>
-                    <Field label="Performance Type" required icon={Music2}>
+                    <Field label={t("event.performanceType") || "Performance Type"} required icon={Music2}>
                       <div className="relative">
                         <select
                           id="brief-performance-type"
@@ -363,7 +365,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                   </div>
 
                   {/* Row 4 — Categories (tag chips) */}
-                  <Field label="Event Categories" icon={Tag}>
+                  <Field label={t("nav.categories") || "Event Categories"} icon={Tag}>
                     <div className="flex flex-wrap gap-2 pt-1">
                       {CATEGORY_OPTIONS.map((cat) => {
                         const selected = form.categories.includes(cat);
@@ -373,7 +375,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                             type="button"
                             onClick={() => toggleCategory(cat)}
                             className={cn(
-                              "rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all duration-150",
+                              "rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all duration-150 cursor-pointer",
                               selected
                                 ? "border-[#E25C1D] bg-[#E25C1D] text-white shadow-xs"
                                 : "border-stone-200 bg-stone-50/80 text-stone-600 hover:border-orange-300 hover:bg-orange-50/50 hover:text-[#E25C1D]"
@@ -387,7 +389,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                   </Field>
 
                   {/* Row 5 — Professional Requirements */}
-                  <Field label="Professional Requirements" icon={ClipboardList}>
+                  <Field label={t("event.requirements") || "Professional Requirements"} icon={ClipboardList}>
                     <textarea
                       id="brief-requirements"
                       rows={3}
@@ -404,7 +406,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                   {/* Auth warning */}
                   {!currentUser && (
                     <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-700">
-                      ⚠️ You must be signed in to post a requirement.
+                      ⚠️ {t("booking.loginRequiredText") || "You must be signed in to post a requirement."}
                     </p>
                   )}
 
@@ -414,7 +416,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                     type="submit"
                     disabled={submitting || !currentUser}
                     className={cn(
-                      "mt-2 flex h-12 w-full items-center justify-center gap-2",
+                      "mt-2 flex h-12 w-full items-center justify-center gap-2 cursor-pointer",
                       "rounded-xl bg-[#E25C1D] text-xs font-bold uppercase tracking-wider text-white",
                       "shadow-md transition-all duration-200 hover:bg-[#c94e17] hover:shadow-lg active:scale-[0.99]",
                       (submitting || !currentUser) && "cursor-not-allowed opacity-60 hover:bg-[#E25C1D] hover:shadow-md"
@@ -423,10 +425,10 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                     {submitting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Submitting…
+                        {t("booking.sending") || "Submitting…"}
                       </>
                     ) : (
-                      "Submit Requirement"
+                      t("events.postEvent") || "Submit Requirement"
                     )}
                   </button>
                 </form>

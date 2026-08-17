@@ -9,8 +9,10 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import { CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
+
+import { useI18n } from "@/i18n/I18nProvider";
 
 const LOCAL_CUSTOM_CATS_KEY = "mykalakar_custom_categories";
 
@@ -167,6 +169,7 @@ const cardVariants = {
 export default function BrowseAndPopularCategories() {
   const [categories, setCategories] = useState<any[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
+  const { t } = useI18n();
 
   useEffect(() => {
     const q = collection(db, "categories");
@@ -206,64 +209,6 @@ export default function BrowseAndPopularCategories() {
         const combined = [...localCustom, ...CATEGORY_GROUP_OPTIONS];
         setCategories(combined);
       }
-    );
-    return () => unsub();
-  }, []);
-
-  const [artistCounts, setArtistCounts] = useState<Record<string, number>>({});
-  const [categoryArtistCounts, setCategoryArtistCounts] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    const q = query(collection(db, "artists"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const counts: Record<string, number> = {};
-        const catCounts: Record<string, number> = {};
-
-        snap.docs.forEach((docSnap) => {
-          const data = docSnap.data();
-          const status = String(data.status || "active").toLowerCase();
-          if (status !== "active" && status !== "approved" && status !== "") return;
-
-          const catStr = String(
-            data.categoryGroup || data.category || data.primaryCategory || data.artForm || data.subCategory || ""
-          ).toLowerCase();
-          const categoriesArr = Array.isArray(data.categories)
-            ? data.categories.map((c: any) => String(c).toLowerCase())
-            : [];
-          const eventsArr = Array.isArray(data.events)
-            ? data.events.map((e: any) => String(e).toLowerCase())
-            : [];
-
-          const allCatTerms = [catStr, ...categoriesArr];
-
-          // Count for event types
-          BROWSE_EVENTS.forEach((evt) => {
-            const titleLower = evt.title.toLowerCase();
-            const keyword = titleLower.split(" ")[0]; // e.g. "wedding", "varkari", "birthday"
-
-            const isMatch =
-              catStr.includes(keyword) ||
-              categoriesArr.some((c: string) => c.includes(keyword)) ||
-              eventsArr.some((e: string) => e.includes(keyword));
-
-            if (isMatch) {
-              counts[evt.title] = (counts[evt.title] || 0) + 1;
-            }
-          });
-
-          // Count for categories
-          allCatTerms.forEach((term) => {
-            if (!term) return;
-            catCounts[term] = (catCounts[term] || 0) + 1;
-          });
-        });
-
-        setArtistCounts(counts);
-        setCategoryArtistCounts(catCounts);
-      },
-      (err) => console.warn("Artist count snapshot warning:", err)
     );
     return () => unsub();
   }, []);
@@ -309,7 +254,7 @@ export default function BrowseAndPopularCategories() {
         <div className="flex items-center justify-between mb-2.5 sm:mb-5">
           <div className="flex items-center gap-2">
             <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-stone-900 tracking-tight">
-              Browse by Event
+              {t("home.browseByEvent") || "Browse by Event"}
             </h2>
             <span className="h-2 w-2 rounded-full bg-orange-500 animate-ping hidden sm:inline-block" />
           </div>
@@ -346,9 +291,6 @@ export default function BrowseAndPopularCategories() {
           className="flex items-center gap-2 sm:gap-4 md:gap-5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-0.5 snap-x snap-mandatory"
         >
           {displayEvents.map((evt, idx) => {
-            const count = artistCounts[evt.title] || 0;
-            const countText = count > 0 ? `${count} ${count === 1 ? "Artist" : "Artists"}` : "0 Artists";
-
             return (
               <motion.div
                 key={`${evt.title}-${idx}`}
@@ -369,11 +311,6 @@ export default function BrowseAndPopularCategories() {
                     />
                     {/* Subtle bottom vignette gradient */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-
-                    {/* Floating Bottom Badge */}
-                    <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-orange-500 px-1.5 py-0.5 text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-white shadow-xs border border-white">
-                      {countText}
-                    </span>
                   </div>
 
                   {/* Text Below the Circle */}
@@ -382,7 +319,7 @@ export default function BrowseAndPopularCategories() {
                       {evt.title}
                     </h3>
                     <span className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] sm:text-[12px] font-semibold text-orange-600 group-hover:text-orange-700">
-                      <span>Explore</span>
+                      <span>{t("common.explore") || "Explore"}</span>
                       <span className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
                     </span>
                   </div>
@@ -398,7 +335,7 @@ export default function BrowseAndPopularCategories() {
         <div className="flex items-center justify-between mb-2.5 sm:mb-5">
           <div className="flex items-center gap-2">
             <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-stone-900 tracking-tight">
-              Popular Categories
+              {t("home.popularCategories") || "Popular Categories"}
             </h2>
           </div>
         </div>
@@ -417,7 +354,7 @@ export default function BrowseAndPopularCategories() {
                 CATEGORY_SUBTITLES[catName] ||
                 (Array.isArray(cat.subcategories) && cat.subcategories.length > 0
                   ? cat.subcategories.slice(0, 2).join(", ")
-                  : "Verified Artists & Services");
+                  : t("home.verifiedArtistsVendors") || "Verified Artists & Services");
 
               const categoryLink = cat.link || `/artists?category=${encodeURIComponent(catName)}`;
 
@@ -465,8 +402,8 @@ export default function BrowseAndPopularCategories() {
             >
               <span>
                 {isExpanded
-                  ? "Show fewer categories"
-                  : `Show all ${categories.length} categories`}
+                  ? t("home.showFewerCategories") || "Show fewer categories"
+                  : t("home.showAllCategories", { count: categories.length }) || `Show all ${categories.length} categories`}
               </span>
               {isExpanded ? (
                 <ChevronUp className="h-3.5 w-3.5 stroke-[2.5] text-orange-600" />
