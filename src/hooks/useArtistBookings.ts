@@ -7,6 +7,7 @@ import {
   subscribeArtistBookings,
   subscribeArtistNotifications,
   updateArtistBookingStatus,
+  deleteArtistBooking,
 } from "@/services/artistBookingService";
 import type {
   ArtistAvailabilityBlock,
@@ -38,8 +39,9 @@ function sortByEventDate(a: BookingEvent, b: BookingEvent) {
 }
 
 export function useArtistBookings() {
-  const { artistData, currentUser } = useAuth();
+  const { artistData, currentUser, userProfile } = useAuth();
   const artistId = String(artistData?.id || artistData?.uid || currentUser?.uid || "");
+  const artistName = String(artistData?.name || (userProfile as any)?.fullName || currentUser?.displayName || "");
   const [bookings, setBookings] = useState<BookingEvent[]>([]);
   const [availability, setAvailability] = useState<ArtistAvailabilityBlock[]>([]);
   const [notifications, setNotifications] = useState<BookingNotification[]>([]);
@@ -54,7 +56,7 @@ export function useArtistBookings() {
   }, [bookings]);
 
   useEffect(() => {
-    if (!artistId) {
+    if (!artistId && !artistName) {
       setBookings([]);
       setAvailability([]);
       setNotifications([]);
@@ -71,6 +73,7 @@ export function useArtistBookings() {
 
     const unsubscribeBookings = subscribeArtistBookings(
       artistId,
+      artistName,
       (data) => {
         setBookings(data);
         setLoadingBookings(false);
@@ -108,7 +111,8 @@ export function useArtistBookings() {
       unsubscribeAvailability();
       unsubscribeNotifications();
     };
-  }, [artistId]);
+  }, [artistId, artistName]);
+
   const updateStatus = useCallback(
     async (booking: BookingEvent, status: BookingStatus, extraFields?: Partial<BookingEvent>) => {
       if (status === "CONFIRMED") {
@@ -154,16 +158,34 @@ export function useArtistBookings() {
     [availability]
   );
 
+  const deleteBooking = useCallback(async (booking: BookingEvent) => {
+    const previousBookings = bookingsRef.current;
+    setBookings((current) => current.filter((item) => item.id !== booking.id));
+    try {
+      await deleteArtistBooking(booking.id, booking);
+      return { success: true, message: "Booking deleted successfully." };
+    } catch (err) {
+      setBookings(previousBookings);
+      setError(err);
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : "Could not delete booking.",
+      };
+    }
+  }, []);
+
   const summary = useMemo(() => {
     const upcomingEvents = bookings.filter(
-      (booking) => (booking.status === "CONFIRMED" || booking.status === "confirmed") && isFutureOrToday(booking.eventDate)
+      (booking) => (booking.status === "CONFIRMED" || booking.status === "confirmed" || booking.status === "booked") && isFutureOrToday(booking.eventDate)
     );
 
     return {
-      pending: bookings.filter((booking) => ["PENDING_ARTIST_RESPONSE", "pending"].includes(booking.status)).length,
-      confirmed: bookings.filter((booking) => ["CONFIRMED", "confirmed"].includes(booking.status)).length,
+      pending: bookings.filter((booking) =>
+        ["PENDING_ARTIST_RESPONSE", "PENDING_TELECALLER_VERIFICATION", "PAYMENT_PENDING", "pending", "SOFT_HOLD_ACTIVE", "ARTIST_REVIEW", "new", "contacting_artists"].includes(booking.status)
+      ).length,
+      confirmed: bookings.filter((booking) => ["CONFIRMED", "confirmed", "booked", "artist_confirmed"].includes(booking.status)).length,
       completed: bookings.filter((booking) => ["EVENT_COMPLETED", "completed"].includes(booking.status)).length,
-      cancelled: bookings.filter((booking) => ["CANCELLED_BY_ARTIST", "REJECTED", "cancelled"].includes(booking.status)).length,
+      cancelled: bookings.filter((booking) => ["CANCELLED_BY_ARTIST", "CANCELLED_BY_CLIENT", "REJECTED", "cancelled"].includes(booking.status)).length,
       upcoming: upcomingEvents.length,
       unreadNotifications: notifications.filter((notification) => !notification.read).length,
     };
@@ -205,5 +227,6 @@ export function useArtistBookings() {
     loadingNotifications,
     error,
     updateStatus,
+    deleteBooking,
   };
 }

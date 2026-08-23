@@ -47,7 +47,7 @@ export default function MyKalakarHeroSlider() {
   const activeSlide = HERO_SLIDES[slider.activeIndex];
 
   return (
-    <section className="relative w-full h-auto md:h-screen flex flex-col md:block bg-[#0f0b07] overflow-hidden">
+    <section className="relative w-full h-auto md:h-screen flex flex-col md:block overflow-hidden">
       <style dangerouslySetInnerHTML={{ __html: heroSliderStyles }} />
 
       {/* Background Glowing Ambient Orbs */}
@@ -86,7 +86,7 @@ export default function MyKalakarHeroSlider() {
         </button>
 
         {/* Thumbnails Row - DESKTOP ONLY here (at bottom of fullscreen) */}
-        <div className="hidden md:flex absolute bottom-6 left-4 right-4 z-30 overflow-visible gap-3 py-1 scrollbar-none">
+        <div className="hidden md:flex absolute bottom-6 left-4 right-4 z-20 overflow-visible gap-3 py-1 scrollbar-none">
           {HERO_SLIDES.map((slide, index) => {
             const isActive = index === slider.activeIndex;
             return (
@@ -155,8 +155,8 @@ export default function MyKalakarHeroSlider() {
           ))}
         </div>
 
-        {/* DESKTOP ONLY Content Wrapper */}
-        <div className="hidden md:flex absolute inset-0 z-20 flex-row w-full h-full justify-between items-center px-16 lg:px-24 pt-20 pb-20 gap-12">
+        {/* DESKTOP ONLY Content Wrapper (Guaranteed clearance below 80px Navbar) */}
+        <div className="hidden md:flex absolute top-20 md:top-24 bottom-0 left-0 right-0 z-20 flex-row w-full justify-between items-start pt-4 lg:pt-8 px-12 lg:px-20 pb-20 gap-12">
           {/* Left Side: Headline Text & Signature Visual Element */}
           <div className="relative flex w-full md:w-[54%] flex-col justify-center text-white pointer-events-none select-none">
             {/* MyKalakar Signature Visual Ribbon Trail SVG (Desktop ONLY) */}
@@ -241,8 +241,8 @@ export default function MyKalakarHeroSlider() {
           </div>
 
           {/* Right Side: Glass Slide Panel */}
-          <div className="w-full md:w-[45%] lg:w-[42%] flex flex-col justify-center">
-            <div className="relative z-10 w-full">
+          <div className="w-full md:w-[45%] lg:w-[42%] flex flex-col justify-center relative z-30">
+            <div className="relative z-30 w-full">
               <GlassSlidePanel slide={activeSlide} activeIndex={slider.activeIndex} slideCount={HERO_SLIDES.length} />
             </div>
           </div>

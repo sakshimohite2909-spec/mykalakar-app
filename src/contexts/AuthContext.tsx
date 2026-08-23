@@ -291,13 +291,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       );
 
-      // ── 3. artists/{uid} ───────────────────────────────────────────────────
+      // ── 3. artists/{uid} or query by uid/userId ────────────────────────────
+      const artistByUidQuery = query(
+        collection(db, "artists"),
+        where("uid", "==", uid),
+        limit(1)
+      );
       unsubArtistRef.current = onSnapshot(
         doc(db, "artists", uid),
         (snap) => {
-          artistDocRef.current = snap.exists() ? { id: snap.id, ...snap.data() } : null;
-          if (initialised) resolveRoleAndProfile();
-          else onReady();
+          if (snap.exists()) {
+            artistDocRef.current = { id: snap.id, ...snap.data() };
+            if (initialised) resolveRoleAndProfile();
+            else onReady();
+          } else {
+            onSnapshot(
+              artistByUidQuery,
+              (qSnap) => {
+                if (!qSnap.empty) {
+                  const d = qSnap.docs[0];
+                  artistDocRef.current = { id: d.id, ...d.data() };
+                } else {
+                  artistDocRef.current = null;
+                }
+                if (initialised) resolveRoleAndProfile();
+                else onReady();
+              },
+              () => {
+                artistDocRef.current = null;
+                if (initialised) resolveRoleAndProfile();
+                else onReady();
+              }
+            );
+          }
         },
         (err) => {
           console.warn("artists listener error:", err);

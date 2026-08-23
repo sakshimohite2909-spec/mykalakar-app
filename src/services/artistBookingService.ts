@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   onSnapshot,
   query,
@@ -79,8 +80,10 @@ function normalizeDateOnly(value: string) {
 }
 
 function normalizeStatus(status: unknown): BookingStatus {
-  if (typeof status !== "string") return "PENDING_ARTIST_RESPONSE";
+  if (typeof status !== "string") return "PENDING_TELECALLER_VERIFICATION";
   const upper = status.toUpperCase();
+  if (upper === "PENDING_TELECALLER_VERIFICATION") return "PENDING_TELECALLER_VERIFICATION";
+  if (upper === "PAYMENT_PENDING") return "PAYMENT_PENDING";
   if (upper === "PENDING" || upper === "PENDING_ARTIST_RESPONSE") return "PENDING_ARTIST_RESPONSE";
   if (upper === "CONFIRMED") return "CONFIRMED";
   if (upper === "COMPLETED" || upper === "EVENT_COMPLETED") return "EVENT_COMPLETED";
@@ -119,6 +122,8 @@ export function normalizeBooking(id: string, data: DocumentData): BookingEvent {
     holdExpiryTime: data.holdExpiryTime ? String(data.holdExpiryTime) : undefined,
     paymentGateway: data.paymentGateway || undefined,
     authorizedAmount: data.authorizedAmount ? Number(data.authorizedAmount) : undefined,
+    confirmedPrice: data.confirmedPrice ? Number(data.confirmedPrice) : undefined,
+    telecallerStatus: data.telecallerStatus ? String(data.telecallerStatus) : undefined,
     isEscrowReleased: data.isEscrowReleased !== undefined ? Boolean(data.isEscrowReleased) : undefined,
     counterOfferAmount: data.counterOfferAmount ? Number(data.counterOfferAmount) : undefined,
     counterOfferNotes: data.counterOfferNotes ? String(data.counterOfferNotes) : undefined,
@@ -217,8 +222,6 @@ export async function checkAndReleaseExpiredHolds(bookings: BookingEvent[]) {
     }
   }
 }
-
-import { getDocs } from "firebase/firestore";
 
 function parseTimeToMinutes(timeStr?: string): number {
   if (!timeStr) return 0;
@@ -410,23 +413,210 @@ export async function createArtistBooking(input: CreateBookingInput) {
   return bookingPayload;
 }
 
+export async function deleteArtistBooking(bookingId: string, booking?: BookingEvent) {
+  const cleanId = bookingId.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
+  const collectionsToTry = [BOOKING_COLLECTION, "inquiries", "telecaller_leads"];
+  const deletePromises: Promise<any>[] = [];
+
+  // 1. Delete direct document IDs
+  collectionsToTry.forEach((col) => {
+    deletePromises.push(deleteDoc(doc(db, col, cleanId)).catch(() => {}));
+    deletePromises.push(deleteDoc(doc(db, col, bookingId)).catch(() => {}));
+  });
+
+  // 2. Query and delete any matching documents in all collections by phone/clientName
+  if (booking?.clientPhone && booking.clientPhone !== "Phone not provided") {
+    const phone = booking.clientPhone.trim();
+    collectionsToTry.forEach((col) => {
+      const q = query(collection(db, col), where("clientPhone", "==", phone));
+      const qCust = query(collection(db, col), where("customerPhone", "==", phone));
+      const qPhone = query(collection(db, col), where("phone", "==", phone));
+      [q, qCust, qPhone].forEach((subQ) => {
+        deletePromises.push(
+          getDocs(subQ).then((snap) => {
+            snap.forEach((d) => deleteDoc(d.ref).catch(() => {}));
+          }).catch(() => {})
+        );
+      });
+    });
+  }
+
+  await Promise.allSettled(deletePromises);
+
+  // 3. Clear from all local storage caches
+  try {
+    const storageKeys = ["mykalakar_local_telecaller_leads", "mykalakar_telecaller_leads"];
+    storageKeys.forEach((key) => {
+      const rawLocal = localStorage.getItem(key);
+      if (rawLocal) {
+        const parsed = JSON.parse(rawLocal);
+        const filtered = parsed.filter((l: any) => {
+          const lId = String(l.id || "");
+          const lPhone = String(l.clientPhone || l.customerPhone || l.phone || "").trim();
+          if (lId === bookingId || lId === cleanId) return false;
+          if (booking?.clientPhone && lPhone && lPhone === booking.clientPhone.trim()) return false;
+          return true;
+        });
+        localStorage.setItem(key, JSON.stringify(filtered));
+      }
+    });
+  } catch (e) {
+    // Ignore error
+  }
+}
+
 export function subscribeArtistBookings(
   artistId: string,
-  onData: (bookings: BookingEvent[]) => void,
+  artistNameOrCb: string | ((bookings: BookingEvent[]) => void),
+  onDataOrErr?: ((bookings: BookingEvent[]) => void) | ((error: unknown) => void),
   onError?: (error: unknown) => void
 ) {
-  const bookingsQuery = query(collection(db, BOOKING_COLLECTION), where("artistId", "==", artistId));
-  return onSnapshot(
-    bookingsQuery,
+  const artistName = typeof artistNameOrCb === "string" ? artistNameOrCb : "";
+  const onData = typeof artistNameOrCb === "function" ? artistNameOrCb : (onDataOrErr as any);
+  const actualOnError = typeof artistNameOrCb === "function" ? (onDataOrErr as any) : onError;
+
+  let firestoreBookings: BookingEvent[] = [];
+  let inquiryBookings: BookingEvent[] = [];
+  let telecallerBookings: BookingEvent[] = [];
+
+  const cleanArtistName = artistName.trim().toLowerCase();
+  const cleanArtistId = artistId.trim().toLowerCase();
+
+  const isMatchForArtist = (data: any, docId: string) => {
+    if (!data) return false;
+    // Reject dummy/empty docs that have no client info at all
+    const clientName = data.clientName || data.customerName;
+    const clientPhone = data.clientPhone || data.customerPhone || data.phone;
+    const eventDate = data.eventDate || data.date;
+    const venue = data.venueLocation || data.eventLocation || data.location;
+    if (!clientName && !clientPhone && !eventDate && !venue) {
+      return false;
+    }
+
+    const dArtistId = String(data.artistId || data.artistUid || "").toLowerCase();
+    const dArtistName = String(data.artistName || data.requestedArtistName || "").toLowerCase();
+    const dSubCat = String(data.subCategory || "").toLowerCase();
+    const matchedArr = Array.isArray(data.matchedArtists) ? data.matchedArtists : [];
+
+    if (cleanArtistId && (dArtistId === cleanArtistId || docId.toLowerCase().includes(cleanArtistId))) {
+      return true;
+    }
+    if (cleanArtistName && (dArtistName.includes(cleanArtistName) || cleanArtistName.includes(dArtistName))) {
+      return true;
+    }
+    if (cleanArtistName && dSubCat.includes(cleanArtistName)) {
+      return true;
+    }
+    if (cleanArtistName && matchedArr.some((m: any) => String(m.artistName || "").toLowerCase().includes(cleanArtistName))) {
+      return true;
+    }
+    return false;
+  };
+
+  const publishMerged = () => {
+    const map = new Map<string, BookingEvent>();
+    const all: BookingEvent[] = [];
+
+    // Local storage leads override for instant offline/local syncing
+    try {
+      const rawLocal = localStorage.getItem("mykalakar_local_telecaller_leads");
+      if (rawLocal) {
+        const parsed = JSON.parse(rawLocal);
+        parsed.forEach((l: any) => {
+          if (isMatchForArtist(l, l.id)) {
+            all.push(normalizeBooking(l.id, l));
+          }
+        });
+      }
+    } catch (e) {
+      // Ignore local storage error
+    }
+
+    [...firestoreBookings, ...inquiryBookings, ...telecallerBookings, ...all].forEach((b) => {
+      // Create canonical deduplication key based on clientPhone + eventDate
+      const phoneDigits = (b.clientPhone || "").replace(/\D/g, "").slice(-10);
+      const dateKey = (b.eventDate || "").trim();
+      const nameKey = (b.clientName || "").trim().toLowerCase();
+
+      const dedupeKey = phoneDigits && dateKey
+        ? `${phoneDigits}_${dateKey}`
+        : (phoneDigits ? `${phoneDigits}_${nameKey}` : (dateKey && nameKey ? `${nameKey}_${dateKey}` : b.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "")));
+
+      const existing = map.get(dedupeKey);
+      if (!existing) {
+        map.set(dedupeKey, b);
+      } else {
+        // Priority status resolution: if one of the docs is CONFIRMED or PENDING_ARTIST_RESPONSE, preserve that status!
+        const priorityStatuses = ["CONFIRMED", "confirmed", "completed", "EVENT_COMPLETED", "PENDING_ARTIST_RESPONSE", "pending"];
+        let mergedStatus = existing.status;
+        if (priorityStatuses.includes(b.status) && !priorityStatuses.includes(existing.status)) {
+          mergedStatus = b.status;
+        } else if (b.status === "PENDING_ARTIST_RESPONSE" || b.status === "confirmed" || b.status === "CONFIRMED") {
+          mergedStatus = b.status;
+        }
+
+        map.set(dedupeKey, {
+          ...existing,
+          ...b,
+          // Preserve best client info
+          clientName: (existing.clientName && existing.clientName !== "Client") ? existing.clientName : b.clientName,
+          clientPhone: (existing.clientPhone && existing.clientPhone !== "Phone not provided") ? existing.clientPhone : b.clientPhone,
+          venueLocation: (existing.venueLocation && existing.venueLocation !== "Venue not provided") ? existing.venueLocation : b.venueLocation,
+          status: mergedStatus,
+        });
+      }
+    });
+
+    const result = Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt || Date.now()).getTime() - new Date(a.createdAt || Date.now()).getTime()
+    );
+    if (onData) onData(result);
+  };
+
+  // 1. Subscribe to bookings collection
+  const unsubBookings = onSnapshot(
+    collection(db, BOOKING_COLLECTION),
     (snapshot) => {
-      const bookings = mapSnapshot(snapshot, normalizeBooking).sort(
-        (a, b) => new Date(a.eventDate || a.createdAt).getTime() - new Date(b.eventDate || b.createdAt).getTime()
-      );
-      checkAndReleaseExpiredHolds(bookings).catch(console.error);
-      onData(bookings);
+      firestoreBookings = snapshot.docs
+        .filter((docSnap) => isMatchForArtist(docSnap.data(), docSnap.id))
+        .map((docSnap) => normalizeBooking(docSnap.id, docSnap.data()));
+      publishMerged();
     },
-    onError
+    (err) => {
+      if (actualOnError) actualOnError(err);
+      publishMerged();
+    }
   );
+
+  // 2. Subscribe to inquiries collection
+  const unsubInquiries = onSnapshot(
+    collection(db, "inquiries"),
+    (snapshot) => {
+      inquiryBookings = snapshot.docs
+        .filter((docSnap) => isMatchForArtist(docSnap.data(), docSnap.id))
+        .map((docSnap) => normalizeBooking(`inquiry_${docSnap.id}`, docSnap.data()));
+      publishMerged();
+    },
+    () => publishMerged()
+  );
+
+  // 3. Subscribe to telecaller_leads collection
+  const unsubLeads = onSnapshot(
+    collection(db, "telecaller_leads"),
+    (snapshot) => {
+      telecallerBookings = snapshot.docs
+        .filter((docSnap) => isMatchForArtist(docSnap.data(), docSnap.id))
+        .map((docSnap) => normalizeBooking(`lead_${docSnap.id}`, docSnap.data()));
+      publishMerged();
+    },
+    () => publishMerged()
+  );
+
+  return () => {
+    unsubBookings();
+    unsubInquiries();
+    unsubLeads();
+  };
 }
 
 export function subscribeCustomerBookings(
@@ -507,7 +697,8 @@ export function getConfirmedBookingConflict(
 }
 
 function notificationForStatus(status: BookingStatus) {
-  switch (status) {
+  const norm = normalizeStatus(status);
+  switch (norm) {
     case "CONFIRMED":
       return {
         type: "booking_accepted" as const,
@@ -544,20 +735,135 @@ export async function updateArtistBookingStatus(
   extraFields: Partial<BookingEvent> = {}
 ) {
   const now = new Date().toISOString();
+  const cleanDocId = booking.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
+  const normalizedBookingStatus = normalizeStatus(status);
+
+  // 1. Prepare booking update payload
+  const bookingPayload = sanitizePayload({
+    ...booking,
+    status: normalizedBookingStatus,
+    updatedAt: now,
+    ...extraFields,
+  });
+
+  // Determine telecaller lead status mapping
+  const upperStatus = String(normalizedBookingStatus).toUpperCase();
+  const telecallerStatus =
+    upperStatus === "CONFIRMED" || upperStatus === "ACCEPTED"
+      ? "artist_confirmed"
+      : upperStatus === "PAYMENT_PENDING"
+      ? "quote_sent"
+      : upperStatus === "EVENT_COMPLETED" || upperStatus === "COMPLETED"
+      ? "booked"
+      : upperStatus.includes("CANCEL") || upperStatus === "REJECTED" || upperStatus === "DECLINED"
+      ? "cancelled"
+      : "in_progress";
+
+  const leadPayload = sanitizePayload({
+    status: telecallerStatus,
+    telecallerStatus: telecallerStatus,
+    bookingStatus: normalizedBookingStatus,
+    updatedAt: now,
+    ...extraFields,
+  });
+
+  // 2. Perform upserts across Firestore collections safely using setDoc with merge: true
+  const writePromises: Promise<any>[] = [];
+
+  // Bookings collection (update clean ID and prefixed ID)
+  writePromises.push(
+    setDoc(doc(db, BOOKING_COLLECTION, cleanDocId), bookingPayload, { merge: true }).catch(() => {})
+  );
+  if (booking.id !== cleanDocId) {
+    writePromises.push(
+      setDoc(doc(db, BOOKING_COLLECTION, booking.id), bookingPayload, { merge: true }).catch(() => {})
+    );
+  }
+
+  // Telecaller leads collection
+  writePromises.push(
+    setDoc(doc(db, "telecaller_leads", cleanDocId), leadPayload, { merge: true }).catch(() => {})
+  );
+  if (booking.id !== cleanDocId) {
+    writePromises.push(
+      setDoc(doc(db, "telecaller_leads", booking.id), leadPayload, { merge: true }).catch(() => {})
+    );
+  }
+
+  // Inquiries collection
+  writePromises.push(
+    setDoc(doc(db, "inquiries", cleanDocId), leadPayload, { merge: true }).catch(() => {})
+  );
+  if (booking.id !== cleanDocId) {
+    writePromises.push(
+      setDoc(doc(db, "inquiries", booking.id), leadPayload, { merge: true }).catch(() => {})
+    );
+  }
+
+  // Also update any matching leads in telecaller_leads by client phone if present
+  if (booking.clientPhone && booking.clientPhone !== "Phone not provided") {
+    const phone = booking.clientPhone.trim();
+    const phoneQueries = [
+      query(collection(db, "telecaller_leads"), where("clientPhone", "==", phone)),
+      query(collection(db, "telecaller_leads"), where("customerPhone", "==", phone)),
+      query(collection(db, "telecaller_leads"), where("phone", "==", phone)),
+      query(collection(db, "inquiries"), where("clientPhone", "==", phone)),
+      query(collection(db, "inquiries"), where("phone", "==", phone)),
+    ];
+    phoneQueries.forEach((q) => {
+      writePromises.push(
+        getDocs(q).then((snap) => {
+          snap.forEach((d) => {
+            setDoc(d.ref, leadPayload, { merge: true }).catch(() => {});
+          });
+        }).catch(() => {})
+      );
+    });
+  }
+
   await withTimeout(
-    updateDoc(doc(db, BOOKING_COLLECTION, booking.id), {
-      status,
-      updatedAt: now,
-      ...extraFields,
-    }),
+    Promise.allSettled(writePromises),
     FIREBASE_WRITE_TIMEOUT_MS,
     "Updating the booking is taking too long. Please try again."
   );
 
+  // Update local storage cache for telecaller leads
+  try {
+    const storageKeys = ["mykalakar_local_telecaller_leads", "mykalakar_telecaller_leads"];
+    storageKeys.forEach((key) => {
+      const rawLocal = localStorage.getItem(key);
+      if (rawLocal) {
+        const parsed = JSON.parse(rawLocal);
+        const updated = parsed.map((l: any) => {
+          const lId = String(l.id || "");
+          const lPhone = String(l.clientPhone || l.customerPhone || l.phone || "").trim();
+          const matches =
+            lId === booking.id ||
+            lId === cleanDocId ||
+            (booking.clientPhone && lPhone && lPhone === booking.clientPhone.trim());
+          if (matches) {
+            return {
+              ...l,
+              status: telecallerStatus,
+              telecallerStatus,
+              bookingStatus: normalizedBookingStatus,
+              updatedAt: now,
+              ...extraFields,
+            };
+          }
+          return l;
+        });
+        localStorage.setItem(key, JSON.stringify(updated));
+      }
+    });
+  } catch (e) {
+    // Ignore local storage error
+  }
+
   // Sync confirmed bookings to public availability node for masking
-  if (status === "CONFIRMED" || status === "EVENT_COMPLETED") {
+  if (normalizedBookingStatus === "CONFIRMED" || normalizedBookingStatus === "EVENT_COMPLETED") {
     try {
-      await setDoc(doc(db, AVAILABILITY_COLLECTION, `booking_${booking.id}`), {
+      await setDoc(doc(db, AVAILABILITY_COLLECTION, `booking_${cleanDocId}`), {
         artistId: booking.artistId,
         blockedDate: booking.eventDate,
         reason: "Booked",
@@ -567,15 +873,18 @@ export async function updateArtistBookingStatus(
     } catch (err) {
       console.warn("Failed to sync availability block:", err);
     }
-  } else if (["CANCELLED_BY_ARTIST", "CANCELLED_BY_CLIENT", "REJECTED"].includes(status)) {
+  } else if (["CANCELLED_BY_ARTIST", "CANCELLED_BY_CLIENT", "REJECTED"].includes(normalizedBookingStatus)) {
     try {
-      await deleteDoc(doc(db, AVAILABILITY_COLLECTION, `booking_${booking.id}`));
+      await deleteDoc(doc(db, AVAILABILITY_COLLECTION, `booking_${cleanDocId}`));
+      if (booking.id !== cleanDocId) {
+        await deleteDoc(doc(db, AVAILABILITY_COLLECTION, `booking_${booking.id}`));
+      }
     } catch (err) {
       // Ignore if it doesn't exist
     }
   }
 
-  const notification = notificationForStatus(status);
+  const notification = notificationForStatus(normalizedBookingStatus);
   if (notification) {
     await createBookingNotification({
       artistId: booking.artistId,

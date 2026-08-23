@@ -55,9 +55,15 @@ export type TelecallerLead = {
   category: string;
   subCategory: string;
   eventDate: string;
+  eventTime?: string;
   eventLocation: string;
+  venueAddress?: string;
   district?: string;
   budget: number;
+  artistOfferBudget?: number;
+  soundRequired?: boolean;
+  isVerifiedByTelecaller?: boolean;
+  telecallerNotes?: string;
   specialNotes?: string;
   assignedTelecallerId?: string;
   assignedTelecallerName?: string;
@@ -70,6 +76,7 @@ export type TelecallerLead = {
   confirmedPrice?: number;
   source: "website_inquiry" | "manual_phone_call";
   createdAt?: string | Date;
+  updatedAt?: string | Date;
 };
 
 const LEADS_COLLECTION = "telecaller_leads";
@@ -172,8 +179,14 @@ function sanitizeLead(id: string, data: any): TelecallerLead {
       isBooking ? "Artist Booking" : "Event Requirement"
     ),
     eventDate: toSafeString(data.eventDate || data.date, ""),
+    eventTime: toSafeString(data.eventTime || data.time || data.timing, ""),
     eventLocation: toSafeString(data.eventLocation || data.venueLocation || data.location || data.city, ""),
+    venueAddress: toSafeString(data.venueAddress || data.address || data.venue, ""),
     budget: Number(data.authorizedAmount || data.budget || data.totalBudget || 0) || 0,
+    artistOfferBudget: data.artistOfferBudget ? Number(data.artistOfferBudget) : undefined,
+    soundRequired: typeof data.soundRequired === "boolean" ? data.soundRequired : undefined,
+    isVerifiedByTelecaller: Boolean(data.isVerifiedByTelecaller || data.isVerified),
+    telecallerNotes: toSafeString(data.telecallerNotes || data.verifiedNotes, ""),
     specialNotes: toSafeString(data.specialNotes || data.message || data.requirements || data.additionalNotes, ""),
     status,
     matchedArtists: Array.isArray(data.matchedArtists)
@@ -207,6 +220,7 @@ function sanitizeLead(id: string, data: any): TelecallerLead {
     confirmedPrice: data.confirmedPrice ? Number(data.confirmedPrice) : undefined,
     source: (data.source === "manual_phone_call" ? "manual_phone_call" : "website_inquiry") as any,
     createdAt: toSafeString(data.createdAt, new Date().toISOString()),
+    updatedAt: toSafeString(data.updatedAt, ""),
   };
 }
 
@@ -481,9 +495,19 @@ export async function updateLeadStatus(
     console.warn("Local storage status save warning:", e);
   }
 
+  const bookingStatusToSet =
+    status === "artist_confirmed" || status === "quote_sent"
+      ? "PAYMENT_PENDING"
+      : status === "booked"
+      ? "CONFIRMED"
+      : status === "cancelled"
+      ? "CANCELLED_BY_CLIENT"
+      : status;
+
   const updatePayload: Record<string, any> = {
     status,
     telecallerStatus: status,
+    bookingStatus: bookingStatusToSet,
     updatedAt: serverTimestamp(),
   };
   if (confirmedArtist) {
@@ -502,16 +526,23 @@ export async function updateLeadStatus(
     // Ignore permissions or network fallback
   }
 
+  const bookingDocPayload = {
+    ...updatePayload,
+    status: bookingStatusToSet,
+  };
+
   try {
     if (leadId.startsWith("booking_")) {
-      await updateDoc(doc(db, "bookings", realDocId), updatePayload);
+      await setDoc(doc(db, "bookings", realDocId), bookingDocPayload, { merge: true });
     } else if (leadId.startsWith("brief_")) {
       await updateDoc(doc(db, "eventBriefs", realDocId), updatePayload);
     } else {
       try {
-        await updateDoc(doc(db, LEADS_COLLECTION, leadId), updatePayload);
+        await setDoc(doc(db, LEADS_COLLECTION, leadId), updatePayload, { merge: true });
+        // Also update any matching booking in bookings collection
+        await setDoc(doc(db, "bookings", realDocId), bookingDocPayload, { merge: true });
       } catch {
-        await updateDoc(doc(db, "inquiries", realDocId), updatePayload);
+        await setDoc(doc(db, "inquiries", realDocId), updatePayload, { merge: true });
       }
     }
   } catch (error: any) {
@@ -564,4 +595,63 @@ export async function logArtistCall(
   }
 
   return updatedList;
+}
+
+export async function updateLeadDetails(
+  leadId: string,
+  updatedData: Partial<TelecallerLead>
+): Promise<void> {
+  const cid = cleanId(leadId);
+
+  // 1. Immediately update local storage cache
+  const localList = getLocalLeads();
+  let found = false;
+  localList.forEach((l) => {
+    if (cleanId(l.id) === cid || l.id === leadId) {
+      Object.assign(l, updatedData);
+      l.isVerifiedByTelecaller = true;
+      found = true;
+    }
+  });
+
+  if (!found) {
+    localList.push({
+      id: leadId,
+      ...updatedData,
+      isVerifiedByTelecaller: true,
+    } as any);
+  }
+
+  try {
+    localStorage.setItem(LOCAL_LEADS_KEY, JSON.stringify(localList.slice(0, 100)));
+  } catch (e) {
+    console.warn("Local storage update warning:", e);
+  }
+
+  // 2. Write to Firestore
+  const updatePayload: Record<string, any> = {
+    ...updatedData,
+    isVerifiedByTelecaller: true,
+    updatedAt: serverTimestamp(),
+  };
+
+  const realDocId = cleanId(leadId);
+  try {
+    await setDoc(doc(db, LEADS_COLLECTION, realDocId), updatePayload, { merge: true });
+    await setDoc(doc(db, LEADS_COLLECTION, leadId), updatePayload, { merge: true });
+  } catch (e) {
+    console.warn("Firestore lead details update error:", e);
+  }
+
+  try {
+    if (leadId.startsWith("booking_")) {
+      await setDoc(doc(db, "bookings", realDocId), updatePayload, { merge: true });
+    } else if (leadId.startsWith("brief_")) {
+      await setDoc(doc(db, "eventBriefs", realDocId), updatePayload, { merge: true });
+    } else {
+      await setDoc(doc(db, "inquiries", realDocId), updatePayload, { merge: true });
+    }
+  } catch {
+    // Ignore permissions or collection mismatch
+  }
 }

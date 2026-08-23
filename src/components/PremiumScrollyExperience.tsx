@@ -396,8 +396,8 @@ function FeaturedArtistsSection({ artists, loading }: { artists: ShowcaseArtist[
   };
 
   return (
-    <section className="container-shell app-section content-section rhythm-left luxury-section !mt-4 md:!mt-6">
-      <div className="flex items-center justify-between mb-4 sm:mb-5 max-w-[1240px] mx-auto px-4 md:px-6">
+    <section className="container-shell luxury-section !mt-0 !pt-2 !pb-4">
+      <div className="flex items-center justify-between mb-3 max-w-[1240px] mx-auto px-4 md:px-6">
         <h2 className="text-xl md:text-2xl font-extrabold text-stone-900 tracking-tight">
           Featured Artists
         </h2>
@@ -501,9 +501,9 @@ function CTASection() {
   return (
     <>
       <section className="home-cta-section container-shell app-section rhythm-full pb-24 relative overflow-hidden">
-        {/* Ambient glowing gradient orbs */}
-        <div className="absolute left-[5%] top-[10%] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(249,115,22,0.22)_0%,rgba(245,158,11,0.08)_50%,transparent_100%)] blur-3xl pointer-events-none -z-10 animate-pulse" />
-        <div className="absolute right-[10%] bottom-[5%] h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.2)_0%,rgba(234,88,12,0.08)_50%,transparent_100%)] blur-3xl pointer-events-none -z-10" />
+        {/* Ambient glowing gradient orbs with breathing animation */}
+        <div className="ambient-orb-1 absolute left-[5%] top-[10%] h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle,rgba(249,115,22,0.28)_0%,rgba(245,158,11,0.12)_50%,transparent_100%)] blur-3xl pointer-events-none -z-10" />
+        <div className="ambient-orb-2 absolute right-[10%] bottom-[5%] h-[350px] w-[350px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.25)_0%,rgba(234,88,12,0.1)_50%,transparent_100%)] blur-3xl pointer-events-none -z-10" />
 
         <div className="home-cta-panel grid gap-6 rounded-3xl p-6 md:p-10 shadow-2xl md:grid-cols-[1fr_360px] items-center relative z-10">
           <div className="py-2">
@@ -530,7 +530,7 @@ function CTASection() {
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link to="/register?role=artist" className="btn-join-artist inline-flex h-12 items-center gap-2 rounded-xl px-6 text-sm font-black text-white transition-all duration-300 focus:outline-none">
+              <Link to="/register?role=artist" className="btn-join-artist shimmer-btn-effect inline-flex h-12 items-center gap-2 rounded-xl px-6 text-sm font-black text-white transition-all duration-300 focus:outline-none hover:scale-105 active:scale-95 shadow-xl shadow-orange-600/30">
                 <Users className="h-4 w-4" />
                 {t("nav.joinArtist")}
               </Link>
@@ -539,10 +539,10 @@ function CTASection() {
 
           {/* Right Image Container with Floating Badge */}
           <div className="relative group self-center w-full">
-            <SmartImage src={STATIC_IMAGES.profileCover} alt={t("home.hero.altArtist")} usageId="home:cta" category="hero" orientation="landscape" aspectRatio="aspect-video" containerClassName="rounded-2xl overflow-hidden shadow-2xl border border-white/15 group-hover:scale-[1.02] transition-transform duration-500" />
+            <SmartImage src={STATIC_IMAGES.profileCover} alt={t("home.hero.altArtist")} usageId="home:cta" category="hero" orientation="landscape" aspectRatio="aspect-video" containerClassName="rounded-2xl overflow-hidden shadow-2xl border border-white/15 group-hover:scale-[1.03] transition-transform duration-500" />
 
             {/* Floating Glass Rating Badge */}
-            <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-xl border border-white/20 bg-black/60 px-3 py-1.5 shadow-lg backdrop-blur-md">
+            <div className="badge-shimmer-effect absolute bottom-3 left-3 flex items-center gap-2 rounded-xl border border-white/20 bg-black/60 px-3 py-1.5 shadow-lg backdrop-blur-md">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-500/20 text-orange-400 font-extrabold text-xs">
                 🎭
               </div>
@@ -596,7 +596,7 @@ export default function PremiumScrollyExperience() {
         <title>{t("home.meta.title")}</title>
       </Helmet>
       <Navbar />
-      <main>
+      <main className="pt-20">
         <HeroCarousel />
         <BrowseAndPopularCategories />
         <FeaturedArtistsSection artists={artists} loading={artistsLoading} />

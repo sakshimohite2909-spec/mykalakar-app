@@ -4,6 +4,7 @@ import { ArrowRight, CalendarDays, Sparkles } from "lucide-react";
 import type { HeroSlide } from "./sliderData";
 import { useI18n } from "@/i18n/I18nProvider";
 import NewRequirementModal from "@/components/NewRequirementModal";
+import { SpotlightSearch } from "@/components/search/SpotlightSearch";
 
 type GlassSlidePanelProps = {
   slide?: HeroSlide;
@@ -46,6 +47,11 @@ export function GlassSlidePanel({ slide, activeIndex, slideCount }: GlassSlidePa
             </h2>
           </div>
         )}
+
+        {/* Hero Banner Search Bar */}
+        <div className="w-full relative z-40 my-1">
+          <SpotlightSearch className="w-full shadow-lg" />
+        </div>
 
         {/* CTA Buttons */}
         <div data-slide-detail className="flex flex-col sm:flex-row gap-2 pt-0.5">

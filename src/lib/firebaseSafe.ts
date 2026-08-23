@@ -45,7 +45,12 @@ export function firebaseErrorMessage(error: unknown, fallback: string) {
   const code = getFirebaseErrorCode(error);
 
   if (code && FIREBASE_ERROR_MESSAGES[code]) return FIREBASE_ERROR_MESSAGES[code];
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof Error && error.message) {
+    if (error.message.toLowerCase().includes("user not authenticated")) {
+      return "Please log in to perform this action.";
+    }
+    return error.message;
+  }
   return fallback;
 }
 

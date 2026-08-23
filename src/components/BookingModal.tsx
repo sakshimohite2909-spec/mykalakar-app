@@ -88,6 +88,7 @@ export default function BookingModal({
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [bookingCode, setBookingCode] = useState("");
+  const [sameAsMobile, setSameAsMobile] = useState(false);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -129,6 +130,7 @@ export default function BookingModal({
     if (open) {
       setStep(1);
       setBookingCode("");
+      setSameAsMobile(false);
       setPaymentDetails({
         cardholderName: "",
         cardNumber: "",
@@ -157,21 +159,60 @@ export default function BookingModal({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    if (name === "customerPhone" || name === "clientWhatsapp") {
+    if (name === "customerPhone") {
+      const sanitized = sanitizePhoneNumber(value);
       setFormData((prev) => ({
         ...prev,
-        [name]: sanitizePhoneNumber(value),
+        customerPhone: sanitized,
+        ...(sameAsMobile ? { clientWhatsapp: sanitized } : {}),
+      }));
+      return;
+    }
+    if (name === "clientWhatsapp") {
+      setFormData((prev) => ({
+        ...prev,
+        clientWhatsapp: sanitizePhoneNumber(value),
       }));
       return;
     }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleSameAsMobileToggle = (checked: boolean) => {
+    setSameAsMobile(checked);
+    if (checked) {
+      setFormData((prev) => ({
+        ...prev,
+        clientWhatsapp: prev.customerPhone,
+      }));
+    }
+  };
+
   const handleSelectChange = (value: string) => {
     setFormData((prev) => ({ ...prev, eventType: value }));
   };
 
+  const handleAuthCheck = () => {
+    if (!currentUser) {
+      toast({
+        title: t("artist.loginRequiredTitle") || "लॉगिन आवश्यक आहे",
+        description: t("artist.loginRequiredText") || "पुढील प्रक्रियेसाठी कृपया प्रथम लॉगिन करा.",
+      });
+      onOpenChange(false);
+      navigate("/login", {
+        state: {
+          from: window.location.pathname,
+          action: "book",
+        },
+      });
+      return false;
+    }
+    return true;
+  };
+
   const runAvailabilityCheck = async () => {
+    if (!handleAuthCheck()) return;
+
     if (!formData.customerName || !formData.eventDate || !formData.eventType) {
       toast({
         variant: "destructive",
@@ -205,21 +246,14 @@ export default function BookingModal({
     }
   };
 
-  const handleSubmitAuthorization = async () => {
-    if (!paymentDetails.cardholderName || !paymentDetails.cardNumber || !paymentDetails.expiryDate || !paymentDetails.cvv) {
-      toast({
-        variant: "destructive",
-        title: "Card Details Incomplete",
-        description: "Please enter complete card details for Razorpay authorization hold.",
-      });
-      return;
-    }
+  const handleSubmitBookingRequest = async () => {
+    if (!handleAuthCheck()) return;
 
     setLoading(true);
     try {
       const uid = requireAuthUid(currentUser);
 
-      // 1. Create booking in Firestore
+      // 1. Create booking in Firestore with status PENDING_TELECALLER_VERIFICATION
       const booking = await createArtistBooking({
         artistId,
         artistName,
@@ -236,9 +270,9 @@ export default function BookingModal({
         eventEndTime: formData.eventEndTime,
         specialRequirements: formData.specialRequirements,
         authorizedAmount: Number(formData.authorizedAmount || 15000),
-        status: "PENDING_ARTIST_RESPONSE",
+        status: "PENDING_TELECALLER_VERIFICATION",
         paymentGateway: "razorpay",
-        paymentStatus: "authorized_hold",
+        paymentStatus: "deferred_payment",
       });
 
       // 2. Save inquiry to Firestore collection
@@ -284,8 +318,8 @@ export default function BookingModal({
       setBookingCode(generatedCode);
 
       toast({
-        title: "Booking Requested & Authorized",
-        description: `Razorpay hold active for 24h. Booking code: ${generatedCode}`,
+        title: "Booking Request Sent!",
+        description: `Our team & ${artistName} will contact you soon. Code: ${generatedCode}`,
       });
 
       setStep(3); // Step 3: Success Confirmation Screen
@@ -344,33 +378,22 @@ export default function BookingModal({
               exit={{ opacity: 0, x: 20 }}
               className="space-y-4 mt-2"
             >
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-stone-700">Your Full Name *</Label>
-                  <Input
-                    name="customerName"
-                    value={formData.customerName}
-                    onChange={handleChange}
-                    placeholder="e.g. John Doe"
-                    className="h-10 text-xs font-semibold rounded-xl"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-stone-700">Email Address *</Label>
-                  <Input
-                    name="customerEmail"
-                    type="email"
-                    value={formData.customerEmail}
-                    onChange={handleChange}
-                    placeholder="john@example.com"
-                    className="h-10 text-xs font-semibold rounded-xl"
-                    required
-                  />
-                </div>
+              {/* Row 1: Full Name */}
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-stone-700">Your Full Name *</Label>
+                <Input
+                  name="customerName"
+                  value={formData.customerName}
+                  onChange={handleChange}
+                  placeholder="e.g. John Doe"
+                  autoComplete="off"
+                  className="h-10 text-xs font-semibold rounded-xl"
+                  required
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Row 2: Mobile Number & WhatsApp Number + Checkbox */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs font-bold text-stone-700">Mobile Number *</Label>
                   <Input
@@ -379,6 +402,7 @@ export default function BookingModal({
                     onChange={handleChange}
                     placeholder={PHONE_PLACEHOLDER}
                     maxLength={PHONE_MAX_LENGTH}
+                    autoComplete="off"
                     className="h-10 text-xs font-semibold rounded-xl"
                     required
                   />
@@ -391,12 +415,26 @@ export default function BookingModal({
                     onChange={handleChange}
                     placeholder={PHONE_PLACEHOLDER}
                     maxLength={PHONE_MAX_LENGTH}
-                    className="h-10 text-xs font-semibold rounded-xl"
+                    autoComplete="off"
+                    disabled={sameAsMobile}
+                    className={`h-10 text-xs font-semibold rounded-xl ${
+                      sameAsMobile ? "bg-stone-100/90 text-stone-500 cursor-not-allowed border-stone-200" : ""
+                    }`}
                   />
+                  <label className="flex items-center gap-2 cursor-pointer pt-1 select-none text-[11px] font-semibold text-stone-600 hover:text-stone-900 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={sameAsMobile}
+                      onChange={(e) => handleSameAsMobileToggle(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-stone-300 text-orange-600 focus:ring-orange-500 accent-orange-600 cursor-pointer"
+                    />
+                    <span>WhatsApp number is same as mobile number</span>
+                  </label>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              {/* Row 3: Event Date, Start Time, End Time */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="space-y-1 col-span-1">
                   <Label className="text-xs font-bold text-stone-700">Event Date *</Label>
                   <Input
@@ -404,7 +442,7 @@ export default function BookingModal({
                     type="date"
                     value={formData.eventDate}
                     onChange={handleChange}
-                    className="h-10 text-xs font-semibold rounded-xl"
+                    className="h-10 text-xs font-semibold rounded-xl cursor-pointer"
                     required
                   />
                 </div>
@@ -415,7 +453,7 @@ export default function BookingModal({
                     type="time"
                     value={formData.eventStartTime}
                     onChange={handleChange}
-                    className="h-10 text-xs font-semibold rounded-xl"
+                    className="h-10 text-xs font-semibold rounded-xl cursor-pointer"
                     required
                   />
                 </div>
@@ -426,13 +464,14 @@ export default function BookingModal({
                     type="time"
                     value={formData.eventEndTime}
                     onChange={handleChange}
-                    className="h-10 text-xs font-semibold rounded-xl"
+                    className="h-10 text-xs font-semibold rounded-xl cursor-pointer"
                     required
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Row 4: Event Location/City & Performance Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs font-bold text-stone-700">Event Location/City *</Label>
                   <Input
@@ -464,18 +503,20 @@ export default function BookingModal({
                 </div>
               </div>
 
+              {/* Row 5: Event Venue Address (Full Width) */}
               <div className="space-y-1">
                 <Label className="text-xs font-bold text-stone-700">Event Venue Address</Label>
                 <Input
                   name="customerAddress"
                   value={formData.customerAddress}
                   onChange={handleChange}
-                  placeholder="Full building/street address"
+                  placeholder="e.g. Full venue address, building name, street, area"
                   className="h-10 text-xs font-semibold rounded-xl"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Row 6: Budget & Special Requirements */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs font-bold text-stone-700">Your Budget/Offer (₹) *</Label>
                   <Input
@@ -534,7 +575,7 @@ export default function BookingModal({
             </motion.div>
           )}
 
-          {/* ─── Step 2: Razorpay Gateway & Authorization Hold ─── */}
+          {/* ─── Step 2: Request Review Notice ─── */}
           {step === 2 && (
             <motion.div
               key="step2"
@@ -545,102 +586,42 @@ export default function BookingModal({
             >
               <div className="rounded-2xl border border-orange-200 bg-orange-50/80 p-4 text-center">
                 <CalendarDays className="mx-auto h-7 w-7 text-orange-600 mb-1.5" />
-                <h3 className="text-sm font-extrabold text-stone-900">Send Request to {artistName}</h3>
+                <h3 className="text-sm font-extrabold text-stone-900">Review Request for {artistName}</h3>
                 <p className="text-xs text-stone-600 mt-0.5">
-                  Your request for <span className="font-bold text-stone-900">{formData.eventDate}</span> will be sent to the artist. {artistName} will review their schedule and decide to accept or decline.
+                  Your request for <span className="font-bold text-stone-900">{formData.eventDate}</span> will be routed to our Executive Management team and sent to {artistName}.
                 </p>
               </div>
 
-              {/* Escrow Information alert */}
-              <div className="rounded-2xl border border-orange-200 bg-orange-50/60 p-3.5 flex items-start gap-2.5 text-xs text-stone-700 leading-relaxed">
-                <ShieldCheck className="h-5 w-5 shrink-0 text-orange-600" />
+              {/* No Payment Required Banner */}
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 flex items-start gap-3 text-xs text-stone-700 leading-relaxed">
+                <ShieldCheck className="h-6 w-6 shrink-0 text-emerald-600 mt-0.5" />
                 <div>
-                  <span className="font-extrabold text-stone-900 block mb-0.5">Escrow Authorization Guarantee</span>
-                  Funds remain in your account until the artist accepts. If rejected or expired (24h), the authorization drops automatically. No refund fees apply.
+                  <span className="font-extrabold text-emerald-950 block text-sm mb-0.5">Zero Upfront Payment</span>
+                  No immediate payment required! Our MyKalakar Executive team will contact both you and the artist to finalize the event timing, venue details, and exact pricing.
                 </div>
               </div>
 
-              {/* Gateway — Razorpay */}
-              <div className="space-y-1.5">
-                <Label className="text-stone-900 font-extrabold text-xs">Payment Gateway</Label>
-                <div className="py-2.5 px-4 rounded-xl border border-orange-500 bg-orange-50 text-orange-600 font-black text-xs uppercase text-center tracking-wider">
-                  Razorpay Secure Hold
+              {/* Event Summary Details Card */}
+              <div className="border border-stone-200 rounded-2xl bg-stone-50/80 p-4 space-y-2 text-xs font-semibold text-stone-700">
+                <div className="flex justify-between border-b border-stone-200/60 pb-2">
+                  <span>Client Name:</span>
+                  <strong className="text-stone-900">{formData.customerName}</strong>
                 </div>
-              </div>
-
-              {/* Razorpay Card Form */}
-              <div className="border border-stone-200 rounded-2xl bg-stone-50/80 p-4">
-                <h4 className="text-xs font-black uppercase tracking-wider text-stone-500 mb-3 flex items-center gap-1.5">
-                  <CreditCard className="h-4 w-4 text-stone-600" />
-                  Simulated Razorpay Gateway
-                </h4>
-
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold text-stone-700">Cardholder Name</Label>
-                    <Input
-                      value={paymentDetails.cardholderName}
-                      onChange={(e) =>
-                        setPaymentDetails((prev) => ({ ...prev, cardholderName: e.target.value }))
-                      }
-                      placeholder="Johnathan Doe"
-                      className="h-10 text-xs font-semibold rounded-xl bg-white"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold text-stone-700">Credit / Debit Card Number</Label>
-                    <Input
-                      value={paymentDetails.cardNumber}
-                      onChange={(e) =>
-                        setPaymentDetails((prev) => ({
-                          ...prev,
-                          cardNumber: e.target.value.replace(/\D/g, "").slice(0, 16),
-                        }))
-                      }
-                      placeholder="4111 2222 3333 4444"
-                      className="h-10 text-xs font-semibold rounded-xl bg-white"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-stone-700">Expiration Date</Label>
-                      <Input
-                        value={paymentDetails.expiryDate}
-                        onChange={(e) =>
-                          setPaymentDetails((prev) => ({ ...prev, expiryDate: e.target.value }))
-                        }
-                        placeholder="MM/YY"
-                        className="h-10 text-xs font-semibold rounded-xl bg-white"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-stone-700">CVV / CVC</Label>
-                      <Input
-                        value={paymentDetails.cvv}
-                        type="password"
-                        maxLength={3}
-                        onChange={(e) =>
-                          setPaymentDetails((prev) => ({
-                            ...prev,
-                            cvv: e.target.value.replace(/\D/g, ""),
-                          }))
-                        }
-                        placeholder="***"
-                        className="h-10 text-xs font-semibold rounded-xl bg-white"
-                        required
-                      />
-                    </div>
-                  </div>
+                <div className="flex justify-between border-b border-stone-200/60 pb-2">
+                  <span>Contact Number:</span>
+                  <strong className="text-stone-900">{formData.customerPhone}</strong>
                 </div>
-
-                <div className="mt-4 border-t border-stone-200 pt-3 flex items-center justify-between text-xs text-stone-600 font-semibold">
-                  <span>Authorized Hold Amount:</span>
-                  <span className="text-stone-900 font-extrabold text-sm">
-                    ₹{Number(formData.authorizedAmount).toLocaleString("en-IN")}
-                  </span>
+                <div className="flex justify-between border-b border-stone-200/60 pb-2">
+                  <span>Event & Performance:</span>
+                  <strong className="text-stone-900">{formData.eventType}</strong>
+                </div>
+                <div className="flex justify-between border-b border-stone-200/60 pb-2">
+                  <span>Event Location:</span>
+                  <strong className="text-stone-900">{formData.eventLocation}</strong>
+                </div>
+                <div className="flex justify-between pt-1 text-sm font-extrabold">
+                  <span className="text-stone-800">Estimated Budget Offer:</span>
+                  <span className="text-orange-600">₹{Number(formData.authorizedAmount || 15000).toLocaleString("en-IN")}</span>
                 </div>
               </div>
 
@@ -654,18 +635,18 @@ export default function BookingModal({
                   <ArrowLeft className="mr-1.5 h-4 w-4" /> Edit Details
                 </Button>
                 <Button
-                  onClick={handleSubmitAuthorization}
+                  onClick={handleSubmitBookingRequest}
                   className="w-2/3 bg-orange-600 hover:bg-orange-500 text-white py-5 rounded-xl font-extrabold text-xs shadow-md"
                   disabled={loading}
                 >
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Authorizing...
+                      Sending Request...
                     </>
                   ) : (
                     <>
-                      Authorize & Book Hold <Send className="ml-1.5 h-4 w-4" />
+                      Send Booking Request <Send className="ml-1.5 h-4 w-4" />
                     </>
                   )}
                 </Button>
@@ -673,7 +654,7 @@ export default function BookingModal({
             </motion.div>
           )}
 
-          {/* ─── Step 3: Success Confirmation Screen ─── */}
+          {/* ─── Step 3: Success Confirmation Screen (Minimal & Clean) ─── */}
           {step === 3 && (
             <motion.div
               key="step3"
@@ -688,17 +669,17 @@ export default function BookingModal({
 
               <div>
                 <h2 className="text-2xl font-black text-stone-900 tracking-tight">
-                  Booking Requested & Authorized!
+                  Booking Request Sent Successfully!
                 </h2>
-                <p className="text-xs sm:text-sm font-semibold text-stone-500 mt-1.5">
-                  {artistName} has received your inquiry. Razorpay authorization hold is active for 24 hours.
+                <p className="text-xs sm:text-sm font-semibold text-stone-500 mt-1.5 max-w-md mx-auto leading-relaxed">
+                  Your request is being reviewed by our MyKalakar Executive Team. We will connect with you and {artistName} shortly.
                 </p>
                 <div className="inline-flex items-center rounded-full bg-stone-100 px-4 py-1.5 text-xs font-bold text-stone-700 mt-3 border border-stone-200">
                   Booking Code: <span className="font-extrabold text-stone-900 ml-1">{bookingCode || "MK98765432"}</span>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-3">
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <Button
                   onClick={() => {
                     onOpenChange(false);
@@ -715,50 +696,6 @@ export default function BookingModal({
                 >
                   Book Another Service
                 </Button>
-              </div>
-
-              {/* "What Happens Next?" 4-Step Progress Box */}
-              <div className="pt-6 border-t border-stone-100 text-left">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-stone-400 text-center mb-4">
-                  What Happens Next?
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                  <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/70 flex flex-col items-center">
-                    <div className="h-8 w-8 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center mb-2 font-bold text-xs">
-                      1
-                    </div>
-                    <p className="text-xs font-bold text-stone-800 leading-tight">
-                      Artist receives request
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/70 flex flex-col items-center">
-                    <div className="h-8 w-8 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center mb-2 font-bold text-xs">
-                      2
-                    </div>
-                    <p className="text-xs font-bold text-stone-800 leading-tight">
-                      Discuss & confirm details
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/70 flex flex-col items-center">
-                    <div className="h-8 w-8 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center mb-2 font-bold text-xs">
-                      3
-                    </div>
-                    <p className="text-xs font-bold text-stone-800 leading-tight">
-                      Razorpay hold captures
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/70 flex flex-col items-center">
-                    <div className="h-8 w-8 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center mb-2 font-bold text-xs">
-                      4
-                    </div>
-                    <p className="text-xs font-bold text-stone-800 leading-tight">
-                      Enjoy your Event
-                    </p>
-                  </div>
-                </div>
               </div>
             </motion.div>
           )}

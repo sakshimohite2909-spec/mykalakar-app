@@ -392,7 +392,18 @@ export const LuxuryArtistCard = forwardRef<HTMLElement, { artist: ArtistCardView
               </h3> {/* ADDED FOR i18n */}
               <ArrowUpRight className={cn("h-5 w-5", isPremium && "text-amber-500")} />
             </div>
-            <p className="luxury-card-subtitle">{subCategoryLabel}</p> {/* ADDED FOR i18n */}
+            <div className="flex flex-wrap gap-1 my-1.5 min-h-[22px]">
+              {(artist.allServices && artist.allServices.length > 0 ? artist.allServices : [artist.subCategory]).slice(0, 3).map((srv) => (
+                <span key={srv} className="inline-block rounded-md bg-orange-50 text-orange-700 border border-orange-100/60 px-1.5 py-0.5 text-[9px] font-extrabold truncate max-w-[100px]">
+                  {getArtLabel(t, srv)}
+                </span>
+              ))}
+              {(artist.allServices?.length || 1) > 3 && (
+                <span className="inline-block rounded-md bg-stone-100 text-stone-600 px-1.5 py-0.5 text-[9px] font-extrabold">
+                  +{(artist.allServices?.length || 1) - 3} more
+                </span>
+              )}
+            </div>
             <p className="luxury-card-description">{bioText}</p>
             <div className="luxury-card-meta">
               <span>

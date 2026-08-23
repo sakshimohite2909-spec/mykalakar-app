@@ -221,3 +221,31 @@ export async function uploadImageAsset(
 
   return uploadFileAssetWithProgress(fileToUpload, storagePath, onProgress);
 }
+
+// ─── Video & Reel Upload Helpers ─────────────────────────────────────────────
+const MAX_VIDEO_SIZE_BYTES = 30 * 1024 * 1024; // 30 MB
+const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v", "video/mpeg"];
+
+export function validateVideoFile(file: File): { valid: boolean; error?: string } {
+  if (!file || !(file instanceof File)) return { valid: false, error: "No valid video file provided." };
+  if (!ALLOWED_VIDEO_TYPES.includes(file.type) && !file.name.match(/\.(mp4|mov|webm|m4v)$/i)) {
+    return { valid: false, error: "Invalid video format. Please upload MP4, MOV, or WebM video." };
+  }
+  if (file.size > MAX_VIDEO_SIZE_BYTES) {
+    return { valid: false, error: `Video file too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 30MB allowed.` };
+  }
+  return { valid: true };
+}
+
+export async function uploadVideoFile(
+  file: File,
+  storagePath: string,
+  onProgress?: (percent: number) => void
+): Promise<string> {
+  const validation = validateVideoFile(file);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+  return uploadFileWithProgress(file, storagePath, onProgress);
+}
+

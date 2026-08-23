@@ -9,12 +9,19 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { uploadImageFile } from "@/lib/uploadService";
+import { uploadImageFile, uploadVideoFile } from "@/lib/uploadService";
 import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, withTimeout } from "@/lib/firebaseSafe";
-import { getArtistArtForms } from "@/constants/artistSystem";
+import {
+  extractArtistServices,
+  getArtistArtForms,
+  getEventTypes,
+  getCategoriesForEvent,
+  getSubcategoriesForCategory,
+} from "@/constants/artistSystem";
 import { getYoutubeVideoId } from "@/lib/youtube";
 import { updateUnifiedArtistProfile } from "@/services/UnifiedProfileService";
 import { compressImageUpload } from "@/utils/imageCompression";
+import { getUsableImageUrl } from "@/utils/fallbackImages";
 import {
     DateOfBirthSelect,
     INDIAN_BANK_OPTIONS,
@@ -36,6 +43,9 @@ import {
     Building2,
     Phone,
     IndianRupee,
+    Sparkles,
+    Film,
+    Play,
 } from "lucide-react";
 import { NavigationBlocker } from "@/components/NavigationBlocker";
 import { Switch } from "@/components/ui/switch";
@@ -76,10 +86,36 @@ export default function ArtistEditProfile() {
 
     const [socialLinks, setSocialLinks] = useState<Array<{ platform: string; url: string }>>([]);
     const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
+    const [reelPreviews, setReelPreviews] = useState<Array<{ id: string; url: string; title: string }>>([]);
+    const [services, setServices] = useState<Array<{ id: string; event: string; category: string; subcategory: string }>>([]);
 
     const profileInputRef = useRef<HTMLInputElement>(null);
     const coverInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
+    const reelInputRef = useRef<HTMLInputElement>(null);
+    const [uploadingReelProgress, setUploadingReelProgress] = useState<number | null>(null);
+
+    const addService = () => {
+        setIsDirty(true);
+        setServices((prev) => [...prev, { id: `srv-${Date.now()}`, event: "Varkari Sampraday", category: "", subcategory: "" }]);
+    };
+
+    const removeService = (id: string) => {
+        setIsDirty(true);
+        setServices((prev) => prev.filter((s) => s.id !== id));
+    };
+
+    const updateService = (id: string, field: "event" | "category" | "subcategory", value: string) => {
+        setIsDirty(true);
+        setServices((prev) =>
+            prev.map((s) => {
+                if (s.id !== id) return s;
+                if (field === "event") return { ...s, event: value, category: "", subcategory: "" };
+                if (field === "category") return { ...s, category: value, subcategory: "" };
+                return { ...s, subcategory: value };
+            })
+        );
+    };
 
     const getValidYoutubeLinks = () =>
         socialLinks
@@ -94,7 +130,13 @@ export default function ArtistEditProfile() {
             artistData?.profileImageUrl ||
             artistData?.artistProfile?.profileImage ||
             "";
-        return candidate;
+        const usable = getUsableImageUrl(candidate);
+        if (usable) return usable;
+        return imageRegistry.getUniqueImage({
+            category: artistData?.subcategory || artistData?.category || "Default",
+            type: "artist",
+            key: artistData?.id || artistData?.uid || artistData?.name || "profile-image",
+        });
     };
 
     const getCurrentCoverImage = () => {
@@ -105,7 +147,13 @@ export default function ArtistEditProfile() {
             artistData?.coverImageUrl ||
             artistData?.artistProfile?.coverImage ||
             "";
-        return candidate;
+        const usable = getUsableImageUrl(candidate);
+        if (usable) return usable;
+        return imageRegistry.getUniqueImage({
+            category: artistData?.subcategory || artistData?.category || "Default",
+            type: "cover",
+            key: artistData?.id || artistData?.uid || artistData?.name || "cover-image",
+        });
     };
 
     const buildArtistProfile = (mediaOverrides: { profileImage?: string; coverImage?: string } = {}) => ({
@@ -152,6 +200,23 @@ export default function ArtistEditProfile() {
                 artistData.media?.galleryPhotos ||
                 (Array.isArray(artistData.galleryPhotos) ? artistData.galleryPhotos : []) ||
                 []
+            );
+            const rawReels = artistData.media?.reels || (Array.isArray(artistData.reels) ? artistData.reels : []) || [];
+            const parsedReels = rawReels.map((r: any, idx: number) => {
+                if (typeof r === "string") {
+                    return { id: `reel_${idx}`, url: r, title: `Reel ${idx + 1}` };
+                }
+                return { id: r.id || `reel_${idx}`, url: r.url || "", title: r.title || `Reel ${idx + 1}` };
+            }).filter((r: any) => Boolean(r.url));
+            setReelPreviews(parsedReels);
+            const loadedServices = extractArtistServices(artistData);
+            setServices(
+                loadedServices.map((s, idx) => ({
+                    id: s.id || `srv-${idx}`,
+                    event: s.event || "Varkari Sampraday",
+                    category: s.category || "",
+                    subcategory: s.subcategory || s.artForm || "",
+                }))
             );
         }
     }, [artistData]);
@@ -303,6 +368,86 @@ export default function ArtistEditProfile() {
         }
     };
 
+    // Handle performance reel video upload
+    const handleReelAdd = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || !files[0] || !artistData) return;
+        const file = files[0];
+
+        if (reelPreviews.length >= 6) {
+            toast({ variant: "destructive", title: "Limit Exceeded", description: "Maximum 6 performance reels allowed." });
+            return;
+        }
+
+        try {
+            setUploadingReelProgress(0);
+            const ownerId = artistData.uid || artistData.id;
+            if (!ownerId) throw new Error("User not authenticated");
+
+            const reelUrl = await uploadVideoFile(file, `reels/${ownerId}/${Date.now()}_${file.name}`, (pct) => {
+                setUploadingReelProgress(pct);
+            });
+
+            const newReel = {
+                id: `reel_${Date.now()}`,
+                url: reelUrl,
+                title: file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ") || "Performance Reel",
+            };
+
+            const updatedReels = [...reelPreviews, newReel];
+
+            await withTimeout(
+                updateUnifiedArtistProfile({
+                    artistId: artistData.id,
+                    uid: ownerId,
+                    artistData: {
+                        "media.reels": updatedReels,
+                        reels: updatedReels,
+                    },
+                }),
+                FIREBASE_WRITE_TIMEOUT_MS,
+                "Could not save video reel."
+            );
+            await refreshArtistData();
+            setReelPreviews(updatedReels);
+            toast({ title: "Performance Reel Uploaded! 🎬" });
+        } catch (error: any) {
+            logFirebaseError(error);
+            toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not upload video reel.") });
+        } finally {
+            setUploadingReelProgress(null);
+            if (reelInputRef.current) reelInputRef.current.value = "";
+        }
+    };
+
+    // Remove reel video
+    const removeReel = async (index: number) => {
+        if (!artistData) return;
+        const updatedReels = [...reelPreviews];
+        updatedReels.splice(index, 1);
+        try {
+            const ownerId = artistData.uid || artistData.id;
+            await withTimeout(
+                updateUnifiedArtistProfile({
+                    artistId: artistData.id,
+                    uid: ownerId,
+                    artistData: {
+                        "media.reels": updatedReels,
+                        reels: updatedReels,
+                    },
+                }),
+                FIREBASE_WRITE_TIMEOUT_MS,
+                "Could not delete reel."
+            );
+            await refreshArtistData();
+            setReelPreviews(updatedReels);
+            toast({ title: "Reel removed" });
+        } catch (error: any) {
+            logFirebaseError(error);
+            toast({ variant: "destructive", title: "Error", description: firebaseErrorMessage(error, "Could not delete reel.") });
+        }
+    };
+
     // Social links
     const addSocialLink = () => { setIsDirty(true); setSocialLinks([...socialLinks, { platform: "youtube", url: "" }]); };
     const removeSocialLink = (index: number) => { setIsDirty(true); setSocialLinks(socialLinks.filter((_, i) => i !== index)); };
@@ -421,6 +566,16 @@ export default function ArtistEditProfile() {
                     teamPerformancePrice: Number(formData.teamPrice) || 0,
                     showPricingOnProfile: formData.showPricingOnProfile,
                     showPriceOnProfile: formData.showPricingOnProfile,
+                    services: services.map((s) => ({
+                        event: s.event,
+                        category: s.category,
+                        subcategory: s.subcategory,
+                        artForm: s.subcategory,
+                    })),
+                    eventType: services[0]?.event || artistData.eventType || "Varkari Sampraday",
+                    category: services[0]?.category || artistData.category || "",
+                    subcategory: services[0]?.subcategory || artistData.subcategory || "",
+                    artForm: services[0]?.subcategory || artistData.artForm || "",
                     ...(updatedCategoriesArray ? { categoriesArray: updatedCategoriesArray } : {}),
                     ...(updatedArtsList ? { artsList: updatedArtsList } : {}),
                     },
@@ -577,6 +732,79 @@ export default function ArtistEditProfile() {
                                 )}
                             </div>
                         </div>
+
+                        {/* Performance Reels & Short Videos */}
+                        <div className="pt-3 border-t border-border">
+                            <div className="flex items-center justify-between mb-2">
+                                <div>
+                                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                                        <Film className="h-4 w-4 text-orange-500" /> Performance Reels & Short Videos ({reelPreviews.length}/6)
+                                    </Label>
+                                    <span className="text-[11px] text-muted-foreground">
+                                        Direct MP4/MOV upload from phone gallery (Max 30MB). Plays natively in-app.
+                                    </span>
+                                </div>
+                            </div>
+
+                            <input
+                                type="file"
+                                ref={reelInputRef}
+                                className="hidden"
+                                accept="video/mp4,video/quicktime,video/webm"
+                                onChange={handleReelAdd}
+                            />
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                                {reelPreviews.map((reel, i) => (
+                                    <div key={reel.id || i} className="relative aspect-[9/16] rounded-xl overflow-hidden border bg-black group shadow-sm">
+                                        <video
+                                            src={reel.url}
+                                            playsInline
+                                            muted
+                                            className="w-full h-full object-cover opacity-80"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 flex flex-col justify-between p-2">
+                                            <div className="flex justify-end">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeReel(i)}
+                                                    className="p-1 bg-red-600/90 text-white rounded-full hover:bg-red-700 transition"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </div>
+                                            <p className="text-[10px] font-bold text-white line-clamp-1 truncate">
+                                                {reel.title}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {reelPreviews.length < 6 && (
+                                    <div
+                                        onClick={() => reelInputRef.current?.click()}
+                                        className="border-2 border-dashed border-border rounded-xl aspect-[9/16] flex flex-col items-center justify-center cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition-all p-3 text-center"
+                                    >
+                                        {uploadingReelProgress !== null ? (
+                                            <div className="flex flex-col items-center gap-1.5">
+                                                <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
+                                                <span className="text-[10px] font-black text-orange-600">
+                                                    {uploadingReelProgress}%
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="h-9 w-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mb-1">
+                                                    <Film className="h-4 w-4" />
+                                                </div>
+                                                <span className="text-[11px] font-bold text-foreground">Upload Reel</span>
+                                                <span className="text-[9px] text-muted-foreground mt-0.5">MP4 / MOV</span>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
             </motion.div>
@@ -659,6 +887,104 @@ export default function ArtistEditProfile() {
                                     />
                                 </div>
                             </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </motion.div>
+
+            {/* Services & Expertise */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+                <Card>
+                    <CardContent className="p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-semibold flex items-center gap-2">
+                                <Sparkles className="h-5 w-5 text-orange-500" /> Services & Expertise
+                            </h3>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={addService}
+                                className="text-xs border-orange-200 text-orange-600 hover:bg-orange-50"
+                            >
+                                <Plus className="h-4 w-4 mr-1" /> + Add Another Service
+                            </Button>
+                        </div>
+
+                        <div className="space-y-4">
+                            {services.map((service, index) => {
+                                const categoryOptions = service.event ? getCategoriesForEvent(service.event).map((c) => c.name) : [];
+                                const subcategoryOptions = service.event && service.category ? getSubcategoriesForCategory(service.event, service.category) : [];
+
+                                return (
+                                    <div key={service.id} className="p-4 rounded-xl border border-border/60 bg-secondary/30 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Service {index + 1}</span>
+                                            {index > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeService(service.id)}
+                                                    className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" /> Remove
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            {/* Event */}
+                                            <div>
+                                                <Label className="text-xs font-bold mb-1.5 block">Event</Label>
+                                                <Select
+                                                    value={service.event || ""}
+                                                    onValueChange={(val) => updateService(service.id, "event", val)}
+                                                >
+                                                    <SelectTrigger><SelectValue placeholder="Select Event" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {getEventTypes().map((evt) => (
+                                                            <SelectItem key={evt} value={evt}>{evt}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            {/* Category */}
+                                            <div>
+                                                <Label className="text-xs font-bold mb-1.5 block">Category</Label>
+                                                <Select
+                                                    value={service.category || ""}
+                                                    disabled={!service.event}
+                                                    onValueChange={(val) => updateService(service.id, "category", val)}
+                                                >
+                                                    <SelectTrigger><SelectValue placeholder={service.event ? "Select Category" : "Select Event first"} /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {categoryOptions.map((cat) => (
+                                                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            {/* Subcategory */}
+                                            <div>
+                                                <Label className="text-xs font-bold mb-1.5 block">Subcategory</Label>
+                                                <Select
+                                                    value={service.subcategory || ""}
+                                                    disabled={!service.category}
+                                                    onValueChange={(val) => updateService(service.id, "subcategory", val)}
+                                                >
+                                                    <SelectTrigger><SelectValue placeholder={service.category ? "Select Subcategory" : "Select Category first"} /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {subcategoryOptions.map((sub) => (
+                                                            <SelectItem key={sub} value={sub}>{sub}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </CardContent>
                 </Card>

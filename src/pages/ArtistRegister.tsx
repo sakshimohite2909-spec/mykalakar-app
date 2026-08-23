@@ -74,6 +74,7 @@ type PortfolioLink = { platform: PortfolioPlatform; url: string };
 type ExtraArtMediaField = "profile" | "performance";
 type ExtraArtEntry = {
   id: string;
+  eventType: string;
   mainCategory: string;
   category: string;
   soloPrice: string;
@@ -90,7 +91,6 @@ type PreparedExtraArtEntry = Omit<ExtraArtEntry, "youtubeLinks"> & { youtubeLink
 
 const roleTabs: Array<{ id: AuthRole; label: string; icon: ComponentType<{ className?: string }>; color: string }> = [
   { id: "artist", label: "Artist", icon: Music, color: "from-orange-500 to-amber-400" },
-  { id: "user", label: "User", icon: User, color: "from-rose-500 to-amber-400" },
 ];
 
 const artCategoryOptions = [...ARTIST_TYPES];
@@ -569,7 +569,7 @@ function ArtCategoryCard({
 }) {
   const { t } = useI18n();
 
-  const update = (field: "mainCategory" | "category" | "soloPrice" | "duoPrice" | "teamPrice", value: string) => {
+  const update = (field: "eventType" | "mainCategory" | "category" | "soloPrice" | "duoPrice" | "teamPrice", value: string) => {
     onUpdate({ ...art, [field]: value });
   };
   const updateShowPricing = (showPricingOnProfile: boolean) => {
@@ -592,7 +592,7 @@ function ArtCategoryCard({
   return (
     <div className="form-subcard rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="text-sm font-black text-slate-500">{t("register.label.artNumber", { number: index + 1 })}</p>
+        <p className="text-sm font-black text-slate-500">Service {index + 1}</p>
         {removable ? (
           <button
             type="button"
@@ -600,27 +600,41 @@ function ArtCategoryCard({
             className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-red-100 bg-white/70 px-3 text-[10px] font-black uppercase tracking-wider text-red-500 transition hover:bg-red-50"
           >
             <Trash2 className="h-3.5 w-3.5" />
-            {t("register.btn.remove")}
+            {t("register.btn.remove") || "Remove"}
           </button>
         ) : null}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* Event */}
         <SearchableDropdown
-          label={t("register.label.mainCategory")}
-          value={art.mainCategory}
-          options={[...MAIN_CATEGORIES]}
-          placeholder={t("register.placeholder.mainCategory")}
+          label="Event"
+          value={art.eventType || ""}
+          options={getEventTypes()}
+          placeholder="Select Event"
+          onChange={(value) => {
+            onUpdate({ ...art, eventType: value, mainCategory: "", category: "" });
+          }}
+        />
+
+        {/* Category */}
+        <SearchableDropdown
+          label="Category"
+          value={art.mainCategory || ""}
+          options={art.eventType ? getCategoriesForEvent(art.eventType).map((c) => c.name) : []}
+          placeholder={art.eventType ? "Select Category" : "Select Event first"}
+          disabled={!art.eventType}
           onChange={(value) => {
             onUpdate({ ...art, mainCategory: value, category: "" });
           }}
         />
 
+        {/* Subcategory */}
         <SearchableDropdown
-          label={t("register.label.artForm")}
-          value={art.category}
-          options={art.mainCategory ? getSubcategoriesForMainCategory(art.mainCategory) : []}
-          placeholder={t("register.placeholder.artForm")}
+          label="Subcategory"
+          value={art.category || ""}
+          options={art.eventType && art.mainCategory ? getSubcategoriesForCategory(art.eventType, art.mainCategory) : []}
+          placeholder={art.mainCategory ? "Select Subcategory" : "Select Category first"}
           error={error}
           disabled={!art.mainCategory}
           allowCustom
@@ -965,45 +979,12 @@ function RoleTabs({
   activeRole: AuthRole;
   onChange: (role: AuthRole) => void;
 }) {
-  const { t } = useI18n(); // ADDED FOR i18n
-  return (
-    <div className="role-tabs grid grid-cols-2 gap-1.5 rounded-2xl border border-orange-100 bg-orange-50/60 p-1.5 shadow-sm backdrop-blur-md">
-      {roleTabs.map((tab) => {
-        const Icon = tab.icon;
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => onChange(tab.id)}
-            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
-              activeRole === tab.id
-                ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
-                : "text-slate-500 hover:bg-white/70 hover:text-slate-700"
-            }`}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {t(`auth.role.${tab.id}`)} {/* ADDED FOR i18n */}
-          </button>
-        );
-      })}
-    </div>
-  );
+  return null;
 }
 
 function useRoleFromQuery(defaultRole: AuthRole = "artist") {
-  const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const roleParam = searchParams.get("role");
-  const pathRole: AuthRole | null = location.pathname.includes("user")
-    ? "user"
-    : location.pathname.includes("artist")
-    ? "artist"
-    : null;
-  const activeRole: AuthRole = roleParam === "user" || roleParam === "artist" ? roleParam : pathRole ?? defaultRole;
-
-  const setActiveRole = (role: AuthRole) => {
-    setSearchParams({ role }, { replace: true });
-  };
+  const activeRole: AuthRole = "artist";
+  const setActiveRole = (_role: AuthRole) => {};
 
   return [activeRole, setActiveRole] as const;
 }
@@ -1011,6 +992,7 @@ function useRoleFromQuery(defaultRole: AuthRole = "artist") {
 function createExtraArtEntry(): ExtraArtEntry {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    eventType: "",
     mainCategory: "",
     category: "",
     soloPrice: "",
@@ -1585,6 +1567,31 @@ export default function ArtistRegister() {
         updatedAt: serverTimestamp(),
       });
 
+      const servicesList = [
+        {
+          event: values.eventType || "Varkari Sampraday",
+          category: values.mainCategory || "",
+          subcategory: values.artCategory || "",
+          artForm: values.artCategory || "",
+          soloPrice: artEntries[0]?.soloPerformancePrice || 0,
+          duoPrice: artEntries[0]?.duoPerformancePrice || 0,
+          teamPrice: artEntries[0]?.teamPerformancePrice || 0,
+          showPricingOnProfile: artEntries[0]?.showPricingOnProfile || false,
+          youtubeLinks: primaryCategoryYoutubeLinks,
+        },
+        ...preparedExtraArts.map((entry) => ({
+          event: entry.eventType || values.eventType || "Varkari Sampraday",
+          category: entry.mainCategory || "",
+          subcategory: entry.category || "",
+          artForm: entry.category || "",
+          soloPrice: Number(entry.soloPrice) || 0,
+          duoPrice: Number(entry.duoPrice) || 0,
+          teamPrice: Number(entry.teamPrice) || 0,
+          showPricingOnProfile: entry.showPricingOnProfile || false,
+          youtubeLinks: entry.youtubeLinks,
+        })),
+      ];
+
       const payload = sanitizePayload({
         uid,
         role: "artist",
@@ -1626,6 +1633,7 @@ export default function ArtistRegister() {
         categories: categoryNames,
         categoriesArray: artEntries,
         artsList: artEntries,
+        services: servicesList,
         artistProfile,
         soloPrice: artEntries[0]?.soloPerformancePrice || 0,
         duoPrice: artEntries[0]?.duoPerformancePrice || 0,
@@ -1838,27 +1846,24 @@ export default function ArtistRegister() {
             </div>
             <h1 className="font-display text-4xl font-black tracking-tight text-[#1A1A1A] md:text-5xl">
               {t("register.join")} <span className="gradient-text-primary">{t("brand.name")}</span>
-              {activeRole === "artist" ? t("register.asArtist") : t("register.asUser")} {/* ADDED FOR i18n */}
+              {t("register.asArtist")} {/* ADDED FOR i18n */}
             </h1>
             <p className="mt-2 text-sm font-semibold text-slate-500">
               {t("register.subtitle")} {/* ADDED FOR i18n */}
             </p>
           </div>
 
-          <RoleTabs activeRole={activeRole} onChange={setActiveRole} />
-
           <AnimatePresence mode="wait">
-            {activeRole === "artist" ? (
-              <motion.form
-                key="artist"
-                initial={{ opacity: 0, x: -18 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 18 }}
-                transition={{ duration: 0.28 }}
-                onSubmit={artistForm.handleSubmit(submitArtist, scrollToError)}
-                className="mt-8 space-y-8"
-                noValidate
-              >
+            <motion.form
+              key="artist"
+              initial={{ opacity: 0, x: -18 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 18 }}
+              transition={{ duration: 0.28 }}
+              onSubmit={artistForm.handleSubmit(submitArtist, scrollToError)}
+              className="mt-8 space-y-8"
+              noValidate
+            >
                 <div ref={errorRef} className="scroll-mt-24" />
                 <SectionHeading icon={Lock} title={t("register.section.loginAccount")} />
 
@@ -2033,19 +2038,19 @@ export default function ArtistRegister() {
                 </div>
 
                 <div className="flex flex-col gap-3 border-b border-orange-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 className="font-display text-xl font-bold text-[#2E3A47]">{t("register.section.skills")}</h2>
+                  <h2 className="font-display text-xl font-bold text-[#2E3A47]">Services & Expertise</h2>
                   <button
                     type="button"
                     onClick={addArtEntry}
                     className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 px-5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-orange-200"
                   >
                     <Plus className="h-4 w-4" />
-                    {t("register.btn.addCategory")}
+                    + Add Another Service
                   </button>
                 </div>
 
                 <div className="form-subcard rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
-                  <p className="mb-4 text-sm font-black text-slate-500">{t("register.label.artNumber", { number: 1 })}</p>
+                  <p className="mb-4 text-sm font-black text-slate-500">Service 1</p>
                   
                   <div className="grid gap-4 md:grid-cols-3">
                     {/* Event Type */}
@@ -2552,97 +2557,6 @@ export default function ArtistRegister() {
                   {t("register.btn.submit")}
                 </button>
               </motion.form>
-            ) : activeRole === "user" ? (
-              <motion.form
-                key="user-form"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                onSubmit={userForm.handleSubmit(submitUser, scrollToError)}
-                className="space-y-6"
-              >
-                <div ref={errorRef} className="scroll-mt-24" />
-                <SectionHeading icon={User} title={t("register.section.userAccountDetails")} />
-                <div className="grid gap-4 md:grid-cols-2">
-                  <TextField
-                    label={t("register.label.userFullName")}
-                    name="fullName"
-                    register={userForm.register}
-                    error={userForm.formState.errors.fullName?.message}
-                    placeholder={t("register.placeholder.userFullName")}
-                  />
-                   <TextField
-                    label={t("register.label.userUsername")}
-                    name="username"
-                    register={userForm.register}
-                    error={userForm.formState.errors.username?.message}
-                    placeholder={t("register.placeholder.userUsername")}
-                  />
-                  <Controller
-                    name="phoneOptional"
-                    control={userForm.control}
-                    render={({ field }) => (
-                      <div className="md:col-span-2">
-                        <label className="mb-1.5 block text-sm font-bold text-slate-700">{t("register.label.phone")}</label>
-                        <input
-                          type="tel"
-                          inputMode="numeric"
-                          value={field.value}
-                          onBlur={field.onBlur}
-                          onChange={(event) => field.onChange(sanitizePhoneNumber(event.target.value))}
-                          placeholder={PHONE_PLACEHOLDER}
-                          maxLength={PHONE_MAX_LENGTH}
-                          className={`${inputClass} ${userForm.formState.errors.phoneOptional ? errorInputClass : ""}`}
-                        />
-                        <FieldError message={userForm.formState.errors.phoneOptional?.message} />
-                      </div>
-                    )}
-                  />
-                  <Controller
-                    name="password"
-                    control={userForm.control}
-                    render={({ field }) => (
-                      <PasswordField
-                        label={t("register.label.password")}
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        error={userForm.formState.errors.password?.message}
-                        show={showPassword}
-                        onToggle={() => setShowPassword((current) => !current)}
-                        placeholder={t("register.placeholder.password")}
-                      />
-                    )}
-                  />
-                  <Controller
-                    name="confirmPassword"
-                    control={userForm.control}
-                    render={({ field }) => (
-                      <PasswordField
-                        label={t("register.label.confirmPassword")}
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        error={userForm.formState.errors.confirmPassword?.message}
-                        show={showPassword}
-                        onToggle={() => setShowPassword((current) => !current)}
-                        placeholder={t("register.placeholder.confirmPassword")}
-                      />
-                    )}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={!userForm.formState.isValid || loadingRole === "user"}
-                  className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-amber-400 text-sm font-black uppercase tracking-widest text-white shadow-lg ${
-                    !userForm.formState.isValid || loadingRole === "user" ? "cursor-not-allowed opacity-50" : ""
-                  }`}
-                >
-                  {loadingRole === "user" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
-                  {t("register.btn.submitUser")}
-                </button>
-              </motion.form>
-            ) : null}
           </AnimatePresence>
         </div>
       </div>

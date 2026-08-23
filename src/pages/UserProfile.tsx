@@ -571,7 +571,25 @@ export default function UserProfile() {
     if (!checkoutBooking) return;
     setCompletingCheckout(true);
     try {
-      await processAcceptCounter(checkoutBooking, checkoutBooking.counterOfferAmount || 0);
+      if (checkoutBooking.status === "PAYMENT_PENDING") {
+        const amountToCapture = checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000;
+        await updateArtistBookingStatus(checkoutBooking, "CONFIRMED", {
+          isPaymentCaptured: true,
+          escrowState: "HELD",
+          authorizedAmount: amountToCapture,
+          confirmedPrice: amountToCapture,
+        });
+        toast({
+          title: "Payment Successful! 🎉",
+          description: `₹${amountToCapture.toLocaleString("en-IN")} received via Razorpay. Your booking with ${checkoutBooking.artistName || "the artist"} is confirmed!`,
+        });
+        setCheckoutBooking(null);
+      } else {
+        await processAcceptCounter(checkoutBooking, checkoutBooking.counterOfferAmount || 0);
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ variant: "destructive", title: "Payment Failed", description: "Could not process Razorpay payment." });
     } finally {
       setCompletingCheckout(false);
     }
@@ -894,7 +912,7 @@ export default function UserProfile() {
                     ) : (
                       <div className="space-y-4">
                         {bookings.map((booking) => {
-                          const isPending = ["SOFT_HOLD_ACTIVE", "PAYMENT_AUTHORIZED", "PENDING_ARTIST_RESPONSE"].includes(booking.status);
+                          const isPending = ["SOFT_HOLD_ACTIVE", "PAYMENT_AUTHORIZED", "PENDING_ARTIST_RESPONSE", "PENDING_TELECALLER_VERIFICATION"].includes(booking.status);
 
                           return (
                             <div key={booking.id} className="border border-slate-200/80 rounded-2xl bg-white p-5 shadow-sm space-y-4 hover:shadow-md transition duration-200">
@@ -927,15 +945,49 @@ export default function UserProfile() {
                               <div className="grid gap-3 sm:grid-cols-3 text-xs font-semibold text-stone-600 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                                 <div className="flex items-center gap-1.5">
                                   <CreditCard className="h-4 w-4 text-[#FF6B00]" />
-                                  <span>{t("profile.bookings.gateway")} <strong className="text-stone-900 uppercase">{booking.paymentGateway || "Stripe"}</strong></span>
+                                  <span>{t("profile.bookings.gateway")} <strong className="text-stone-900 uppercase">{booking.paymentGateway || "Razorpay"}</strong></span>
                                 </div>
                                 <div>
-                                  <span>{t("profile.bookings.escrowHold")} <strong className="text-[#FF6B00] text-sm font-black">Rs {(booking.authorizedAmount || 0).toLocaleString("en-IN")}</strong></span>
+                                  <span>Offer/Budget: <strong className="text-[#FF6B00] text-sm font-black">Rs {(booking.confirmedPrice || booking.authorizedAmount || 0).toLocaleString("en-IN")}</strong></span>
                                 </div>
                                 <div>
-                                  <span>{t("profile.bookings.escrowPayout")} <strong className="text-stone-900 font-extrabold uppercase">{booking.escrowState || "AUTHORIZED"}</strong></span>
+                                  <span>{t("profile.bookings.escrowPayout")} <strong className="text-stone-900 font-extrabold uppercase">{booking.status === "PAYMENT_PENDING" ? "PAYMENT REQUIRED" : (booking.escrowState || "PENDING")}</strong></span>
                                 </div>
                               </div>
+
+                              {/* PENDING TELECALLER VERIFICATION BANNER */}
+                              {booking.status === "PENDING_TELECALLER_VERIFICATION" && (
+                                <div className="border border-amber-200 bg-amber-50/70 rounded-xl p-3.5 text-xs text-amber-950 font-semibold flex items-start gap-2.5">
+                                  <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                                  <div>
+                                    <span className="font-extrabold text-amber-900 block mb-0.5">Telecaller Verification In Progress</span>
+                                    Our Telecaller team is calling {booking.artistName || "the artist"} to confirm event schedule, venue requirements, and final pricing. Payment will be enabled here once the deal is confirmed.
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* PAYMENT PENDING (DEAL CONFIRMED BY TELECALLER) BANNER */}
+                              {booking.status === "PAYMENT_PENDING" && (
+                                <div className="border border-emerald-200 bg-emerald-50/90 rounded-xl p-4 text-xs text-emerald-950 font-semibold space-y-3">
+                                  <div className="flex items-start gap-2.5">
+                                    <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                                    <div>
+                                      <span className="font-extrabold text-emerald-900 block text-sm mb-0.5">Deal Confirmed by Telecaller!</span>
+                                      Telecaller has finalized agreement with {booking.artistName || "the artist"}. Agreed Final Price: <strong className="text-emerald-700 text-sm font-black">₹{(booking.confirmedPrice || booking.authorizedAmount || 15000).toLocaleString("en-IN")}</strong>. Complete payment to finalize booking.
+                                    </div>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    className="w-full sm:w-auto bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-extrabold text-xs px-6 py-2.5 shadow-md flex items-center justify-center gap-2"
+                                    onClick={() => {
+                                      setCheckoutBooking(booking);
+                                      setCheckoutGateway("razorpay");
+                                    }}
+                                  >
+                                    <CreditCard className="h-4 w-4" /> Pay ₹{(booking.confirmedPrice || booking.authorizedAmount || 15000).toLocaleString("en-IN")} via Razorpay
+                                  </Button>
+                                </div>
+                              )}
 
                               {/* COUNTER OFFER DIFF VIEW */}
                               {booking.status === "COUNTER_OFFER_SENT" && (
@@ -1132,33 +1184,52 @@ export default function UserProfile() {
         </DialogContent>
       </Dialog>
 
-      {/* Counter Offer Price Increase Additional Auth Checkout popup */}
+      {/* Counter Offer & Deferred Razorpay Payment Checkout popup */}
       <Dialog open={Boolean(checkoutBooking)} onOpenChange={(open) => !open && setCheckoutBooking(null)}>
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-black text-stone-900 flex items-center gap-1.5">
-              <CreditCard className="h-5 w-5 text-[#FF6B00]" /> {t("profile.checkoutDialog.title")}
+              <CreditCard className="h-5 w-5 text-[#FF6B00]" />
+              {checkoutBooking?.status === "PAYMENT_PENDING" ? "Complete Razorpay Booking Payment" : t("profile.checkoutDialog.title")}
             </DialogTitle>
           </DialogHeader>
           {checkoutBooking && (
             <div className="space-y-4 py-2 text-sm text-stone-600 font-semibold">
-              <div className="p-3 bg-amber-50 rounded-xl space-y-1 font-bold">
-                <p className="flex justify-between">{t("profile.checkoutDialog.originalHold")} <span>Rs {checkoutBooking.authorizedAmount?.toLocaleString("en-IN")}</span></p>
-                <p className="flex justify-between">{t("profile.checkoutDialog.newCounterPrice")} <span>Rs {checkoutBooking.counterOfferAmount?.toLocaleString("en-IN")}</span></p>
-                <p className="flex justify-between text-amber-700 text-md border-t border-amber-200/50 pt-1.5 mt-1.5">
-                  {t("profile.checkoutDialog.extraHoldToAuthorize")}
-                  <span>Rs {((checkoutBooking.counterOfferAmount || 0) - (checkoutBooking.authorizedAmount || 0)).toLocaleString("en-IN")}</span>
-                </p>
-              </div>
+              {checkoutBooking.status === "PAYMENT_PENDING" ? (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1 font-bold text-emerald-950">
+                  <p className="text-xs font-black uppercase text-emerald-700 tracking-wider">Telecaller Confirmed Deal</p>
+                  <p className="flex justify-between text-sm pt-1">
+                    <span>Artist:</span> <strong>{checkoutBooking.artistName || "Artist"}</strong>
+                  </p>
+                  <p className="flex justify-between text-sm">
+                    <span>Event Date:</span> <strong>{formatDate(checkoutBooking.eventDate)}</strong>
+                  </p>
+                  <p className="flex justify-between text-emerald-800 text-base border-t border-emerald-200/70 pt-1.5 mt-1.5 font-black">
+                    <span>Agreed Amount:</span>
+                    <span>₹{(checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000).toLocaleString("en-IN")}</span>
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 bg-amber-50 rounded-xl space-y-1 font-bold">
+                  <p className="flex justify-between">{t("profile.checkoutDialog.originalHold")} <span>Rs {checkoutBooking.authorizedAmount?.toLocaleString("en-IN")}</span></p>
+                  <p className="flex justify-between">{t("profile.checkoutDialog.newCounterPrice")} <span>Rs {checkoutBooking.counterOfferAmount?.toLocaleString("en-IN")}</span></p>
+                  <p className="flex justify-between text-amber-700 text-md border-t border-amber-200/50 pt-1.5 mt-1.5">
+                    {t("profile.checkoutDialog.extraHoldToAuthorize")}
+                    <span>Rs {((checkoutBooking.counterOfferAmount || 0) - (checkoutBooking.authorizedAmount || 0)).toLocaleString("en-IN")}</span>
+                  </p>
+                </div>
+              )}
 
               <div className="border border-slate-200 rounded-xl bg-slate-50 p-3.5 space-y-3">
-                <h4 className="text-xs font-black uppercase text-stone-400 tracking-wider">{t("profile.checkoutDialog.simulatedGateway").replace("{{gateway}}", checkoutGateway.toUpperCase())}</h4>
+                <h4 className="text-xs font-black uppercase text-orange-600 tracking-wider">
+                  Simulated Razorpay Secure Gateway
+                </h4>
                 <div className="space-y-1">
-                  <Label>{t("profile.checkoutDialog.cardholderName")}</Label>
+                  <Label>Cardholder Name</Label>
                   <Input placeholder="Johnathan Doe" value={checkoutDetails.cardholderName} onChange={(e) => setCheckoutDetails(prev => ({ ...prev, cardholderName: e.target.value }))} />
                 </div>
                 <div className="space-y-1">
-                  <Label>{t("profile.checkoutDialog.cardNumber")}</Label>
+                  <Label>Credit / Debit Card Number</Label>
                   <Input placeholder="4111 2222 3333 4444" value={checkoutDetails.cardNumber} onChange={(e) => setCheckoutDetails(prev => ({ ...prev, cardNumber: e.target.value }))} />
                 </div>
               </div>
@@ -1167,7 +1238,13 @@ export default function UserProfile() {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setCheckoutBooking(null)}>{t("profile.checkoutDialog.btnCancel")}</Button>
             <Button className="bg-[#FF6B00] hover:bg-[#e86100] text-white font-bold" onClick={submitCheckoutDelta} disabled={completingCheckout}>
-              {completingCheckout ? <Loader2 className="h-4 w-4 animate-spin" /> : t("profile.checkoutDialog.btnAuthorizeExtra")}
+              {completingCheckout ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : checkoutBooking?.status === "PAYMENT_PENDING" ? (
+                `Pay ₹${(checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000).toLocaleString("en-IN")} via Razorpay`
+              ) : (
+                t("profile.checkoutDialog.btnAuthorizeExtra")
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

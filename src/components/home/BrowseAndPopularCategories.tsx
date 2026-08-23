@@ -143,6 +143,23 @@ const DEFAULT_CATEGORY_ICONS: Record<string, string> = {
   Painter: "🎨",
 };
 
+const CATEGORY_POD_THEMES: Record<string, { bg: string; text: string; glow: string }> = {
+  Painter: { bg: "bg-gradient-to-tr from-amber-100 to-orange-100", text: "text-amber-700", glow: "shadow-amber-500/20" },
+  Performers: { bg: "bg-gradient-to-tr from-purple-100 to-pink-100", text: "text-purple-700", glow: "shadow-purple-500/20" },
+  "Event Services": { bg: "bg-gradient-to-tr from-sky-100 to-indigo-100", text: "text-sky-700", glow: "shadow-sky-500/20" },
+  "Folk & Traditional Arts": { bg: "bg-gradient-to-tr from-rose-100 to-orange-100", text: "text-rose-700", glow: "shadow-rose-500/20" },
+  "Spiritual & Varkari Sampraday": { bg: "bg-gradient-to-tr from-amber-100 to-yellow-100", text: "text-amber-800", glow: "shadow-amber-500/25" },
+  "Varkari Sampraday": { bg: "bg-gradient-to-tr from-amber-100 to-yellow-100", text: "text-amber-800", glow: "shadow-amber-500/25" },
+  Wedding: { bg: "bg-gradient-to-tr from-red-100 to-rose-100", text: "text-red-700", glow: "shadow-red-500/20" },
+  Birthday: { bg: "bg-gradient-to-tr from-pink-100 to-fuchsia-100", text: "text-pink-700", glow: "shadow-pink-500/20" },
+  "Corporate Event": { bg: "bg-gradient-to-tr from-blue-100 to-slate-100", text: "text-blue-800", glow: "shadow-blue-500/20" },
+  "Cultural Event": { bg: "bg-gradient-to-tr from-emerald-100 to-teal-100", text: "text-emerald-700", glow: "shadow-emerald-500/20" },
+  "Religious Event": { bg: "bg-gradient-to-tr from-orange-100 to-amber-100", text: "text-orange-800", glow: "shadow-orange-500/20" },
+  "College Event": { bg: "bg-gradient-to-tr from-violet-100 to-indigo-100", text: "text-violet-700", glow: "shadow-violet-500/20" },
+  "Festival Event": { bg: "bg-gradient-to-tr from-amber-100 to-rose-100", text: "text-amber-700", glow: "shadow-amber-500/20" },
+  "Other Events": { bg: "bg-gradient-to-tr from-stone-100 to-amber-50", text: "text-stone-800", glow: "shadow-stone-500/20" },
+};
+
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -248,10 +265,10 @@ export default function BrowseAndPopularCategories() {
   const displayEvents = [...BROWSE_EVENTS, ...BROWSE_EVENTS, ...BROWSE_EVENTS];
 
   return (
-    <section className="mx-auto w-full max-w-[1240px] px-3 sm:px-4 md:px-6 pt-3 sm:pt-4 md:pt-6 pb-3 sm:pb-4 md:pb-6 overflow-hidden">
+    <section className="mx-auto w-full max-w-[1240px] px-3 sm:px-4 md:px-6 pt-2 pb-1 overflow-hidden">
       {/* ─── 1. Browse by Event ─── */}
-      <div className="mb-5 sm:mb-8 md:mb-10">
-        <div className="flex items-center justify-between mb-2.5 sm:mb-5">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex items-center justify-between mb-2.5 sm:mb-3">
           <div className="flex items-center gap-2">
             <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-stone-900 tracking-tight">
               {t("home.browseByEvent") || "Browse by Event"}
@@ -294,33 +311,37 @@ export default function BrowseAndPopularCategories() {
             return (
               <motion.div
                 key={`${evt.title}-${idx}`}
+                whileHover={{ y: -5, scale: 1.02 }}
                 whileTap={{ scale: 0.95 }}
-                className="flex-shrink-0 snap-start py-0.5"
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                className="flex-shrink-0 snap-start py-1"
               >
                 <Link
                   to={evt.link}
                   className="group flex flex-col items-center justify-between w-[115px] sm:w-36 md:w-44 text-center cursor-pointer h-full"
                 >
-                  {/* Circular Image Container (Compact on mobile: 2 to 2.5 visible at once) */}
-                  <div className="relative aspect-square w-20 h-20 sm:w-32 sm:h-32 md:w-40 md:h-40 shrink-0 rounded-full border-2 border-white bg-stone-900 shadow-md ring-2 ring-orange-500/15 transition-all duration-300 group-hover:scale-105 group-hover:ring-orange-500/50 group-hover:shadow-xl overflow-hidden">
-                    <img
-                      src={evt.image}
-                      alt={evt.title}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                      loading="lazy"
-                    />
-                    {/* Subtle bottom vignette gradient */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                  {/* Circular Image Container with Smooth 2-Layer Ring */}
+                  <div className="relative p-[2.5px] sm:p-[3px] rounded-full bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-500 shadow-xs transition-all duration-500 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-orange-500/25 shrink-0">
+                    <div className="relative aspect-square w-20 h-20 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-[2px] sm:border-[2.5px] border-white bg-stone-100">
+                      <img
+                        src={evt.image}
+                        alt={evt.title}
+                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-115"
+                        loading="lazy"
+                      />
+                      {/* Subtle bottom vignette gradient */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent group-hover:from-black/25 transition-all duration-300" />
+                    </div>
                   </div>
 
                   {/* Text Below the Circle */}
-                  <div className="mt-1.5 flex flex-col items-center justify-start h-9 sm:h-12 w-full px-0.5">
+                  <div className="mt-2 flex flex-col items-center justify-start h-9 sm:h-12 w-full px-0.5">
                     <h3 className="text-[12px] sm:text-xs font-bold text-stone-800 leading-tight group-hover:text-orange-600 transition-colors text-center line-clamp-1 w-full">
                       {evt.title}
                     </h3>
-                    <span className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] sm:text-[12px] font-semibold text-orange-600 group-hover:text-orange-700">
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] sm:text-[12px] font-semibold text-orange-600 group-hover:text-orange-700">
                       <span>{t("common.explore") || "Explore"}</span>
-                      <span className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
+                      <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
                     </span>
                   </div>
                 </Link>
@@ -335,7 +356,7 @@ export default function BrowseAndPopularCategories() {
         <div className="flex items-center justify-between mb-2.5 sm:mb-5">
           <div className="flex items-center gap-2">
             <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-stone-900 tracking-tight">
-              {t("home.popularCategories") || "Popular Categories"}
+              {t("home.popularCategories") || "Popular Searches"}
             </h2>
           </div>
         </div>
@@ -357,12 +378,19 @@ export default function BrowseAndPopularCategories() {
                   : t("home.verifiedArtistsVendors") || "Verified Artists & Services");
 
               const categoryLink = cat.link || `/artists?category=${encodeURIComponent(catName)}`;
+              const podTheme = CATEGORY_POD_THEMES[catName] || {
+                bg: "bg-gradient-to-tr from-amber-100 to-orange-100",
+                text: "text-orange-700",
+                glow: "shadow-orange-500/20",
+              };
 
               return (
                 <motion.div
                   key={cat.id || catName}
                   variants={cardVariants}
+                  whileHover={{ y: -6, scale: 1.03 }}
                   whileTap={{ scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 450, damping: 22 }}
                   layout
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -371,10 +399,10 @@ export default function BrowseAndPopularCategories() {
                 >
                   <Link
                     to={categoryLink}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-stone-200/90 shadow-xs hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/10 hover:-translate-y-1 transition-all duration-300 cursor-pointer h-full min-h-[96px] sm:min-h-[170px] text-center"
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-b from-white via-[#FCFAF7] to-[#F8F2E8] border border-[#E4D7C5] border-t-2 border-t-orange-400/70 hover:border-orange-500 hover:border-t-orange-500 shadow-[0_4px_14px_rgba(78,50,26,0.06)] hover:shadow-[0_12px_28px_rgba(249,115,22,0.18)] transition-all duration-300 cursor-pointer h-full min-h-[96px] sm:min-h-[170px] text-center"
                   >
-                    <div className="flex h-8 w-8 sm:h-12 sm:w-12 items-center justify-center rounded-lg sm:rounded-2xl bg-stone-100/90 text-lg sm:text-2xl transition-all duration-300 group-hover:bg-orange-500 group-hover:scale-110 shadow-xs shrink-0">
-                      <span>{catIcon}</span>
+                    <div className={`flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-xl sm:rounded-2xl ${podTheme.bg} ${podTheme.glow} shadow-xs text-xl sm:text-2xl transition-all duration-300 group-hover:scale-115 group-hover:rotate-6 group-hover:shadow-md shrink-0 border border-white/80`}>
+                      <span className="transition-transform duration-300 group-hover:scale-110">{catIcon}</span>
                     </div>
 
                     <div className="mt-1.5 sm:mt-3 flex flex-col items-center justify-center flex-1 w-full">
@@ -395,10 +423,10 @@ export default function BrowseAndPopularCategories() {
 
         {/* ─── Show All Categories Pill Button ─── */}
         {categories.length > INITIAL_VISIBLE_COUNT && (
-          <div className="mt-4 sm:mt-8 flex justify-center">
+          <div className="mt-2.5 sm:mt-3.5 mb-1 flex justify-center">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="inline-flex items-center gap-1.5 px-5 sm:px-8 py-2 sm:py-3 rounded-full bg-stone-100/90 hover:bg-stone-200/80 text-stone-800 font-extrabold text-xs sm:text-base border border-stone-200/90 shadow-xs hover:shadow-md transition-all duration-300 cursor-pointer active:scale-95"
+              className="inline-flex items-center gap-1.5 px-4 sm:px-6 py-1.5 sm:py-2 rounded-full bg-stone-100/90 hover:bg-stone-200/80 text-stone-800 font-extrabold text-xs sm:text-sm border border-stone-200/90 shadow-xs hover:shadow-md transition-all duration-300 cursor-pointer active:scale-95"
             >
               <span>
                 {isExpanded

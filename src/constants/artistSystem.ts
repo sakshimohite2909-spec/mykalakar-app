@@ -144,6 +144,8 @@ export const EVENT_CATEGORY_HIERARCHY: Record<
         subcategories: [
           "Sound System",
           "Mandap Decoration",
+          "Stage & Lighting",
+          "Photography & Videography",
         ],
       },
     },
@@ -306,11 +308,49 @@ export const EVENT_CATEGORY_HIERARCHY: Record<
   },
   "Birthday": {
     icon: "🎂",
-    groups: {},
+    groups: {
+      "Entertainers": {
+        icon: "🎭",
+        subcategories: ["Magicians", "Puppet Show", "Clowns / Mascot", "Mimicry Artist", "Balloon Modeler", "Game Host / Anchor"],
+      },
+      "Music & Dance": {
+        icon: "🎵",
+        subcategories: ["DJs", "Karaoke Singers", "Kids Dance Group", "Live Singer"],
+      },
+      "Decoration & Setup": {
+        icon: "🎈",
+        subcategories: ["Balloon Decoration", "Theme Decoration", "Sound System", "Lighting", "Stage Setup"],
+      },
+      "Media & Fun": {
+        icon: "📸",
+        subcategories: ["Birthday Photographer", "Cinematic Videographer", "Photo Booth", "Temporary Tattoo Artist", "Face Painting"],
+      },
+    },
   },
   "Corporate Event": {
     icon: "💼",
-    groups: {},
+    groups: {
+      "Hosts & Speakers": {
+        icon: "🎙️",
+        subcategories: ["Anchors / Hosts", "Motivational Speakers", "Keynote Speakers", "Panel Moderators", "Celebrity Host"],
+      },
+      "Entertainment": {
+        icon: "🎸",
+        subcategories: ["Live Bands", "Stand-up Comedians", "Magicians", "Instrumental Artists", "DJs", "Dance Group"],
+      },
+      "AV, Stage & Tech Setup": {
+        icon: "🔊",
+        subcategories: ["Sound System", "LED Wall", "Stage & Lighting", "Projector & Screen", "Live Streaming"],
+      },
+      "Photography & Video": {
+        icon: "📸",
+        subcategories: ["Corporate Photographer", "Event Videographer", "Drone Photography", "Live Webcasting"],
+      },
+      "Venues & Catering": {
+        icon: "🏢",
+        subcategories: ["Conference Hall", "Corporate Catering", "Guest Hospitality", "Welcome Team"],
+      },
+    },
   },
   "Cultural Event": {
     icon: "🪕",
@@ -815,6 +855,83 @@ export function normalizeArtistRecord<T extends Record<string, any>>(artist: T):
 
 // ─── RELATIONAL 3-LEVEL HIERARCHY HELPERS ───
 
+export interface ArtistServiceItem {
+  id?: string;
+  event: string;
+  category: string;
+  subcategory: string;
+  artForm?: string;
+  mainCategory?: string;
+  soloPrice?: string | number;
+  duoPrice?: string | number;
+  teamPrice?: string | number;
+  showPricingOnProfile?: boolean;
+  youtubeLinks?: string[];
+}
+
+export function extractArtistServices(artist: Record<string, any>): ArtistServiceItem[] {
+  if (Array.isArray(artist?.services) && artist.services.length > 0) {
+    return artist.services.map((item: any, idx: number) => {
+      const sub = item.subcategory || item.subCategory || item.artForm || item.name || "Artist";
+      const cat = item.category || item.mainCategory || (findHierarchyForSubcategory(sub)?.category) || "General";
+      const evt = item.event || item.eventType || (findHierarchyForSubcategory(sub)?.eventType) || "General Event";
+      return {
+        id: item.id || `service-${idx}`,
+        event: evt,
+        category: cat,
+        subcategory: sub,
+        artForm: sub,
+        soloPrice: item.soloPrice ?? item.soloPerformancePrice ?? 0,
+        duoPrice: item.duoPrice ?? item.duoPerformancePrice ?? 0,
+        teamPrice: item.teamPrice ?? item.teamPerformancePrice ?? 0,
+        showPricingOnProfile: item.showPricingOnProfile ?? true,
+        youtubeLinks: Array.isArray(item.youtubeLinks) ? item.youtubeLinks : [],
+      };
+    });
+  }
+
+  if (Array.isArray(artist?.artsList) && artist.artsList.length > 0) {
+    return artist.artsList.map((item: any, idx: number) => {
+      const sub = item.artForm || item.category || item.subCategory || item.subcategory || item.name || "Artist";
+      const cat = item.mainCategory || item.category || (findHierarchyForSubcategory(sub)?.category) || "General";
+      const evt = item.eventType || (findHierarchyForSubcategory(sub)?.eventType) || "General Event";
+      return {
+        id: item.id || `art-${idx}`,
+        event: evt,
+        category: cat,
+        subcategory: sub,
+        artForm: sub,
+        soloPrice: item.soloPrice ?? item.soloPerformancePrice ?? 0,
+        duoPrice: item.duoPrice ?? item.duoPerformancePrice ?? 0,
+        teamPrice: item.teamPrice ?? item.teamPerformancePrice ?? 0,
+        showPricingOnProfile: item.showPricingOnProfile ?? true,
+        youtubeLinks: Array.isArray(item.youtubeLinks) ? item.youtubeLinks : [],
+      };
+    });
+  }
+
+  // Fallback to legacy single service fields
+  const sub = artist?.subCategory || artist?.subcategory || artist?.artForm || artist?.category || "Artist";
+  const hierarchy = findHierarchyForSubcategory(sub);
+  const cat = artist?.mainCategory || artist?.categoryGroup || artist?.category || hierarchy?.category || "General";
+  const evt = artist?.eventType || hierarchy?.eventType || "General Event";
+
+  return [
+    {
+      id: "service-0",
+      event: evt,
+      category: cat,
+      subcategory: sub,
+      artForm: sub,
+      soloPrice: artist?.soloPrice ?? 0,
+      duoPrice: artist?.duoPrice ?? 0,
+      teamPrice: artist?.teamPrice ?? 0,
+      showPricingOnProfile: artist?.showPricingOnProfile ?? true,
+      youtubeLinks: Array.isArray(artist?.youtubeLinks) ? artist?.youtubeLinks : [],
+    },
+  ];
+}
+
 export function getEventTypes(): string[] {
   return [
     "Varkari Sampraday",
@@ -876,4 +993,84 @@ export function findHierarchyForSubcategory(subCategoryName: string): { eventTyp
   }
   return null;
 }
+
+/**
+ * Safely extracts all unique city locations for an artist (City-wise).
+ */
+export function extractArtistLocations(artist: Record<string, any>): string[] {
+  if (!artist) return [];
+  const set = new Set<string>();
+
+  const add = (val: unknown) => {
+    if (!val) return;
+    if (typeof val === "string") {
+      val.split(/[,/]/).forEach((item) => {
+        const cleaned = item.trim();
+        const lower = cleaned.toLowerCase();
+        // Ignore generic state/country names so filter remains strictly City-wise
+        if (
+          cleaned &&
+          cleaned.length > 1 &&
+          lower !== "maharashtra" &&
+          lower !== "india" &&
+          lower !== "mh"
+        ) {
+          set.add(cleaned);
+        }
+      });
+    } else if (Array.isArray(val)) {
+      val.forEach(add);
+    }
+  };
+
+  add(artist.city);
+  add(artist.location);
+  add(artist.serviceLocations);
+  add(artist.serviceCities);
+  add(artist.availableCities);
+  add(artist.cities);
+  if (artist.artistProfile) {
+    add(artist.artistProfile.city);
+    add(artist.artistProfile.location);
+    add(artist.artistProfile.serviceLocations);
+    add(artist.artistProfile.serviceCities);
+  }
+  if (Array.isArray(artist.services)) {
+    artist.services.forEach((s: any) => {
+      add(s.location);
+      add(s.city);
+      add(s.cities);
+    });
+  }
+
+  return Array.from(set);
+}
+
+/**
+ * Evaluates whether an artist matches a selected city filter.
+ */
+export function matchesArtistCity(artist: Record<string, any>, selectedCity: string): boolean {
+  if (!selectedCity || selectedCity === "All Cities" || selectedCity === "All" || selectedCity === "all") {
+    return true;
+  }
+  const target = selectedCity.trim().toLowerCase();
+  
+  // 1. Direct substring match on raw location string (e.g. location: "Sangli, Maharashtra" contains "sangli")
+  const rawLoc = String(artist?.location || artist?.city || artist?.artistProfile?.location || "").toLowerCase();
+  if (rawLoc && rawLoc.includes(target)) {
+    return true;
+  }
+
+  // 2. Extracted location tokens match
+  const locations = extractArtistLocations(artist);
+  if (locations.length === 0 && !rawLoc) {
+    return true; // Fallback: include artists with unassigned location
+  }
+
+  return locations.some((loc) => {
+    const lLower = loc.toLowerCase();
+    return lLower.includes(target) || target.includes(lLower);
+  });
+}
+
 

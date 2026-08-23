@@ -104,7 +104,7 @@ export default function Navbar() {
   const isActive = (href: string) => {
     if (href === "/") return location.pathname === "/";
     if (href === "/artists") return location.pathname.startsWith("/artists") || location.pathname.startsWith("/artist/") || location.pathname.startsWith("/search") || location.pathname.startsWith("/explore");
-    if (href === "/events") return location.pathname.startsWith("/events") || location.pathname.startsWith("/event") || location.pathname.startsWith("/location");
+    if (href === "/events") return location.pathname === "/events";
     if (href.includes("#")) return location.pathname === "/" && location.hash === href.slice(href.indexOf("#"));
     return location.pathname === href;
   };
@@ -112,10 +112,10 @@ export default function Navbar() {
 
   return (
     <header
-      className={`site-header fixed top-0 inset-x-0 w-full h-20 flex items-center justify-between z-50 transition-all duration-200 px-3 md:px-4 ${
+      className={`site-header fixed top-0 inset-x-0 w-full h-20 flex items-center justify-between z-50 transition-all duration-200 px-3 md:px-4 bg-[#FDFBF7]/95 backdrop-blur-md ${
         scrolled
-          ? "bg-[#FDFBF7] border-b border-stone-200/80 shadow-md"
-          : "bg-[#FDFBF7]/95 backdrop-blur-md border-b border-stone-100/60"
+          ? "border-b border-stone-200/90 shadow-md"
+          : "border-b border-stone-200/60 shadow-2xs"
       }`}
     >
       <div className="site-nav-shell mx-auto flex w-full max-w-[1200px] items-center justify-between gap-2">
@@ -173,7 +173,7 @@ export default function Navbar() {
                   <ChevronDown className="h-3.5 w-3.5 text-stone-400" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 rounded-2xl border-orange-100/80 bg-[#fffaf2]/95 p-2 shadow-xl backdrop-blur-xl">
+              <DropdownMenuContent align="end" className="z-[70] w-56 rounded-2xl border-orange-100/80 bg-[#fffaf2]/95 p-2 shadow-xl backdrop-blur-xl">
                 <DropdownMenuItem className="cursor-pointer rounded-xl py-2.5 font-semibold" onClick={() => navigate("/profile")}>
                   <UserCircle className="mr-2 h-4 w-4" />
                   {t("nav.myProfile")}

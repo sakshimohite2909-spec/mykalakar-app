@@ -4,6 +4,8 @@ import type { BookingStatus } from "@/types/booking";
 const STATUS_META: Record<BookingStatus, { label: string; color: string }> = {
   DRAFT: { label: "Draft", color: "#78716C" },
   PAYMENT_AUTHORIZED: { label: "Payment Authorized", color: "#6366F1" },
+  PENDING_TELECALLER_VERIFICATION: { label: "Pending Verification", color: "#F59E0B" },
+  PAYMENT_PENDING: { label: "Payment Required", color: "#10B981" },
   PENDING_ARTIST_RESPONSE: { label: "Pending Response", color: "#8B5CF6" },
   ARTIST_REVIEW: { label: "Under Review", color: "#A855F7" },
   CONFIRMED: { label: "Confirmed", color: "#FF6B00" },

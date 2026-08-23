@@ -17,6 +17,9 @@ import {
   ChevronRight,
   ShieldCheck,
   Edit3,
+  Film,
+  Play,
+  Video,
 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import { saveArtist, unsaveArtist, getSavedArtistIds } from "@/services/savedArtistService";
@@ -27,13 +30,14 @@ import { AuthModal } from "@/components/AuthModal";
 import ArtistCalendar from "@/components/artist-bookings/ArtistCalendar";
 import { ArtistVideoEmbed } from "@/components/ArtistVideoEmbed";
 import { AdminEditArtistModal } from "@/components/AdminEditArtistModal";
+import ArtistReelViewerModal, { type ArtistReelItem } from "@/components/artist/ArtistReelViewerModal";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
 import { getYouTubeVideoId, getYoutubeThumbnailUrl, getExternalUrl } from "@/lib/youtube";
 import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, requireAuthUid, withTimeout } from "@/lib/firebaseSafe";
-import { getArtistArtForms } from "@/constants/artistSystem";
+import { extractArtistServices, getArtistArtForms } from "@/constants/artistSystem";
 import { ImageRegistryService, STATIC_IMAGES } from "@/services/ImageRegistryService";
 import { SmartImage } from "@/components/SmartImage";
 import { getArtistCategory, getArtistSubCategory, getParentCategoryForSubCategory } from "@/services/filterEngine";
@@ -359,6 +363,7 @@ export default function ArtistProfile() {
   const [selectedRating, setSelectedRating] = useState(0);
   const [isRatingSubmitting, setIsRatingSubmitting] = useState(false);
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
+  const [selectedReelIndex, setSelectedReelIndex] = useState<number | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const executeProtectedAction = (actionType: "book" | "save" | "rate", callback?: () => void) => {
@@ -538,6 +543,26 @@ export default function ArtistProfile() {
   }, [artist, t]); // ADDED FOR i18n
 
   const profileCategories = artist ? getProfileCategories(artist) : [];
+
+  const groupedServices = useMemo(() => {
+    if (!artist) return {};
+    const servicesList = extractArtistServices(artist);
+    const groups: Record<string, Record<string, string[]>> = {};
+
+    servicesList.forEach((s) => {
+      const evtName = (s.event || "GENERAL").toUpperCase();
+      const catName = s.category || "General Services";
+      const subName = s.subcategory || s.artForm || "";
+
+      if (!groups[evtName]) groups[evtName] = {};
+      if (!groups[evtName][catName]) groups[evtName][catName] = [];
+      if (subName && !groups[evtName][catName].includes(subName)) {
+        groups[evtName][catName].push(subName);
+      }
+    });
+
+    return groups;
+  }, [artist]);
 
   const pricingRangeLabel = useMemo(() => {
     if (!profileCategories || profileCategories.length === 0) return t("artist.priceOnRequest");
@@ -749,6 +774,34 @@ export default function ArtistProfile() {
     })
     .filter(Boolean) as Array<{ link: string; index: number; videoId: string; thumbnailUrl: string }>;
   const activeVideo = portfolioVideos[Math.min(activeVideoIndex, Math.max(portfolioVideos.length - 1, 0))];
+
+  const artistReels: ArtistReelItem[] = useMemo(() => {
+    const rawList = Array.isArray(artist.reels)
+      ? artist.reels
+      : Array.isArray(artist.media?.reels)
+      ? artist.media.reels
+      : Array.isArray(artist.artistProfile?.reels)
+      ? artist.artistProfile.reels
+      : [];
+
+    return rawList
+      .map((item: any, idx: number) => {
+        if (typeof item === "string") {
+          return {
+            id: `reel_${idx}`,
+            url: item,
+            title: `Performance Reel ${idx + 1}`,
+          };
+        }
+        return {
+          id: item.id || `reel_${idx}`,
+          url: item.url || item.videoUrl || "",
+          title: item.title || `Performance Reel ${idx + 1}`,
+          thumbnailUrl: item.thumbnailUrl || "",
+        };
+      })
+      .filter((r: any) => Boolean(r.url));
+  }, [artist]);
   const services = Array.from(new Set([
     ...profileCategories.map((entry) => entry.artForm),
     ...(Array.isArray(artist.services) ? artist.services : []),
@@ -757,10 +810,12 @@ export default function ArtistProfile() {
   const experience = artist.experience || artist.artistProfile?.experience || 5;
   const ratingSummary = getArtistRatingSummary(artist);
   const hasArtistRatings = hasRatings(ratingSummary);
-  const rating = hasArtistRatings ? ratingSummary.averageRating.toFixed(1) : t("artist.noRatingsYet"); // ADDED FOR i18n
+  const ratingDisplay = hasArtistRatings
+    ? `${ratingSummary.averageRating.toFixed(1)} ★`
+    : "New";
   const ratingWithCount = hasArtistRatings
-    ? `${rating} (${formatNumber(ratingSummary.totalRatings)} ${t("artist.ratings")})`
-    : t("artist.noRatingsYet"); // ADDED FOR i18n
+    ? `${ratingSummary.averageRating.toFixed(1)} ★ (${formatNumber(ratingSummary.totalRatings)} ${t("artist.ratings")})`
+    : (t("artist.noRatingsYet") || "New Artist");
   const isOwnArtist = Boolean(currentUser && (currentUser.uid === artist.id || currentUser.uid === artist.uid || currentUser.uid === artist.userId));
   const ratingHelpText = isOwnArtist
     ? t("artist.selfRatingUnavailable")
@@ -872,7 +927,7 @@ export default function ArtistProfile() {
 
               <div className="mt-5 flex flex-wrap gap-2.5">
                 <Button
-                  onClick={() => setBookingOpen(true)}
+                  onClick={() => executeProtectedAction("book", () => setBookingOpen(true))}
                   className="h-11 rounded-full bg-orange-600 px-5 text-xs font-extrabold uppercase tracking-widest text-white shadow-sm transition hover:bg-orange-700 hover:shadow-md"
                 >
                   {t("artist.sendInquiry")} {/* ADDED FOR i18n */}
@@ -945,57 +1000,83 @@ export default function ArtistProfile() {
               <p className="mt-3 text-sm font-medium leading-7 text-stone-600">{bio}</p>
             </section>
 
-            {profileCategories.length > 0 ? (
+            {Object.keys(groupedServices).length > 0 ? (
               <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
                 <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
                   <Sparkles className="h-4 w-4 text-orange-500" />
-                  {t("artist.artCategories")}
+                  Services & Expertise
                 </h2>
-                <div className="mt-4 grid gap-3">
-                  {profileCategories.map((entry) => (
-                    <article key={entry.id} className="rounded-xl border border-stone-100 bg-stone-50 p-4">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                <div className="mt-4 space-y-5">
+                  {Object.entries(groupedServices).map(([eventName, categoriesMap]) => (
+                    <div key={eventName} className="rounded-xl border border-stone-100 bg-stone-50/80 p-4">
+                      <h3 className="text-xs font-black uppercase tracking-wider text-orange-600 mb-3">{eventName}</h3>
+                      <div className="space-y-3 pl-1">
+                        {Object.entries(categoriesMap).map(([catName, subcategories]) => (
+                          <div key={catName}>
+                            <h4 className="text-sm font-extrabold text-stone-900 mb-1.5">{catName}</h4>
+                            <ul className="space-y-1.5 pl-2">
+                              {subcategories.map((sub) => (
+                                <li key={sub} className="text-xs font-bold text-stone-600 flex items-center gap-2">
+                                  <span className="text-orange-500 font-bold">•</span>
+                                  {getArtLabel(t, sub)}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {/* Performance Reels & Short Videos (In-App Player) */}
+            {artistReels.length > 0 ? (
+              <section className="profile-panel profile-media-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+                <div className="flex items-center justify-between">
+                  <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
+                    <Film className="h-4 w-4 text-orange-500" />
+                    Performance Reels & Videos ({artistReels.length})
+                  </h2>
+                  <span className="text-[11px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <ShieldCheck className="h-3 w-3 text-emerald-600" /> Verified Videos
+                  </span>
+                </div>
+                <p className="mt-1 text-xs font-semibold text-stone-400">
+                  Tap to watch verified stage performance clips in full screen
+                </p>
+
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {artistReels.map((reel, idx) => (
+                    <div
+                      key={reel.id || idx}
+                      onClick={() => setSelectedReelIndex(idx)}
+                      className="group relative aspect-[9/16] rounded-2xl overflow-hidden bg-black border border-stone-200 cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
+                    >
+                      <video
+                        src={reel.url}
+                        playsInline
+                        muted
+                        preload="metadata"
+                        className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-between p-3 pointer-events-none">
+                        <div className="flex justify-end">
+                          <span className="bg-black/60 backdrop-blur-md text-[10px] font-bold text-white px-2 py-0.5 rounded-full border border-white/10 flex items-center gap-1">
+                            <Play className="h-2.5 w-2.5 fill-white" /> Reel
+                          </span>
+                        </div>
                         <div>
-                          <p className="text-sm font-extrabold text-stone-950">{getArtLabel(t, entry.artForm)}</p>
-                          <p className="text-xs font-bold uppercase tracking-wide text-stone-400">{entry.mainCategory}</p>
+                          <p className="text-xs font-black text-white line-clamp-2 leading-tight drop-shadow-sm">
+                            {reel.title || `${artistName} Performance`}
+                          </p>
+                          <span className="text-[10px] text-orange-300 font-bold mt-1 flex items-center gap-1">
+                            <Play className="h-2.5 w-2.5 fill-orange-300" /> Watch Reel
+                          </span>
                         </div>
                       </div>
-
-                      {entry.showPricingOnProfile ? (
-                        <div className="mt-3 grid gap-2 text-xs font-bold text-stone-600 sm:grid-cols-3">
-                          {[
-                            ["Solo", entry.soloPerformancePrice],
-                            ["Duo", entry.duoPerformancePrice],
-                            ["Team", entry.teamPerformancePrice],
-                          ].map(([label, value]) => (
-                            <div key={label} className="rounded-lg border border-white bg-white/80 px-3 py-2">
-                              <span className="flex items-center gap-1 text-stone-400">
-                                <IndianRupee className="h-3.5 w-3.5 text-orange-500" />
-                                {label}
-                              </span>
-                              <p className="mt-1 text-sm text-stone-950">{formatPrice(value, t)}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {entry.youtubeLinks.length > 0 ? (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {entry.youtubeLinks.map((link, index) => (
-                            <a
-                              key={`${entry.id}-youtube-${index}`}
-                              href={getExternalUrl(link)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-red-100 bg-white px-3 py-1.5 text-[11px] font-extrabold text-red-600 transition hover:border-red-200 hover:bg-red-50"
-                            >
-                              <Youtube className="h-3.5 w-3.5" />
-                              YouTube {formatNumber(index + 1)}
-                            </a>
-                          ))}
-                        </div>
-                      ) : null}
-                    </article>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -1090,13 +1171,13 @@ export default function ArtistProfile() {
                 {/* Stats row */}
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   {[
-                    { label: t("artist.rating"), value: rating }, // ADDED FOR i18n
-                    { label: t("artist.expShort"), value: t("artist.yearsShort", { years: formatNumber(Number(experience) || 0) }) }, // ADDED FOR i18n
-                    { label: t("nav.events"), value: "50+" }, // ADDED FOR i18n
+                    { label: t("artist.rating"), value: ratingDisplay },
+                    { label: t("artist.expShort"), value: t("artist.yearsShort", { years: formatNumber(Number(experience) || 0) }) },
+                    { label: t("nav.events"), value: "50+" },
                   ].map(({ label, value }) => (
-                    <div key={label} className="rounded-xl border border-stone-100 bg-stone-50 p-2.5 text-center shadow-sm">
-                      <p className="text-base font-extrabold text-orange-600">{value}</p>
-                      <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wide">{label}</p>
+                    <div key={label} className="rounded-xl border border-stone-100 bg-stone-50 p-2 text-center shadow-sm overflow-hidden min-w-0">
+                      <p className="text-xs sm:text-sm font-extrabold text-orange-600 truncate">{value}</p>
+                      <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wide truncate">{label}</p>
                     </div>
                   ))}
                 </div>
@@ -1222,6 +1303,23 @@ export default function ArtistProfile() {
           setArtist((prev: any) => ({ ...prev, ...updatedData }));
         }}
       />
+      {artistReels.length > 0 && selectedReelIndex !== null && (
+        <ArtistReelViewerModal
+          open={selectedReelIndex !== null}
+          onOpenChange={(open) => {
+            if (!open) setSelectedReelIndex(null);
+          }}
+          reels={artistReels}
+          initialIndex={selectedReelIndex}
+          artistName={artistName}
+          artistCategory={artType}
+          artistAvatar={profileAvatarImage || avatarFallbackImage}
+          onBookArtist={() => {
+            setSelectedReelIndex(null);
+            executeProtectedAction("book", () => setBookingOpen(true));
+          }}
+        />
+      )}
     </div>
   );
 }

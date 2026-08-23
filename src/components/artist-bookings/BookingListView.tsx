@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Check, Eye, Loader2, MapPin, Music2, Phone, X } from "lucide-react";
+import { CalendarDays, Check, Eye, Loader2, MapPin, Music2, Phone, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
@@ -22,6 +22,7 @@ export function BookingListView({
   emptyDescription,
   onBookingSelect,
   onStatusChange,
+  onDelete,
   showActions = true,
 }: {
   bookings: BookingEvent[];
@@ -30,6 +31,7 @@ export function BookingListView({
   emptyDescription: string;
   onBookingSelect: (booking: BookingEvent) => void;
   onStatusChange: (booking: BookingEvent, status: BookingStatus) => Promise<{ success: boolean; message: string }>;
+  onDelete?: (booking: BookingEvent) => Promise<{ success: boolean; message: string }> | void;
   showActions?: boolean;
 }) {
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
@@ -96,12 +98,13 @@ export function BookingListView({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row lg:flex-shrink-0">
+              <div className="flex flex-col gap-2 sm:flex-row lg:flex-shrink-0 items-center">
                 <Button variant="outline" onClick={() => onBookingSelect(booking)}>
                   <Eye className="mr-2 h-4 w-4" />
                   View Details
                 </Button>
-                {showActions && (booking.status === "pending" || booking.status === "PENDING_ARTIST_RESPONSE") && (
+                {showActions &&
+                  ["pending", "PENDING", "PENDING_ARTIST_RESPONSE", "PENDING_TELECALLER_VERIFICATION", "PAYMENT_PENDING", "SOFT_HOLD_ACTIVE", "ARTIST_REVIEW", "new", "inquiry", "contacting_artists"].includes(booking.status) && (
                   <>
                     <Button
                       className="bg-[#FF6B00] text-white hover:bg-[#e86100]"
@@ -122,7 +125,7 @@ export function BookingListView({
                     </Button>
                   </>
                 )}
-                {showActions && booking.status === "confirmed" && (
+                {showActions && ["confirmed", "CONFIRMED", "booked", "artist_confirmed"].includes(booking.status) && (
                   <Button
                     className="bg-emerald-600 text-white hover:bg-emerald-700"
                     disabled={Boolean(updatingKey)}
@@ -130,6 +133,32 @@ export function BookingListView({
                   >
                     {updatingKey === `${booking.id}:completed` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                     Complete
+                  </Button>
+                )}
+                {onDelete && (
+                  <Button
+                    variant="outline"
+                    className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 h-10 px-3 shrink-0"
+                    disabled={Boolean(updatingKey)}
+                    title="Delete Booking"
+                    onClick={async () => {
+                      setUpdatingKey(`${booking.id}:delete`);
+                      const res = await onDelete(booking);
+                      setUpdatingKey(null);
+                      if (res) {
+                        toast({
+                          variant: res.success ? "default" : "destructive",
+                          title: res.success ? "Booking Deleted" : "Could not delete",
+                          description: res.message,
+                        });
+                      }
+                    }}
+                  >
+                    {updatingKey === `${booking.id}:delete` ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    )}
                   </Button>
                 )}
               </div>

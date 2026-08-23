@@ -3,6 +3,8 @@ import type { Timestamp } from "firebase/firestore";
 export type BookingStatus =
   | "DRAFT"
   | "PAYMENT_AUTHORIZED"
+  | "PENDING_TELECALLER_VERIFICATION"
+  | "PAYMENT_PENDING"
   | "PENDING_ARTIST_RESPONSE"
   | "ARTIST_REVIEW"
   | "CONFIRMED"
@@ -21,7 +23,12 @@ export type BookingStatus =
   | "pending"
   | "confirmed"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  | "booked"
+  | "new"
+  | "contacting_artists"
+  | "artist_confirmed"
+  | "quote_sent";
 
 export interface BookingEvent {
   id: string;
@@ -47,6 +54,8 @@ export interface BookingEvent {
   holdExpiryTime?: string;
   paymentGateway?: "stripe" | "razorpay" | "paypal" | "adyen";
   authorizedAmount?: number;
+  confirmedPrice?: number;
+  telecallerStatus?: string;
   isEscrowReleased?: boolean;
   counterOfferAmount?: number;
   counterOfferNotes?: string;

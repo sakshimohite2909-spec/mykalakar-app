@@ -129,7 +129,11 @@ export function getFallbackImageForArt(values: unknown[] = [], seed = "") {
 
 export function isGenericPlaceholderImage(value: unknown) {
   const src = String(value || "").trim();
-  return !src || /ui-avatars\.com|api\/\?name=|placeholder\.svg|fallback-image\.webp/i.test(src);
+  if (!src) return true;
+  if (/ui-avatars\.com|api\/\?name=|placeholder\.svg|fallback-image\.webp/i.test(src)) return true;
+  if (/^(Profile|Cover|Avatar|Photo|Image|undefined|null)$/i.test(src)) return true;
+  if (!src.startsWith("http://") && !src.startsWith("https://") && !src.startsWith("data:image/") && !src.startsWith("/")) return true;
+  return false;
 }
 
 export function getUsableImageUrl(value: unknown) {

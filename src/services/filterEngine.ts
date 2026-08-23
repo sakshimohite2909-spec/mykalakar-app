@@ -1,5 +1,7 @@
 import {
   CATEGORY_GROUP_OPTIONS,
+  extractArtistServices,
+  extractArtistLocations,
   getArtistArtForms,
   getCategoryGroupForArtistType,
   isCategoryGroup,
@@ -302,10 +304,13 @@ export function artistMatchesFilters(artist: FilterableArtist, filters: SmartFil
   const artForms = getArtistArtForms(artist);
   const subCategory = getArtistSubCategory(artist);
   const category = getArtistCategory(artist);
+  const services = extractArtistServices(artist);
+  
   const activeCategories = getActiveCategories(filters);
   const activeSubCategories = getActiveSubCategories(filters);
   const activeTags = getActiveTags(filters);
   const activeEventTypes = getActiveEventTypes(filters);
+
   const artistTags = [
     artist.tag,
     artist.tags,
@@ -315,32 +320,60 @@ export function artistMatchesFilters(artist: FilterableArtist, filters: SmartFil
     artist.eventTypes,
     artist.preferredEvents,
   ].flat().filter(Boolean);
-  const artistEventTypes = [
-    artist.eventType,
-    artist.eventTypes,
-    artist.preferredEventTypes,
-    artist.preferredEvents,
-    artist.artistProfile?.eventTypes,
-  ].flat().filter(Boolean);
 
-  const matchesQuery = !query || [
+  const artistEventTypes = Array.from(
+    new Set([
+      artist.eventType,
+      artist.eventTypes,
+      artist.preferredEventTypes,
+      artist.preferredEvents,
+      artist.artistProfile?.eventTypes,
+      ...services.map((s) => s.event),
+    ].flat().filter(Boolean))
+  );
+
+  const allSubCategories = Array.from(
+    new Set([
+      subCategory,
+      ...artForms.map(canonicalSubCategory),
+      ...services.map((s) => canonicalSubCategory(s.subcategory || s.artForm)),
+    ].filter(Boolean))
+  );
+
+  const allCategories = Array.from(
+    new Set([
+      category,
+      ...services.map((s) => canonicalCategory(s.category)),
+      ...allSubCategories.map(getParentCategoryForSubCategory).filter(Boolean),
+    ].filter(Boolean))
+  );
+
+  const allLocations = extractArtistLocations(artist);
+
+  const queryTerms = query ? query.split(/\s+/).filter(Boolean) : [];
+  const searchableText = [
     artist.name,
     artist.professionalName,
     artist.bio,
-    artist.district,
-    artist.city,
-    artist.state,
-    category,
-    subCategory,
-    ...artForms,
+    ...allLocations,
+    ...allCategories,
+    ...allSubCategories,
     ...artistTags,
     ...artistEventTypes,
-  ].some((value) => includesText(value, query));
+  ];
 
-  const matchesCategory = !activeCategories.length || activeCategories.some((value) => normalize(category) === normalize(value));
-  const matchesSubCategory = !activeSubCategories.length || [subCategory, ...artForms.map(canonicalSubCategory)].some((value) =>
-    activeSubCategories.some((active) => normalize(value) === normalize(active))
+  const matchesQuery = !queryTerms.length || queryTerms.every((term) =>
+    searchableText.some((value) => includesText(value, term))
   );
+
+  const matchesCategory = !activeCategories.length || activeCategories.some((active) =>
+    allCategories.some((cat) => normalize(cat) === normalize(active))
+  );
+
+  const matchesSubCategory = !activeSubCategories.length || activeSubCategories.some((active) =>
+    allSubCategories.some((sub) => normalize(sub) === normalize(active))
+  );
+
   const matchesTags = !activeTags.length || activeTags.every((tag) => artistTags.some((value) => includesText(value, tag)));
   const matchesEventTypes = !activeEventTypes.length || activeEventTypes.some((eventType) => artistEventTypes.some((value) => eventTypeMatches(value, eventType)));
 

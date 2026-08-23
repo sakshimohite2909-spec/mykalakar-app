@@ -36,7 +36,7 @@ const MOOD_FILTERS: Record<number, { active: string; inactive: string }> = {
 
 export function SliderBackground({ slides, activeIndex }: SliderBackgroundProps) {
   return (
-    <div className="absolute inset-0 overflow-hidden bg-[#0f0b07]" aria-hidden="true">
+    <div className="absolute inset-0 overflow-hidden bg-transparent" aria-hidden="true">
       {/* Slide Track Wrapper */}
       <div
         data-slider-track
@@ -103,8 +103,7 @@ export function SliderBackground({ slides, activeIndex }: SliderBackgroundProps)
         className="absolute inset-0 pointer-events-none z-15 bg-gradient-to-r from-orange-600/10 via-amber-500/15 to-transparent opacity-0 translate-x-[-100%]"
       />
 
-      {/* Layer 4: Subtle Top & Bottom Vignettes for Edge Protection */}
-      <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/35 via-black/10 to-transparent pointer-events-none z-10" />
+      {/* Layer 4: Bottom Vignette for Edge Protection */}
       <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/40 to-transparent pointer-events-none z-10" />
     </div>
   );

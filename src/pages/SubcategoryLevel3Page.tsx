@@ -5,12 +5,18 @@ import {
   MapPin,
   SlidersHorizontal,
   ChevronDown,
+  ChevronRight,
   BadgeCheck,
   Star,
   Target,
   Heart,
   X,
   Check,
+  Sparkles,
+  Filter,
+  ArrowUpDown,
+  Award,
+  ShieldCheck,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -18,7 +24,10 @@ import { getActiveArtistsPage, clearDataCache } from "@/services/dataService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { resolveArtistProfilePhoto } from "@/services/dataNormalizer";
 import { imageRegistry } from "@/services/ImageRegistryService";
+import { extractArtistServices, matchesArtistCity } from "@/constants/artistSystem";
+import { SearchableCityDropdown } from "@/components/search/SearchableCityDropdown";
 import { useI18n } from "@/i18n/I18nProvider";
+import { getArtLabel } from "@/lib/artLabels";
 
 interface ArtistCardData {
   id: string;
@@ -31,6 +40,8 @@ interface ArtistCardData {
   startingPrice: string;
   image: string;
   subCategory: string;
+  servicesList?: string[];
+  rawItem?: any;
 }
 
 const MOCK_ARTISTS: ArtistCardData[] = [];
@@ -53,7 +64,8 @@ export default function SubcategoryLevel3Page() {
   const decodedCategory = rawCategory ? decodeURIComponent(rawCategory) : null;
   const decodedSubcategory = rawSubcategory ? decodeURIComponent(rawSubcategory) : null;
 
-  const [selectedCity, setSelectedCity] = useState("Pune");
+  const initialLocation = searchParams.get("location") || searchParams.get("city") || "All Cities";
+  const [selectedCity, setSelectedCity] = useState(initialLocation);
   const [selectedSort, setSelectedSort] = useState("Recommended");
   const [selectedPrice, setSelectedPrice] = useState("All");
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -69,6 +81,15 @@ export default function SubcategoryLevel3Page() {
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
+    const locParam = searchParams.get("location") || searchParams.get("city");
+    if (locParam) {
+      setSelectedCity(locParam);
+    } else {
+      setSelectedCity("All Cities");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     let isMounted = true;
     clearDataCache();
     getActiveArtistsPage(30)
@@ -76,7 +97,9 @@ export default function SubcategoryLevel3Page() {
         if (!isMounted) return;
         if (res.items && res.items.length > 0) {
           const mapped: (ArtistCardData & { rawItem: any })[] = res.items.map((item: any) => {
-            const subCat = item.subCategory || item.subcategory || item.artForm || item.category || "Artist";
+            const extracted = extractArtistServices(item);
+            const servicesList = Array.from(new Set(extracted.map((s) => s.subcategory || s.artForm).filter(Boolean)));
+            const subCat = servicesList[0] || item.subCategory || item.subcategory || item.artForm || item.category || "Artist";
             const uploadedImage = resolveArtistProfilePhoto(item);
             const fallbackImage = imageRegistry.getUniqueImage({
               category: subCat,
@@ -95,6 +118,7 @@ export default function SubcategoryLevel3Page() {
               startingPrice: item.startingPrice ? String(item.startingPrice) : "25,000",
               image: uploadedImage || fallbackImage,
               subCategory: subCat,
+              servicesList: servicesList.length ? servicesList : [subCat],
               rawItem: item,
             };
           });
@@ -115,12 +139,13 @@ export default function SubcategoryLevel3Page() {
   const queryParam = searchParams.get("q") || searchParams.get("query") || "";
 
   const displayTitle = useMemo(() => {
-    if (queryParam) return `Artists matching "${queryParam}"`;
-    if (decodedSubcategory) return decodedSubcategory;
-    if (decodedCategory) return `${decodedCategory} Artists`;
-    if (decodedEvent) return `${decodedEvent} Artists`;
-    return "All Artists";
-  }, [queryParam, decodedSubcategory, decodedCategory, decodedEvent]);
+    const locSuffix = selectedCity && selectedCity !== "All Cities" ? ` in ${selectedCity}` : "";
+    if (queryParam) return `Artists matching "${queryParam}"${locSuffix}`;
+    if (decodedSubcategory) return `${decodedSubcategory}${locSuffix}`;
+    if (decodedCategory) return `${decodedCategory} Artists${locSuffix}`;
+    if (decodedEvent) return `Artists in ${decodedEvent}${locSuffix}`;
+    return `All Artists${locSuffix}`;
+  }, [queryParam, decodedSubcategory, decodedCategory, decodedEvent, selectedCity]);
 
   const displayArtists = useMemo(() => {
     const combined = [...realArtists];
@@ -131,8 +156,8 @@ export default function SubcategoryLevel3Page() {
 
     let list = Array.from(unique.values());
 
-    // Filter strictly by the current Subcategory / Category if provided
-    const categoryFilter = (decodedSubcategory || decodedCategory || "").trim().toLowerCase();
+    // Filter by 3-level Database Hierarchy (Subcategory / Category Group / Event Type)
+    const categoryFilter = (decodedSubcategory || decodedCategory || decodedEvent || "").trim().toLowerCase();
     if (categoryFilter && categoryFilter !== "all" && categoryFilter !== "explore" && categoryFilter !== "artists") {
       list = list.filter((a) => {
         const item = a.rawItem || {};
@@ -145,6 +170,8 @@ export default function SubcategoryLevel3Page() {
           item.category,
           item.mainCategory,
           item.discipline,
+          item.eventType,
+          ...(Array.isArray(item.eventTypes) ? item.eventTypes : []),
           ...(Array.isArray(item.categories) ? item.categories : []),
           ...(Array.isArray(item.services) ? item.services : []),
           ...(Array.isArray(item.artsList) ? item.artsList.flatMap((x: any) => [x.category, x.mainCategory]) : []),
@@ -152,10 +179,10 @@ export default function SubcategoryLevel3Page() {
           .filter(Boolean)
           .map((v) => String(v).trim().toLowerCase());
 
-        if (allCategoryValues.length === 0) return false; // Strict matching: Do not fallback to showing uncategorized artists in every category
+        if (allCategoryValues.length === 0) return true;
 
         return allCategoryValues.some(
-          (v) => v === categoryFilter
+          (v) => v === categoryFilter || v.includes(categoryFilter) || categoryFilter.includes(v)
         );
       });
     }
@@ -171,7 +198,7 @@ export default function SubcategoryLevel3Page() {
     }
 
     if (selectedCity && selectedCity !== "All Cities") {
-      list = list.filter((a) => a.location.toLowerCase().includes(selectedCity.toLowerCase()));
+      list = list.filter((a) => matchesArtistCity(a.rawItem || a, selectedCity));
     }
 
     // Advanced Drawer Filter Logic
@@ -280,21 +307,11 @@ export default function SubcategoryLevel3Page() {
         {/* ─── Filter Pills Bar ─── */}
         <div className="flex flex-wrap items-center gap-2.5 mb-6">
           {/* Location Pill */}
-          <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3.5 py-1.5 text-xs font-bold text-stone-700 shadow-2xs hover:border-stone-400 cursor-pointer">
-            <MapPin className="h-3.5 w-3.5 text-stone-500 mr-1.5" />
-            <select
-              value={selectedCity}
-              onChange={(e) => setSelectedCity(e.target.value)}
-              className="bg-transparent border-none outline-none cursor-pointer pr-4 font-bold text-stone-800"
-            >
-              <option value="Pune">Pune</option>
-              <option value="Mumbai">Mumbai</option>
-              <option value="Nashik">Nashik</option>
-              <option value="Thane">Thane</option>
-              <option value="Nagpur">Nagpur</option>
-              <option value="All Cities">All Cities</option>
-            </select>
-          </div>
+          <SearchableCityDropdown
+            selectedCity={selectedCity}
+            onSelectCity={setSelectedCity}
+            availableArtists={realArtists.map((a) => a.rawItem || a)}
+          />
 
           {/* Filters Pill Button (Triggers Slide-out Drawer) */}
           <button
@@ -353,32 +370,49 @@ export default function SubcategoryLevel3Page() {
         {displayArtists.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center py-16 text-center bg-white rounded-3xl border border-stone-200 p-8 sm:p-12 my-6 shadow-xs">
             <div className="h-16 w-16 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 mb-4">
-              <Search className="h-8 w-8 stroke-[1.75]" />
+              <MapPin className="h-8 w-8 stroke-[1.75]" />
             </div>
-            <h3 className="text-xl font-extrabold text-stone-900 mb-2">{t("empty.artistsTitle") || "No artists registered yet"}</h3>
+            <h3 className="text-xl font-extrabold text-stone-900 mb-2">
+              {selectedCity && selectedCity !== "All Cities"
+                ? `No artists available in ${selectedCity}`
+                : t("empty.artistsTitle") || "No artists registered yet"}
+            </h3>
             <p className="text-sm font-medium text-stone-500 max-w-md mb-6 leading-relaxed">
-              There are currently no active artists or vendors registered under <span className="font-bold text-stone-800">{displayTitle}</span>. Are you an artist in this category?
+              {selectedCity && selectedCity !== "All Cities"
+                ? "Try another city or select All Cities to browse available artists."
+                : `There are currently no active artists or vendors registered under ${displayTitle}.`}
             </p>
-            <Link
-              to="/register"
-              className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
-            >
-              {t("cta.artist.button") || "Be the first artist to register"}
-            </Link>
+            {selectedCity && selectedCity !== "All Cities" ? (
+              <button
+                type="button"
+                onClick={() => setSelectedCity("All Cities")}
+                className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+              >
+                Show All Cities
+              </button>
+            ) : (
+              <Link
+                to="/register"
+                className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+              >
+                {t("cta.artist.button") || "Be the first artist to register"}
+              </Link>
+            )}
           </div>
         )}
 
-        {/* ─── Artist Result Cards (Vertical List) ─── */}
-        <div className="space-y-4 sm:space-y-5 mb-10">
+        {/* ─── Artist Result Cards (Compact Responsive Grid: 2 cols mobile, 3-5 cols desktop) ─── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 mb-10">
           {displayArtists.map((artist) => {
             const isFav = favorites.has(artist.id);
             return (
               <div
                 key={artist.id}
-                className="group relative flex flex-col sm:flex-row items-center gap-4 sm:gap-6 p-4 sm:p-5 rounded-2xl bg-white border border-stone-200/80 shadow-xs hover:border-orange-400 hover:shadow-md transition-all duration-300"
+                onClick={() => navigate(`/artist/${artist.id}`)}
+                className="group relative flex flex-col justify-between p-3 rounded-2xl bg-white border border-stone-200/80 shadow-xs hover:border-orange-500 hover:shadow-md transition-all duration-300 cursor-pointer select-none"
               >
-                {/* Left Image */}
-                <div className="relative h-28 w-28 sm:h-32 sm:w-32 shrink-0 overflow-hidden rounded-2xl bg-stone-100 border border-stone-100">
+                {/* Top Image & Favorite Heart */}
+                <div className="relative h-32 sm:h-36 w-full overflow-hidden rounded-xl bg-stone-100 mb-2.5 shrink-0">
                   <img
                     src={artist.image}
                     alt={artist.name}
@@ -396,92 +430,73 @@ export default function SubcategoryLevel3Page() {
                       }
                     }}
                   />
-                </div>
-
-                {/* Center Main Info */}
-                <div className="flex-1 min-w-0 w-full sm:w-auto">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="text-base sm:text-lg font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors truncate">
-                        {artist.name}
-                      </h3>
-                      {artist.isVerified && (
-                        <BadgeCheck className="h-5 w-5 text-blue-500 fill-blue-500/10 shrink-0" />
-                      )}
-                    </div>
-                    {/* Heart button for mobile */}
-                    <button
-                      onClick={() => toggleFavorite(artist.id)}
-                      className="text-stone-400 hover:text-rose-500 transition sm:hidden"
-                      aria-label="Add to favorites"
-                    >
-                      <Heart
-                        className={`h-5 w-5 ${
-                          isFav ? "fill-rose-500 text-rose-500" : ""
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  {/* Rating & Location Row */}
-                  <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs font-semibold text-stone-600">
-                    <div className="flex items-center gap-1 text-amber-500">
-                      <Star className="h-4 w-4 fill-current" />
-                      <span className="font-extrabold text-stone-900">
-                        {artist.rating}
-                      </span>
-                      <span className="text-stone-400">
-                        ({artist.reviewsCount})
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 text-stone-500">
-                      <MapPin className="h-3.5 w-3.5 text-stone-400" />
-                      <span>{artist.location}</span>
-                    </div>
-                  </div>
-
-                  {/* Experience & Starting Price Row */}
-                  <div className="flex flex-wrap items-center gap-4 sm:gap-6 mt-3 pt-2.5 border-t border-stone-100 text-xs font-medium text-stone-600">
-                    <div className="flex items-center gap-1.5 text-stone-500 font-semibold">
-                      <Target className="h-3.5 w-3.5 text-stone-400" />
-                      <span>{artist.experience}</span>
-                    </div>
-                    <div className="text-xs">
-                      <span className="text-stone-400 font-medium">
-                        Starts from{" "}
-                      </span>
-                      <span className="font-extrabold text-stone-900 text-sm">
-                        ₹{artist.startingPrice}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column: Action Buttons */}
-                <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2.5 w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-100">
                   <button
-                    onClick={() => toggleFavorite(artist.id)}
-                    className="hidden sm:flex self-end mb-1 text-stone-400 hover:text-rose-500 transition"
-                    aria-label="Add to favorites"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(artist.id);
+                    }}
+                    className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition cursor-pointer"
                   >
                     <Heart
-                      className={`h-5 w-5 ${
+                      className={`h-3.5 w-3.5 ${
                         isFav ? "fill-rose-500 text-rose-500" : ""
                       }`}
                     />
                   </button>
-                  <Link
-                    to={`/artist/${artist.id}`}
-                    className="flex-1 sm:flex-initial inline-flex h-10 items-center justify-center rounded-xl border border-stone-200 bg-white px-4 text-xs font-extrabold text-stone-800 shadow-2xs hover:bg-stone-50 transition text-center"
-                  >
-                    {t("nav.viewPublicPage") || "View Profile"}
-                  </Link>
-                  <Link
-                    to={`/artist/${artist.id}?book=true`}
-                    className="flex-1 sm:flex-initial inline-flex h-10 items-center justify-center rounded-xl bg-orange-600 px-5 text-xs font-extrabold text-white shadow-sm hover:bg-orange-500 transition text-center"
-                  >
-                    {t("artist.booking") || "Book Now"}
-                  </Link>
+                </div>
+
+                {/* Content Details */}
+                <div className="flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors truncate">
+                        {artist.name}
+                      </h3>
+                      {artist.isVerified && (
+                        <BadgeCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                      )}
+                    </div>
+
+                    {/* Service Badges */}
+                    <div className="flex flex-wrap gap-1 mb-1.5 min-h-[22px]">
+                      {(artist.servicesList && artist.servicesList.length > 0 ? artist.servicesList : [artist.subCategory]).slice(0, 2).map((srv) => (
+                        <span key={srv} className="inline-block rounded-md bg-orange-50 text-orange-700 border border-orange-100/60 px-1.5 py-0.5 text-[9px] font-extrabold truncate max-w-[110px]">
+                          {getArtLabel(t, srv)}
+                        </span>
+                      ))}
+                      {(artist.servicesList?.length || 1) > 2 && (
+                        <span className="inline-block rounded-md bg-stone-100 text-stone-600 px-1.5 py-0.5 text-[9px] font-extrabold">
+                          +{(artist.servicesList?.length || 1) - 2} more
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Rating & Location */}
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-stone-600 pt-1.5 border-t border-stone-100">
+                      <div className="flex items-center gap-0.5 text-amber-500">
+                        <Star className="h-3 w-3 fill-current" />
+                        <span className="font-extrabold text-stone-900">{artist.rating}</span>
+                      </div>
+                      <div className="flex items-center gap-0.5 text-stone-500 truncate max-w-[90px]">
+                        <MapPin className="h-3 w-3 text-stone-400 shrink-0" />
+                        <span className="truncate">{artist.location}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer Price & View Action */}
+                  <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] text-stone-400 block font-medium leading-none">Starts from</span>
+                      <span className="font-extrabold text-stone-900 text-xs mt-0.5 block">
+                        ₹{artist.startingPrice}
+                      </span>
+                    </div>
+                    <span className="inline-flex items-center gap-0.5 text-[11px] font-extrabold text-orange-600 group-hover:translate-x-0.5 transition-transform">
+                      Profile <ChevronRight className="h-3 w-3" />
+                    </span>
+                  </div>
                 </div>
               </div>
             );

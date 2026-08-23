@@ -22,6 +22,15 @@ import {
   Star,
   ExternalLink,
   FileText,
+  Edit3,
+  MessageCircle,
+  ShieldCheck,
+  Volume2,
+  Copy,
+  Film,
+  Play,
+  RotateCcw,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +47,8 @@ import {
   type MatchedArtistCall,
 } from "@/services/telecallerService";
 import ManualLeadModal from "./ManualLeadModal";
+import EditLeadModal from "./EditLeadModal";
+import ArtistReelViewerModal, { type ArtistReelItem } from "@/components/artist/ArtistReelViewerModal";
 import { MAIN_EVENT_CARDS } from "@/constants/artistSystem";
 import { subscribeActiveArtists } from "@/services/dataService";
 import { toast } from "@/hooks/use-toast";
@@ -55,6 +66,7 @@ export default function TelecallerDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeLead, setActiveLead] = useState<TelecallerLead | null>(null);
   const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [artistCategoryFilter, setArtistCategoryFilter] = useState<string>("all");
@@ -67,6 +79,90 @@ export default function TelecallerDashboard() {
   const [quotedPrice, setQuotedPrice] = useState<number>(15000);
   const [callNotes, setCallNotes] = useState<string>("");
   const [savingCall, setSavingCall] = useState(false);
+
+  const handleWhatsAppArtist = (artist: any) => {
+    if (!activeLead) return;
+    const phone = (artist.phone || artist.contactNumber || "9876543210").replace(/[^0-9]/g, "");
+    const cleanPhone = phone.startsWith("91") && phone.length === 12 ? phone : phone.length === 10 ? `91${phone}` : phone;
+
+    const offerPrice = activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8);
+    const soundText =
+      activeLead.soundRequired === true
+        ? "कलाकाराने स्वतः साऊंड व माईक आणावे"
+        : activeLead.soundRequired === false
+        ? "साऊंड सिस्टीमची गरज नाही"
+        : "हॉल / आयोजकांकडून उपलब्ध असेल";
+
+    const message = `🙏 *नमस्कार ${artist.name || "कलाकार"} जी!*
+MyKalakar कडून नवीन इव्हेंट बुकिंग उपलब्ध आहे:
+
+📌 *कार्यक्रम:* ${activeLead.eventType || "इव्हेंट"} - ${activeLead.subCategory || "कलाकार"}
+📅 *तारीख:* ${activeLead.eventDate || "तारीख चर्चाधीन"}
+⏰ *वेळ:* ${activeLead.eventTime || "सायं. ०६:०० ते ०९:००"}
+📍 *ठिकाण:* ${activeLead.venueAddress ? `${activeLead.venueAddress}, ` : ""}${activeLead.eventLocation || "महाराष्ट्र"}
+💰 *ऑफर मानधन:* ₹${offerPrice.toLocaleString("en-IN")}
+🔊 *साऊंड सिस्टीम:* ${soundText}
+${activeLead.telecallerNotes ? `📝 *विशेष सूचना:* ${activeLead.telecallerNotes}\n` : ""}
+👉 *तुम्ही या तारखेला उपलब्ध असल्यास कृपया MyKalakar ला 'YES' किंवा 'NO' रिप्लाय द्या.*
+_(टीप: सर्व बुकिंग व पेमेंट MyKalakar द्वारे सुरक्षित केले जाईल.)_`;
+
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank");
+    toast({
+      title: "WhatsApp Message Sent! 🟢",
+      description: `Opened masked booking requirement for ${artist.name}. Customer phone is protected.`,
+    });
+  };
+
+  const [previewArtistReels, setPreviewArtistReels] = useState<{ artist: any; reels: ArtistReelItem[] } | null>(null);
+
+  const handleReleasePayout = async (lead: TelecallerLead) => {
+    try {
+      await updateLeadStatus(lead.id, "booked");
+      setActiveLead((prev) => (prev ? { ...prev, status: "booked" } : null));
+      toast({
+        title: "Payout Authorized & Released! 💸",
+        description: `Artist payout of ₹${(lead.artistOfferBudget || Math.round((lead.budget || 15000) * 0.8)).toLocaleString("en-IN")} cleared for release.`,
+      });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Action Failed", description: "Could not release payout." });
+    }
+  };
+
+  const handleProcessRefund = async (lead: TelecallerLead) => {
+    try {
+      await updateLeadStatus(lead.id, "cancelled");
+      setActiveLead((prev) => (prev ? { ...prev, status: "cancelled" } : null));
+      toast({
+        title: "Refund Approved & Processed 🔄",
+        description: `Customer refund of ₹${lead.budget?.toLocaleString("en-IN")} processed as per cancellation policy.`,
+      });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Action Failed", description: "Could not process refund." });
+    }
+  };
+
+  const openArtistReelsPreview = (artist: any) => {
+    const rawList = Array.isArray(artist.reels)
+      ? artist.reels
+      : Array.isArray(artist.media?.reels)
+      ? artist.media.reels
+      : [];
+
+    const parsed: ArtistReelItem[] = rawList.map((item: any, idx: number) => {
+      if (typeof item === "string") {
+        return { id: `reel_${idx}`, url: item, title: `${artist.name || "Artist"} Performance ${idx + 1}` };
+      }
+      return { id: item.id || `reel_${idx}`, url: item.url || item.videoUrl || "", title: item.title || `${artist.name || "Artist"} Reel` };
+    }).filter((r: any) => Boolean(r.url));
+
+    if (parsed.length === 0) {
+      toast({ title: "No Reels Available", description: `${artist.name} has not uploaded any performance reels yet.` });
+      return;
+    }
+
+    setPreviewArtistReels({ artist, reels: parsed });
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -441,9 +537,15 @@ export default function TelecallerDashboard() {
                           <span className="text-xs font-black text-emerald-700 flex items-center gap-1">
                             <IndianRupee className="h-3.5 w-3.5 shrink-0" /> Budget: ₹{lead.budget?.toLocaleString("en-IN") || "N/A"}
                           </span>
-                          <span className="text-xs font-black text-orange-600 flex items-center gap-1 hover:underline shrink-0">
-                            View Details →
-                          </span>
+                          {isSelected ? (
+                            <span className="text-[11px] font-black text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              ● Active
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-semibold text-stone-400 flex items-center gap-0.5">
+                              Select →
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -463,202 +565,175 @@ export default function TelecallerDashboard() {
               </button>
 
               {activeLead ? (
-                <>
-                  {/* Step Tracker Progress Bar - 2x2 Grid on Mobile, 4-col on Desktop */}
-                  <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-extrabold text-stone-500">
-                      <span className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-xl border border-emerald-200 justify-center sm:justify-start">
-                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> 1. Requirement
-                      </span>
-                      <span className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border justify-center sm:justify-start ${
-                        activeLead.status !== "new"
-                          ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                          : "text-stone-400 bg-stone-50 border-stone-200"
-                      }`}>
-                        {activeLead.status !== "new" ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <Clock className="h-3.5 w-3.5 shrink-0" />} 2. Customer Called
-                      </span>
-                      <span className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border justify-center sm:justify-start ${
-                        activeLead.status === "contacting_artists" || activeLead.status === "artist_confirmed" || activeLead.status === "booked"
-                          ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                          : "text-stone-400 bg-stone-50 border-stone-200"
-                      }`}>
-                        {activeLead.status === "contacting_artists" || activeLead.status === "artist_confirmed" || activeLead.status === "booked" ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <Clock className="h-3.5 w-3.5 shrink-0" />} 3. Artists Contacted
-                      </span>
-                      <span className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border justify-center sm:justify-start ${
-                        activeLead.status === "artist_confirmed" || activeLead.status === "booked"
-                          ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                          : "text-stone-400 bg-stone-50 border-stone-200"
-                      }`}>
-                        {activeLead.status === "artist_confirmed" || activeLead.status === "booked" ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <Clock className="h-3.5 w-3.5 shrink-0" />} 4. Confirmed
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Step 1: Customer Requirement Card */}
-                  <div className="p-4 sm:p-6 rounded-2xl bg-white border border-stone-200/80 shadow-sm space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-4">
+                <div className="space-y-4">
+                  {/* SECTION 1: CUSTOMER REQUIREMENT (Clean & Actionable) */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-white border border-stone-200/80 shadow-sm space-y-3.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-stone-100 pb-3">
                       <div>
-                        <h2 className="text-base sm:text-lg font-black text-stone-950 flex flex-wrap items-center gap-2">
-                          Customer Requirement
-                          {activeLead.leadType === "book_artist" ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-purple-100 text-purple-900 border border-purple-300">
-                              <UserCheck className="h-3.5 w-3.5 text-purple-700" /> Requested: {activeLead.requestedArtistName || "Artist"}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-base sm:text-lg font-black text-stone-950">
+                            {activeLead.customerName || "Customer Lead"}
+                          </h3>
+                          {activeLead.isVerifiedByTelecaller ? (
+                            <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <ShieldCheck className="h-3 w-3" /> Verified
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
-                              <FileText className="h-3.5 w-3.5 text-amber-700" /> Requirement
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                              Pending Check
                             </span>
                           )}
-                        </h2>
-                        <p className="text-xs text-stone-500 font-semibold mt-1">
-                          Customer: <strong className="text-stone-900">{activeLead.customerName || "Customer"}</strong>
+                        </div>
+                        <p className="text-xs font-bold text-stone-600 mt-0.5">
+                          {activeLead.eventType} • <span className="text-orange-600">{activeLead.subCategory}</span>
                         </p>
                       </div>
 
                       <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => setEditModalOpen(true)}
+                          className="h-8 px-3 text-xs font-extrabold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 flex items-center gap-1"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" /> Edit Details
+                        </Button>
+
                         <Select
                           value={activeLead.status}
                           onValueChange={(val: LeadStatus) => handleStatusChange(activeLead.id, val)}
                         >
-                          <SelectTrigger className="w-full sm:w-44 h-9 text-xs rounded-xl bg-stone-50 border-stone-200 text-stone-900 font-bold">
-                            <SelectValue placeholder="Update Status" />
+                          <SelectTrigger className="w-36 h-8 text-xs rounded-xl bg-stone-50 border-stone-200 text-stone-900 font-bold">
+                            <SelectValue />
                           </SelectTrigger>
-                          <SelectContent className="bg-white border-stone-200 text-stone-900 text-xs">
-                            <SelectItem value="new">New Lead</SelectItem>
-                            <SelectItem value="contacting_artists">Calling Artists</SelectItem>
-                            <SelectItem value="artist_confirmed">Artist Confirmed</SelectItem>
-                            <SelectItem value="quote_sent">Quote Sent</SelectItem>
-                            <SelectItem value="booked">Booked</SelectItem>
-                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                          <SelectContent className="bg-white border-stone-200 text-xs">
+                            <SelectItem value="new">1. New Lead</SelectItem>
+                            <SelectItem value="contacting_artists">2. Calling Artists</SelectItem>
+                            <SelectItem value="artist_confirmed">3. Confirmed</SelectItem>
+                            <SelectItem value="booked">4. Completed / Paid</SelectItem>
+                            <SelectItem value="cancelled">5. Cancelled</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
 
-                    {/* Requirement Summary Box */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-stone-50 p-3.5 sm:p-4 rounded-xl border border-stone-200/60">
-                      <div>
-                        <span className="text-stone-500 font-bold block text-[11px]">Event & Artform:</span>
-                        <span className="text-stone-950 font-black text-xs sm:text-sm">{activeLead.eventType} - {activeLead.subCategory}</span>
-                      </div>
-                      <div>
-                        <span className="text-stone-500 font-bold block text-[11px]">Target Event Date:</span>
-                        <span className="text-orange-600 font-black text-xs sm:text-sm">📅 {activeLead.eventDate || "Date TBD"}</span>
-                      </div>
-                      <div>
-                        <span className="text-stone-500 font-bold block text-[11px]">Max Budget:</span>
-                        <span className="text-emerald-700 font-black text-xs sm:text-sm">₹{activeLead.budget?.toLocaleString("en-IN")}</span>
-                      </div>
+                    {/* Compact Details Strip */}
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-bold text-stone-800">
+                        📅 {activeLead.eventDate || "Date TBD"} {activeLead.eventTime ? `(${activeLead.eventTime})` : ""}
+                      </span>
+                      <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-bold text-stone-800">
+                        📍 {activeLead.eventLocation || "Location"}{activeLead.venueAddress ? ` • ${activeLead.venueAddress}` : ""}
+                      </span>
+                      <span className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl font-black text-emerald-800">
+                        💰 Client Budget: ₹{activeLead.budget?.toLocaleString("en-IN") || "N/A"}
+                      </span>
+                      <span className="bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-xl font-bold text-orange-800">
+                        Offer Payout: ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8)).toLocaleString("en-IN")}
+                      </span>
+                      {activeLead.soundRequired !== undefined && (
+                        <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-semibold text-stone-700">
+                          🔊 {activeLead.soundRequired ? "Artist Sound" : "Venue Sound"}
+                        </span>
+                      )}
                     </div>
 
-                    {activeLead.specialNotes && (
-                      <p className="text-xs text-stone-700 italic bg-amber-50/50 p-3 rounded-xl border border-amber-100">
-                        "{activeLead.specialNotes}"
+                    {activeLead.telecallerNotes && (
+                      <p className="text-xs bg-amber-50/60 border border-amber-200/60 text-amber-900 px-3 py-2 rounded-xl font-medium">
+                        📝 <strong>Notes:</strong> {activeLead.telecallerNotes}
                       </p>
                     )}
 
-                    {/* Customer Call Action Button */}
-                    <div className="pt-1">
-                      {activeLead.customerPhone ? (
-                        <a
-                          href={`tel:${activeLead.customerPhone}`}
-                          onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
-                          className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all active:scale-[0.99]"
-                        >
-                          <Phone className="h-4 w-4" /> Call Customer ({activeLead.customerPhone})
-                        </a>
-                      ) : (
-                        <p className="text-xs text-stone-500 italic">No phone number provided for customer.</p>
-                      )}
-                    </div>
+                    {/* Direct 1-Click Customer Call */}
+                    {activeLead.customerPhone && (
+                      <a
+                        href={`tel:${activeLead.customerPhone}`}
+                        onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
+                        className="w-full py-2.5 sm:py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+                      >
+                        <Phone className="h-4 w-4" /> Call Customer ({activeLead.customerPhone})
+                      </a>
+                    )}
                   </div>
 
-                  {/* Step 2: Recommended Matching Artists */}
-                  <div className="p-4 sm:p-6 rounded-2xl bg-white border border-stone-200/80 shadow-sm space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-stone-100 pb-3">
-                      <h3 className="text-sm font-black text-stone-950 flex items-center gap-2 leading-tight">
+                  {/* SECTION 2: MATCHING ARTISTS (Fast WhatsApp & Call) */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-white border border-stone-200/80 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
+                      <h4 className="text-sm font-black text-stone-950 flex items-center gap-2">
                         <Users className="h-4 w-4 text-orange-600 shrink-0" />
                         <span>Recommended Artists ({matchingArtists.length})</span>
-                      </h3>
+                      </h4>
                       <span className="text-[11px] font-semibold text-stone-500">
-                        Matched by Location + Category + Date
+                        Customer phone is masked
                       </span>
                     </div>
 
-                    <div className="space-y-3">
-                      {matchingArtists.map((artist) => {
+                    <div className="space-y-2.5">
+                      {matchingArtists.slice(0, 6).map((artist) => {
                         const phoneNum = artist.phone || artist.contactNumber || "+91 98765 43210";
-                        const existingCall = activeLead.matchedArtists?.find(
-                          (item) => item.artistName.toLowerCase() === artist.name.toLowerCase()
-                        );
+                        const isConfirmed = activeLead.status === "artist_confirmed" && activeLead.requestedArtistName === artist.name;
 
                         return (
                           <div
                             key={artist.name}
-                            className="p-3.5 sm:p-4 rounded-2xl bg-stone-50/70 border border-stone-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
+                            className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all ${
+                              isConfirmed ? "bg-emerald-50/80 border-emerald-300" : "bg-stone-50/60 border-stone-200/80"
+                            }`}
                           >
-                            <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-black text-sm sm:text-base border border-orange-200 shrink-0">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="h-9 w-9 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-black text-xs shrink-0">
                                 {artist.name.charAt(0)}
                               </div>
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className="text-xs sm:text-sm font-black text-stone-950">{artist.name}</h4>
-                                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200 flex items-center gap-0.5">
-                                    <Star className="h-3 w-3 fill-amber-500 text-amber-500 shrink-0" /> {artist.rating || 4.8}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs font-black text-stone-900 truncate">{artist.name}</span>
+                                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded flex items-center gap-0.5">
+                                    ★ {artist.rating || 4.8}
                                   </span>
-                                  {existingCall && (
-                                    <span
-                                      className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
-                                        existingCall.callOutcome === "agreed"
-                                          ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                                          : existingCall.callOutcome === "busy_booked"
-                                          ? "bg-red-100 text-red-900 border border-red-300"
-                                          : "bg-amber-100 text-amber-900 border border-amber-300"
-                                      }`}
-                                    >
-                                      {existingCall.callOutcome === "agreed"
-                                        ? "🟢 Available"
-                                        : existingCall.callOutcome === "busy_booked"
-                                        ? "🔴 Not Available"
-                                        : "🟡 " + existingCall.callOutcome}
-                                    </span>
-                                  )}
                                 </div>
-                                <p className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-2 font-semibold flex-wrap">
-                                  <span>📍 {artist.district || artist.location || "Location TBD"}</span>
-                                  <span>• From ₹{artist.startingPrice?.toLocaleString("en-IN") || "15,000"}</span>
+                                <p className="text-[11px] text-stone-500 font-semibold truncate">
+                                  📍 {artist.district || artist.location || "Maharashtra"} • From ₹{artist.startingPrice?.toLocaleString("en-IN") || "15,000"}
                                 </p>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-200/60">
-                              <a
-                                href={`tel:${phoneNum}`}
-                                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-white border border-stone-200 text-xs font-extrabold text-stone-800 hover:bg-stone-100 transition shadow-sm active:scale-95"
-                              >
-                                <Phone className="h-3.5 w-3.5 text-orange-600 shrink-0" />
-                                Call Artist
-                              </a>
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedArtistForCall(artist);
-                                  setQuotedPrice(activeLead.budget || 15000);
-                                }}
-                                className="flex-1 sm:flex-initial rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-extrabold px-3 py-2 sm:py-1.5 active:scale-95"
-                              >
-                                Log Result
-                              </Button>
-                              {existingCall?.callOutcome === "agreed" && (
+                            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                              {Boolean(artist.reels?.length || artist.media?.reels?.length) && (
                                 <Button
                                   size="sm"
-                                  onClick={() => handleStatusChange(activeLead.id, "artist_confirmed")}
-                                  className="w-full sm:w-auto rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold px-3 py-2 sm:py-1.5 active:scale-95"
+                                  variant="ghost"
+                                  onClick={() => openArtistReelsPreview(artist)}
+                                  className="h-8 px-2 text-xs font-bold text-orange-600 hover:bg-orange-100 rounded-lg"
                                 >
-                                  🏆 Confirm Artist
+                                  <Film className="h-3.5 w-3.5 mr-1" /> Reel
                                 </Button>
                               )}
+
+                              <Button
+                                size="sm"
+                                onClick={() => handleWhatsAppArtist(artist)}
+                                className="h-8 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1"
+                              >
+                                <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                              </Button>
+
+                              <a
+                                href={`tel:${phoneNum}`}
+                                className="h-8 px-2.5 rounded-lg bg-white border border-stone-200 text-xs font-bold text-stone-800 hover:bg-stone-100 inline-flex items-center gap-1"
+                              >
+                                <Phone className="h-3.5 w-3.5 text-orange-600" /> Call
+                              </a>
+
+                              <Button
+                                size="sm"
+                                onClick={() => handleStatusChange(activeLead.id, "artist_confirmed")}
+                                className={`h-8 px-2.5 rounded-lg text-xs font-bold ${
+                                  isConfirmed
+                                    ? "bg-emerald-700 text-white"
+                                    : "bg-stone-900 hover:bg-stone-800 text-white"
+                                }`}
+                              >
+                                {isConfirmed ? "Confirmed ✓" : "Confirm"}
+                              </Button>
                             </div>
                           </div>
                         );
@@ -666,148 +741,48 @@ export default function TelecallerDashboard() {
                     </div>
                   </div>
 
-                  {/* Step 3: Pop-up Modal / Logger for selected artist call */}
-                  {selectedArtistForCall && (
-                    <form onSubmit={handleLogArtistCall} className="p-4 sm:p-5 rounded-2xl bg-orange-50/90 border border-orange-300 space-y-4 shadow-lg">
-                      <div className="flex items-center justify-between border-b border-orange-200 pb-3">
-                        <h4 className="text-xs sm:text-sm font-black text-stone-950 flex items-center gap-2">
-                          <PhoneCall className="h-4 w-4 text-orange-600 shrink-0" />
-                          Call Result — Artist: {selectedArtistForCall.name}
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedArtistForCall(null)}
-                          className="text-stone-400 hover:text-stone-700 text-xs font-bold px-2 py-1"
-                        >
-                          ✕ Close
-                        </button>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[11px] font-extrabold text-stone-700 block">Select Outcome</label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-bold">
-                          <button
-                            type="button"
-                            onClick={() => setCallOutcome("agreed")}
-                            className={`p-3 rounded-xl border transition-all text-left flex items-center gap-2 ${
-                              callOutcome === "agreed"
-                                ? "bg-emerald-600 text-white border-emerald-600 font-extrabold shadow-sm"
-                                : "bg-white text-stone-800 border-stone-200 hover:border-emerald-300"
-                            }`}
-                          >
-                            🟢 Available & Agreed
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCallOutcome("busy_booked")}
-                            className={`p-3 rounded-xl border transition-all text-left flex items-center gap-2 ${
-                              callOutcome === "busy_booked"
-                                ? "bg-red-600 text-white border-red-600 font-extrabold shadow-sm"
-                                : "bg-white text-stone-800 border-stone-200 hover:border-red-300"
-                            }`}
-                          >
-                            🔴 Not Available / Busy
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCallOutcome("price_too_high")}
-                            className={`p-3 rounded-xl border transition-all text-left flex items-center gap-2 ${
-                              callOutcome === "price_too_high"
-                                ? "bg-amber-600 text-white border-amber-600 font-extrabold shadow-sm"
-                                : "bg-white text-stone-800 border-stone-200 hover:border-amber-300"
-                            }`}
-                          >
-                            🟡 Price Issue
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCallOutcome("no_answer")}
-                            className={`p-3 rounded-xl border transition-all text-left flex items-center gap-2 ${
-                              callOutcome === "no_answer"
-                                ? "bg-stone-700 text-white border-stone-700 font-extrabold shadow-sm"
-                                : "bg-white text-stone-800 border-stone-200 hover:border-stone-400"
-                            }`}
-                          >
-                            ⚪ No Response / Unreachable
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[11px] font-bold text-stone-700 block mb-1">Quoted Price (₹)</label>
-                          <Input
-                            type="number"
-                            value={quotedPrice}
-                            onChange={(e) => setQuotedPrice(Number(e.target.value))}
-                            className="rounded-xl bg-white border-stone-200 text-stone-900 text-xs font-bold h-10"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-bold text-stone-700 block mb-1">Notes / Remarks</label>
-                          <Textarea
-                            placeholder="Enter notes..."
-                            value={callNotes}
-                            onChange={(e) => setCallNotes(e.target.value)}
-                            rows={1}
-                            className="rounded-xl bg-white border-stone-200 text-stone-900 text-xs"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end gap-2 pt-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedArtistForCall(null)}
-                          className="text-xs text-stone-600 font-bold"
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          type="submit"
-                          disabled={savingCall}
-                          size="sm"
-                          className="rounded-full bg-orange-600 hover:bg-orange-700 text-white text-xs font-extrabold px-6 h-10"
-                        >
-                          {savingCall ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save Result"}
-                        </Button>
-                      </div>
-                    </form>
-                  )}
-
-                  {/* Step 4: Deal Confirmation Screen */}
-                  {(activeLead.status === "artist_confirmed" || activeLead.status === "booked" || activeLead.confirmedArtistName) && (
-                    <div className="p-5 sm:p-6 rounded-2xl bg-emerald-50/90 border border-emerald-300 space-y-4 shadow-sm text-center">
-                      <div className="h-12 w-12 rounded-full bg-emerald-600 text-white mx-auto flex items-center justify-center font-black text-xl shadow-md">
-                        ✓
+                  {/* SECTION 3: ESCROW & PAYOUT (1-Row Quick Controls) */}
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-4 text-xs font-bold flex-wrap">
+                      <div>
+                        <span className="text-stone-400 block text-[10px] uppercase">Client Paid</span>
+                        <span className="text-emerald-700 font-black">₹{activeLead.budget?.toLocaleString("en-IN")}</span>
                       </div>
                       <div>
-                        <h3 className="text-base sm:text-lg font-black text-emerald-950">Artist Confirmed</h3>
-                        <p className="text-xs font-bold text-emerald-800 mt-1">
-                          {activeLead.confirmedArtistName || "Selected Artist"} • {activeLead.subCategory}
-                        </p>
+                        <span className="text-stone-400 block text-[10px] uppercase">Artist Payout</span>
+                        <span className="text-orange-600 font-black">
+                          ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8)).toLocaleString("en-IN")}
+                        </span>
                       </div>
-
-                      <div className="max-w-md mx-auto bg-white p-4 rounded-xl border border-emerald-200 text-left text-xs space-y-1.5 font-semibold text-stone-800">
-                        <p>👤 <strong>Customer:</strong> {activeLead.customerName}</p>
-                        <p>🎭 <strong>Event:</strong> {activeLead.eventType} - {activeLead.subCategory}</p>
-                        <p>📅 <strong>Date:</strong> {activeLead.eventDate} | 📍 <strong>Location:</strong> {activeLead.eventLocation}</p>
-                        <p>💰 <strong>Agreed Amount:</strong> <strong className="text-emerald-700">₹{activeLead.confirmedPrice?.toLocaleString("en-IN") || activeLead.budget?.toLocaleString("en-IN")}</strong></p>
+                      <div>
+                        <span className="text-stone-400 block text-[10px] uppercase">Margin</span>
+                        <span className="text-purple-700 font-black">
+                          ₹{Math.max(0, (activeLead.budget || 0) - (activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8))).toLocaleString("en-IN")}
+                        </span>
                       </div>
+                    </div>
 
+                    <div className="flex items-center gap-2">
                       <Button
-                        onClick={() => handleStatusChange(activeLead.id, "booked")}
-                        className="w-full sm:w-auto rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold px-8 py-3 shadow-md active:scale-95"
+                        size="sm"
+                        onClick={() => handleReleasePayout(activeLead)}
+                        className="h-8.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black"
                       >
-                        Confirm Booking
+                        💸 Release Payout
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleProcessRefund(activeLead)}
+                        className="h-8.5 px-3 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold"
+                      >
+                        🔄 Refund
                       </Button>
                     </div>
-                  )}
-                </>
+                  </div>
+                </div>
               ) : (
-                <div className="p-12 text-center rounded-2xl bg-white border border-stone-200 text-stone-500 shadow-sm">
+                <div className="p-12 text-center rounded-2xl bg-white border border-stone-200 text-stone-500 text-xs shadow-sm">
                   Select a lead from the left feed to start calling artists.
                 </div>
               )}
@@ -884,12 +859,22 @@ export default function TelecallerDashboard() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setActiveLead(lead);
+                      setEditModalOpen(true);
+                    }}
+                    className="h-9 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 text-xs font-bold flex items-center gap-1"
+                  >
+                    <Edit3 className="h-3.5 w-3.5" /> Edit
+                  </Button>
                   <a
                     href={`tel:${lead.customerPhone}`}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-50 border border-orange-200 text-xs font-bold text-orange-600 hover:bg-orange-100 transition"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-50 border border-orange-200 text-xs font-bold text-orange-600 hover:bg-orange-100 transition"
                   >
                     <Phone className="h-3.5 w-3.5" />
-                    Call Customer
+                    Call
                   </a>
                   <Select
                     value={lead.status}
@@ -1002,6 +987,39 @@ export default function TelecallerDashboard() {
           setActiveLead(newLead);
         }}
       />
+
+      {/* Edit & Verify Lead Modal */}
+      <EditLeadModal
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        lead={activeLead}
+        onLeadUpdated={(updatedLead) => {
+          setLeads((prev) =>
+            prev.map((l) => (l.id === updatedLead.id ? updatedLead : l))
+          );
+          setActiveLead(updatedLead);
+        }}
+      />
+
+      {/* Artist Reels Preview Modal */}
+      {previewArtistReels && (
+        <ArtistReelViewerModal
+          open={Boolean(previewArtistReels)}
+          onOpenChange={(open) => {
+            if (!open) setPreviewArtistReels(null);
+          }}
+          reels={previewArtistReels.reels}
+          artistName={previewArtistReels.artist.name}
+          artistCategory={previewArtistReels.artist.category}
+          artistAvatar={previewArtistReels.artist.avatar}
+          onBookArtist={() => {
+            setPreviewArtistReels(null);
+            if (activeLead) {
+              handleStatusChange(activeLead.id, "artist_confirmed");
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

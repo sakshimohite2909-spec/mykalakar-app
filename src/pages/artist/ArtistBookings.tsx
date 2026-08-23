@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useArtistBookings } from "@/hooks/useArtistBookings";
-import { BookingSummaryCards } from "@/components/artist-bookings/BookingSummaryCards";
 import { BookingListView } from "@/components/artist-bookings/BookingListView";
 import { BookingDetailModal } from "@/components/artist-bookings/BookingDetailModal";
 import type { BookingEvent } from "@/types/booking";
 
 export default function ArtistBookings() {
-  const { bookings, summary, loadingBookings, updateStatus } = useArtistBookings();
+  const { bookings, loadingBookings, updateStatus, deleteBooking } = useArtistBookings();
   const [selectedBooking, setSelectedBooking] = useState<BookingEvent | null>(null);
 
   return (
@@ -17,8 +16,6 @@ export default function ArtistBookings() {
         <p className="mt-1 text-sm text-muted-foreground">Review inquiries, manage booking status, and keep your events moving.</p>
       </motion.div>
 
-      <BookingSummaryCards summary={summary} loading={loadingBookings} />
-
       <BookingListView
         bookings={bookings}
         loading={loadingBookings}
@@ -26,6 +23,7 @@ export default function ArtistBookings() {
         emptyDescription="When a customer sends an inquiry, it will appear here instantly."
         onBookingSelect={setSelectedBooking}
         onStatusChange={updateStatus}
+        onDelete={deleteBooking}
       />
 
       <BookingDetailModal

@@ -1,409 +1,130 @@
-import { useState, useMemo } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { Search, ChevronDown, Clock, ShieldCheck, UserCheck } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { useParams, useSearchParams, Link, useNavigate } from "react-router-dom";
+import {
+  Search,
+  MapPin,
+  ChevronRight,
+  BadgeCheck,
+  Star,
+  Heart,
+  Clock,
+} from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import NewRequirementModal from "@/components/NewRequirementModal";
-import { getSubcategoriesForCategory, getCategoriesForEvent, CATEGORY_GROUP_OPTIONS } from "@/constants/artistSystem";
+import {
+  getSubcategoriesForCategory,
+  getCategoriesForEvent,
+  CATEGORY_GROUP_OPTIONS,
+  extractArtistServices,
+  matchesArtistCity,
+} from "@/constants/artistSystem";
+import { SearchableCityDropdown } from "@/components/search/SearchableCityDropdown";
+import { getActiveArtistsPage, clearDataCache } from "@/services/dataService";
+import { resolveArtistProfilePhoto } from "@/services/dataNormalizer";
+import { imageRegistry } from "@/services/ImageRegistryService";
 import { useI18n } from "@/i18n/I18nProvider";
+import { getArtLabel } from "@/lib/artLabels";
 
-export const CATEGORY_LEVEL2_DATA: Record<
-  string,
-  {
-    title: string;
-    subtitle: string;
-    heroImage: string;
-    allSubcategories: string[];
-    popularServices: Array<{
-      title: string;
-      artistsCount: string;
-      image: string;
-      queryParam: string;
-    }>;
+const isServiceCategory = (cat: string) =>
+  /services|venues|decoration|catering|hospitality|transportation|setup|sound|mandap|stage|photo/i.test(cat || "");
+const isOrganizationCategory = (cat: string) =>
+  /organization|sanstha|troupe|academy/i.test(cat || "");
+
+const getSectionHeading = (categoryName: string, subName: string) => {
+  if (isServiceCategory(categoryName) || isServiceCategory(subName)) {
+    return subName === "All" ? `Available ${categoryName}` : `${subName} Services`;
   }
-> = {
-  Photography: {
-    title: "Photography",
-    subtitle: "Capture every special moment with professional photography services.",
-    heroImage: "https://images.pexels.com/photos/32538906/pexels-photo-32538906.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop",
-    allSubcategories: [
-      "Wedding Photographer",
-      "Candid Photographer",
-      "Traditional Photographer",
-      "Drone Photography",
-      "Pre-Wedding Shoot",
-      "Photo Booth",
-      "Live Streaming",
-      "Cinematic Videography",
-      "More Services",
-    ],
-    popularServices: [
-      {
-        title: "Wedding Photographer",
-        artistsCount: "1450+ Artists",
-        image: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Wedding Photographer",
-      },
-      {
-        title: "Candid Photographer",
-        artistsCount: "950+ Artists",
-        image: "https://images.unsplash.com/photo-1537633552985-df8429e8048b?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Candid Photographer",
-      },
-      {
-        title: "Drone Photography",
-        artistsCount: "720+ Artists",
-        image: "https://images.pexels.com/photos/30620518/pexels-photo-30620518.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop",
-        queryParam: "Drone Photography",
-      },
-      {
-        title: "Pre-Wedding Shoot",
-        artistsCount: "680+ Artists",
-        image: "https://images.unsplash.com/photo-1583939003579-730e3918a45a?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Pre-Wedding Shoot",
-      },
-    ],
-  },
-  Entertainment: {
-    title: "Entertainment",
-    subtitle: "Live musical bands, singers, dancers, DJs, and stage performers for your event.",
-    heroImage: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop",
-    allSubcategories: [
-      "Live Orchestra & Bands",
-      "Celebrity Vocalists",
-      "Folk Dancers",
-      "DJs & Sound Controllers",
-      "Stand-Up Comedians",
-      "Instrumental Ensemble",
-      "Anchors / Hosts",
-      "Magicians & Variety Acts",
-    ],
-    popularServices: [
-      {
-        title: "Live Orchestra & Bands",
-        artistsCount: "1200+ Artists",
-        image: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Band",
-      },
-      {
-        title: "Celebrity Vocalists",
-        artistsCount: "850+ Artists",
-        image: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Singer",
-      },
-      {
-        title: "DJs & Sound Controllers",
-        artistsCount: "1100+ Artists",
-        image: "https://images.pexels.com/photos/2111015/pexels-photo-2111015.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop",
-        queryParam: "DJ",
-      },
-      {
-        title: "Anchors / Hosts",
-        artistsCount: "620+ Artists",
-        image: "https://images.pexels.com/photos/2774556/pexels-photo-2774556.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop",
-        queryParam: "Anchor",
-      },
-    ],
-  },
-  Decoration: {
-    title: "Decoration",
-    subtitle: "Transform your venue with floral mandaps, balloon arches, LED lighting & thematic decor.",
-    heroImage: "https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=1200&auto=format&fit=crop",
-    allSubcategories: [
-      "Mandap & Stage Decor",
-      "Floral Designers",
-      "Balloon Decorators",
-      "Entrance Arches",
-      "Theme & Lighting Decor",
-      "Pathway & Table Decor",
-    ],
-    popularServices: [
-      {
-        title: "Mandap & Stage Decor",
-        artistsCount: "980+ Artists",
-        image: "https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Decorators",
-      },
-      {
-        title: "Floral Designers",
-        artistsCount: "640+ Artists",
-        image: "https://images.unsplash.com/photo-1527529482837-4698179dc6ce?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Floral Decor",
-      },
-      {
-        title: "Balloon Decorators",
-        artistsCount: "750+ Artists",
-        image: "https://images.unsplash.com/photo-1530103862676-de88924083a2?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Balloon Decorators",
-      },
-      {
-        title: "Theme & Lighting Decor",
-        artistsCount: "510+ Artists",
-        image: "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Lighting Decor",
-      },
-    ],
-  },
-  Venue: {
-    title: "Venue",
-    subtitle: "Find luxury banquet halls, open lawns, beach resorts & heritage palaces.",
-    heroImage: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=1200&auto=format&fit=crop",
-    allSubcategories: [
-      "Banquet Halls",
-      "Marriage Lawns",
-      "Resorts & Hotels",
-      "Heritage Forts",
-      "AC Marriage Halls",
-    ],
-    popularServices: [
-      {
-        title: "Banquet Halls",
-        artistsCount: "820+ Venues",
-        image: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Banquet Hall",
-      },
-      {
-        title: "Marriage Lawns",
-        artistsCount: "690+ Venues",
-        image: "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Lawn",
-      },
-      {
-        title: "Resorts & Hotels",
-        artistsCount: "430+ Venues",
-        image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Resort",
-      },
-      {
-        title: "Heritage Forts",
-        artistsCount: "210+ Venues",
-        image: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Heritage",
-      },
-    ],
-  },
-  Catering: {
-    title: "Catering",
-    subtitle: "Authentic multi-cuisine caterers, live counters, dessert stations & Maharashtrian Mahaprasad.",
-    heroImage: "https://images.unsplash.com/photo-1555244162-803834f70033?q=80&w=1200&auto=format&fit=crop",
-    allSubcategories: [
-      "Traditional Maharashtrian Thali",
-      "Multi-Cuisine Buffet",
-      "Live Food Stalls",
-      "Dessert & Mocktail Bar",
-      "Pure Veg Catering",
-    ],
-    popularServices: [
-      {
-        title: "Traditional Maharashtrian Thali",
-        artistsCount: "910+ Caterers",
-        image: "https://images.unsplash.com/photo-1555244162-803834f70033?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Catering",
-      },
-      {
-        title: "Multi-Cuisine Buffet",
-        artistsCount: "740+ Caterers",
-        image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Buffet Catering",
-      },
-      {
-        title: "Live Food Stalls",
-        artistsCount: "580+ Caterers",
-        image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Live Stalls",
-      },
-      {
-        title: "Dessert & Mocktail Bar",
-        artistsCount: "460+ Caterers",
-        image: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Dessert Bar",
-      },
-    ],
-  },
-  Makeup: {
-    title: "Makeup",
-    subtitle: "Professional bridal makeup artists, HD airbrush makeup, saree draping & hair styling.",
-    heroImage: "https://images.pexels.com/photos/33986816/pexels-photo-33986816.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop",
-    allSubcategories: [
-      "Bridal HD Makeup",
-      "Airbrush Makeup",
-      "Groom Makeup & Styling",
-      "Party & Family Makeup",
-      "Saree Draping & Hair",
-    ],
-    popularServices: [
-      {
-        title: "Bridal HD Makeup",
-        artistsCount: "1150+ Artists",
-        image: "https://images.pexels.com/photos/33986816/pexels-photo-33986816.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop",
-        queryParam: "Bridal Makeup",
-      },
-      {
-        title: "Airbrush Makeup",
-        artistsCount: "720+ Artists",
-        image: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Airbrush Makeup",
-      },
-      {
-        title: "Groom Makeup & Styling",
-        artistsCount: "430+ Artists",
-        image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Groom Styling",
-      },
-      {
-        title: "Saree Draping & Hair",
-        artistsCount: "890+ Artists",
-        image: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Hair & Draping",
-      },
-    ],
-  },
-
-  // ─── VARKARI SAMPRADAY LEVEL 2 CATEGORIES ───
-  "Spiritual Speakers": {
-    title: "Spiritual Speakers",
-    subtitle: "Renowned Kirtankars, Pravachankars & Kathakars for Varkari Sampraday programs.",
-    heroImage: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=1200&auto=format&fit=crop",
-    allSubcategories: [
-      "Kirtankar",
-      "Pravachankar",
-      "Vyaspithchalak",
-      "Chopdar",
-      "Bhagwat Katha Kathan",
-      "Ram Katha",
-    ],
-    popularServices: [
-      {
-        title: "Kirtankar",
-        artistsCount: "950+ Kirtankars",
-        image: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Kirtankar",
-      },
-      {
-        title: "Pravachankar",
-        artistsCount: "620+ Pravachankars",
-        image: "https://images.unsplash.com/photo-1608613304899-ea8098577e38?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Pravachankar",
-      },
-      {
-        title: "Vyaspithchalak",
-        artistsCount: "410+ Performers",
-        image: "https://images.unsplash.com/photo-1544717305-2782549b5136?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Vyaspithchalak",
-      },
-      {
-        title: "Bhagwat Katha Kathan",
-        artistsCount: "380+ Kathakars",
-        image: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Bhagwat Katha Kathan",
-      },
-    ],
-  },
-  "Vocal Artists": {
-    title: "Vocal Artists",
-    subtitle: "Bhajani Mandals, Classical Bhajan singers, Bharudkars & Devotional Vocalists.",
-    heroImage: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop",
-    allSubcategories: [
-      "Gayak",
-      "Bharudkar",
-      "Bhajani Mandal",
-      "Shastriya Bhajan",
-    ],
-    popularServices: [
-      {
-        title: "Bhajani Mandal",
-        artistsCount: "1280+ Groups",
-        image: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Bhajani Mandal",
-      },
-      {
-        title: "Bharudkar",
-        artistsCount: "450+ Performers",
-        image: "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Bharudkar",
-      },
-      {
-        title: "Gayak",
-        artistsCount: "890+ Singers",
-        image: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Gayak",
-      },
-      {
-        title: "Shastriya Bhajan",
-        artistsCount: "340+ Vocalists",
-        image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Shastriya Bhajan",
-      },
-    ],
-  },
-  "Instrumental Artists": {
-    title: "Instrumental Artists",
-    subtitle: "Master Mridangamani, Tabla & Harmonium Vadak, Vinekari & Talkaris.",
-    heroImage: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1200&auto=format&fit=crop",
-    allSubcategories: [
-      "Mridangamani",
-      "Vinekari",
-      "Talkari",
-      "Tabla Vadak",
-      "Harmonium Vadak",
-      "Dholki Vadak",
-    ],
-    popularServices: [
-      {
-        title: "Mridangamani",
-        artistsCount: "840+ Masters",
-        image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Mridangamani",
-      },
-      {
-        title: "Harmonium Vadak",
-        artistsCount: "750+ Artists",
-        image: "https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Harmonium Vadak",
-      },
-      {
-        title: "Tabla Vadak",
-        artistsCount: "920+ Artists",
-        image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Tabla Vadak",
-      },
-      {
-        title: "Talkari",
-        artistsCount: "610+ Performers",
-        image: "https://images.unsplash.com/photo-1544717305-2782549b5136?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Talkari",
-      },
-    ],
-  },
-  "Organizations": {
-    title: "Organizations",
-    subtitle: "Registered Warkari Sansthas, Dindi Management & Spiritual Collectives.",
-    heroImage: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=1200&auto=format&fit=crop",
-    allSubcategories: [
-      "Warkari Sanstha",
-    ],
-    popularServices: [
-      {
-        title: "Warkari Sanstha",
-        artistsCount: "310+ Sansthas",
-        image: "https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=800&auto=format&fit=crop",
-        queryParam: "Warkari Sanstha",
-      },
-    ],
-  },
+  if (isOrganizationCategory(categoryName) || isOrganizationCategory(subName)) {
+    return subName === "All" ? `Organizations in ${categoryName}` : `${subName} Organizations`;
+  }
+  return `Artists in ${subName === "All" ? categoryName : subName}`;
 };
+
+const getHeroSubtitle = (categoryName: string) => {
+  if (isServiceCategory(categoryName)) {
+    return "Find and book verified event service providers and vendors for your event.";
+  }
+  if (isOrganizationCategory(categoryName)) {
+    return "Discover registered organizations, troupes, and groups for your event.";
+  }
+  return "Find and book verified professional artists for your event.";
+};
+
+const getEmptyTitle = (categoryName: string, subName: string, selectedCity?: string) => {
+  if (selectedCity && selectedCity !== "All Cities") {
+    return isServiceCategory(categoryName)
+      ? `No services available in ${selectedCity}`
+      : `No artists available in ${selectedCity}`;
+  }
+  if (subName && subName !== "All") {
+    return isServiceCategory(categoryName) || isServiceCategory(subName)
+      ? `No ${subName} services available right now`
+      : `No ${subName} artists available right now`;
+  }
+  return isServiceCategory(categoryName)
+    ? "Currently no services available"
+    : "Currently no artists available";
+};
+
+const getExploreButtonText = (categoryName: string) => {
+  if (isServiceCategory(categoryName)) {
+    return `View All ${categoryName.replace(/\s*services?$/i, "").trim()} Services`;
+  }
+  if (isOrganizationCategory(categoryName)) {
+    return `View All ${categoryName.replace(/\s*organizations?$/i, "").trim()} Organizations`;
+  }
+  return `View All ${categoryName.replace(/\s*artists?$/i, "").trim()} Artists`;
+};
+
+interface ArtistCardData {
+  id: string;
+  name: string;
+  isVerified: boolean;
+  rating: number;
+  reviewsCount: number;
+  location: string;
+  experience: string;
+  startingPrice: string;
+  image: string;
+  subCategory: string;
+  categoryGroup?: string;
+  servicesList?: string[];
+}
 
 export default function CategoryLevel2Page() {
   const { eventName, categoryName } = useParams<{ eventName: string; categoryName: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [briefModalOpen, setBriefModalOpen] = useState(false);
   const { t } = useI18n();
 
   const decodedEvent = eventName ? decodeURIComponent(eventName) : "Wedding";
-  const decodedCategory = categoryName ? decodeURIComponent(categoryName) : "Photography & Videography";
+  const decodedCategory = categoryName ? decodeURIComponent(categoryName) : "Photography";
 
-  // Dynamic subcategories from master data
+  // URL state synchronization
+  const initialSubcategory = searchParams.get("subcategory") || searchParams.get("subCategory") || "All";
+  const initialCity = searchParams.get("location") || searchParams.get("city") || "All Cities";
+
+  const [activeSubcategory, setActiveSubcategory] = useState<string>(initialSubcategory);
+  const [selectedCity, setSelectedCity] = useState<string>(initialCity);
+  const [selectedSort, setSelectedSort] = useState("Recommended");
+  const [selectedPrice, setSelectedPrice] = useState("All");
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [briefModalOpen, setBriefModalOpen] = useState(false);
+
+  useEffect(() => {
+    const locParam = searchParams.get("location") || searchParams.get("city");
+    if (locParam) {
+      setSelectedCity(locParam);
+    } else {
+      setSelectedCity("All Cities");
+    }
+  }, [searchParams]);
+
+  const [realArtists, setRealArtists] = useState<ArtistCardData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Dynamic subcategories from database / master system
   const masterSubcategories = useMemo(() => {
     return getSubcategoriesForCategory(decodedEvent, decodedCategory);
   }, [decodedEvent, decodedCategory]);
@@ -415,27 +136,155 @@ export default function CategoryLevel2Page() {
     return CATEGORY_GROUP_OPTIONS.map((c: any) => ({
       id: c.id,
       name: c.name,
-      icon: c.icon,
+      icon: c.icon || "✨",
       eventType: decodedEvent,
       subcategories: c.subcategories,
     }));
   }, [decodedEvent]);
 
-  const categoryTitle = decodedCategory;
-  const categorySubtitle = `Explore verified subcategories and artists under ${decodedCategory} for ${decodedEvent}.`;
-  const heroImage =
-    "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=1200&auto=format&fit=crop";
+  // Fetch real artists from database
+  useEffect(() => {
+    let isMounted = true;
+    clearDataCache();
+    getActiveArtistsPage(50)
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.items && res.items.length > 0) {
+          const mapped: ArtistCardData[] = res.items.map((item: any) => {
+            const extracted = extractArtistServices(item);
+            const servicesList = Array.from(new Set(extracted.map((s) => s.subcategory || s.artForm).filter(Boolean)));
+            const subCat = servicesList[0] || item.subCategory || item.subcategory || item.artForm || item.category || "Artist";
+            const uploadedImage = resolveArtistProfilePhoto(item);
+            const fallbackImage = imageRegistry.getUniqueImage({
+              category: subCat,
+              type: "artist",
+              key: item.uid || item.id || item.displayName || item.name || "artist-card",
+            });
 
-  const filteredSubcategories = useMemo(() => {
-    if (!searchQuery.trim()) return masterSubcategories;
-    const q = searchQuery.toLowerCase();
-    return masterSubcategories.filter((sub) => sub.toLowerCase().includes(q));
-  }, [searchQuery, masterSubcategories]);
+            return {
+              id: item.uid || item.id || String(Math.random()),
+              name: item.displayName || item.name || item.stageName || item.artistName || "Professional Artist",
+              isVerified: Boolean(item.isVerified || item.verified),
+              rating: item.rating ? Number(item.rating) : 4.8,
+              reviewsCount: item.reviewsCount ? Number(item.reviewsCount) : 24,
+              location: item.city || item.location || "Pune, Maharashtra",
+              experience: item.experience ? `${item.experience} Yrs Exp` : "5+ Yrs Exp",
+              startingPrice: item.startingPrice
+                ? String(item.startingPrice)
+                : item.minPrice
+                ? String(item.minPrice)
+                : "15,000",
+              image: uploadedImage || fallbackImage,
+              subCategory: subCat,
+              categoryGroup: item.categoryGroup || item.category || item.group || "",
+              servicesList: servicesList.length ? servicesList : [subCat],
+            };
+          });
+          setRealArtists(mapped);
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch active artists:", err);
+        if (isMounted) setLoading(false);
+      });
 
-  const handleSubcategoryClick = (subName: string) => {
-    navigate(
-      `/events/${encodeURIComponent(decodedEvent)}/${encodeURIComponent(categoryTitle)}/${encodeURIComponent(subName)}`
-    );
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Sync state when URL search params change
+  useEffect(() => {
+    const subParam = searchParams.get("subcategory") || searchParams.get("subCategory");
+    if (subParam) {
+      setActiveSubcategory(subParam);
+    }
+    const locParam = searchParams.get("location") || searchParams.get("city");
+    if (locParam) {
+      setSelectedCity(locParam);
+    }
+  }, [searchParams]);
+
+  // Subcategory Chip Click Handler (Updates state + URL parameter without page navigation)
+  const handleSubcategorySelect = (subName: string) => {
+    setActiveSubcategory(subName);
+    const newParams = new URLSearchParams(searchParams);
+    if (subName === "All") {
+      newParams.delete("subcategory");
+      newParams.delete("subCategory");
+    } else {
+      newParams.set("subcategory", subName);
+    }
+    setSearchParams(newParams, { replace: true });
+  };
+
+  // Filtered artists calculation
+  const displayedArtists = useMemo(() => {
+    let list = [...realArtists];
+
+    // Filter by Subcategory tab
+    if (activeSubcategory && activeSubcategory !== "All") {
+      const subLower = activeSubcategory.toLowerCase();
+      list = list.filter((a) => {
+        const subs = a.servicesList && a.servicesList.length ? a.servicesList : [a.subCategory];
+        return subs.some((s) => s.toLowerCase().includes(subLower));
+      });
+    } else {
+      // If "All", include artists matching any subcategory in this category group
+      const masterSet = new Set(masterSubcategories.map((s) => s.toLowerCase()));
+      const catLower = decodedCategory.toLowerCase();
+      list = list.filter((a) => {
+        const subs = a.servicesList && a.servicesList.length ? a.servicesList : [a.subCategory];
+        const artistGroup = (a.categoryGroup || "").toLowerCase();
+        return subs.some((s) => masterSet.has(s.toLowerCase()) || s.toLowerCase().includes(catLower)) || artistGroup.includes(catLower);
+      });
+    }
+
+    // Filter by City/Location
+    if (selectedCity && selectedCity !== "All Cities") {
+      list = list.filter((a) => matchesArtistCity(a, selectedCity));
+    }
+
+    // Price Filter
+    if (selectedPrice === "Under20k") {
+      list = list.filter((a) => parseInt(a.startingPrice.replace(/\D/g, ""), 10) < 20000);
+    } else if (selectedPrice === "20kTo30k") {
+      list = list.filter((a) => {
+        const price = parseInt(a.startingPrice.replace(/\D/g, ""), 10);
+        return price >= 20000 && price <= 30000;
+      });
+    } else if (selectedPrice === "Above30k") {
+      list = list.filter((a) => parseInt(a.startingPrice.replace(/\D/g, ""), 10) > 30000);
+    }
+
+    // Sort Order
+    if (selectedSort === "Rating") {
+      list.sort((a, b) => b.rating - a.rating);
+    } else if (selectedSort === "PriceLow") {
+      list.sort((a, b) => parseInt(a.startingPrice.replace(/\D/g, ""), 10) - parseInt(b.startingPrice.replace(/\D/g, ""), 10));
+    } else if (selectedSort === "PriceHigh") {
+      list.sort((a, b) => parseInt(b.startingPrice.replace(/\D/g, ""), 10) - parseInt(a.startingPrice.replace(/\D/g, ""), 10));
+    }
+
+    return list;
+  }, [
+    realArtists,
+    activeSubcategory,
+    masterSubcategories,
+    decodedCategory,
+    selectedCity,
+    selectedPrice,
+    selectedSort,
+  ]);
+
+  const toggleFavorite = (id: string) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   return (
@@ -443,9 +292,9 @@ export default function CategoryLevel2Page() {
       <Navbar />
 
       <main className="flex-1 max-w-[1240px] w-full mx-auto px-4 md:px-6 py-4 md:py-6">
-        {/* ─── Breadcrumb Header ─── */}
+        {/* ─── 1. Single-Line Breadcrumb ─── */}
         <div className="flex items-center justify-between py-2 border-b border-stone-200/60 mb-5">
-          <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 overflow-x-auto whitespace-nowrap no-scrollbar pr-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 overflow-x-auto whitespace-nowrap scrollbar-none pr-2">
             <Link to="/" className="hover:text-stone-900 transition-colors shrink-0">
               {t("nav.home") || "Home"}
             </Link>
@@ -454,62 +303,83 @@ export default function CategoryLevel2Page() {
               {decodedEvent}
             </Link>
             <span className="shrink-0">&gt;</span>
-            <span className="text-stone-900 font-bold shrink-0">{categoryTitle}</span>
+            <span className="text-stone-900 font-bold shrink-0">{decodedCategory}</span>
           </div>
           <button
             onClick={() => navigate("/search")}
-            className="p-1.5 rounded-full hover:bg-stone-200/60 text-stone-500 transition"
+            className="p-1.5 rounded-full hover:bg-stone-200/60 text-stone-500 transition shrink-0 ml-2"
             aria-label="Search"
           >
             <Search className="h-4 w-4" />
           </button>
         </div>
 
-        {/* ─── Hero Section Banner ─── */}
-        <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-stone-950 via-stone-900 to-stone-800 text-white p-6 sm:p-8 md:p-10 mb-6 min-h-[220px] sm:min-h-[250px] flex items-center shadow-lg">
-          <div className="relative z-10 max-w-lg pb-10">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight">
-              {categoryTitle}
+        {/* ─── 2. Category Hero / Header ─── */}
+        <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-stone-950 via-stone-900 to-stone-800 text-white p-6 sm:p-8 mb-6 min-h-[160px] sm:min-h-[180px] flex items-center shadow-lg">
+          <div className="relative z-10 max-w-xl">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
+              {decodedCategory}
             </h1>
-            <p className="mt-2 text-sm sm:text-base text-stone-300 font-medium leading-relaxed">
-              {categorySubtitle}
+            <p className="mt-2 text-xs sm:text-sm text-stone-300 font-medium leading-relaxed">
+              {getHeroSubtitle(decodedCategory)}
             </p>
           </div>
 
-          {/* Right HD Image with Fading Mask */}
           <div className="absolute right-0 top-0 bottom-0 w-1/2 md:w-5/12 overflow-hidden pointer-events-none">
             <div className="absolute inset-0 bg-gradient-to-r from-stone-950 via-stone-950/60 to-transparent z-10" />
             <img
-              src={heroImage}
-              alt={categoryTitle}
+              src="https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=1200&auto=format&fit=crop"
+              alt={decodedCategory}
               className="h-full w-full object-cover object-center"
             />
           </div>
+        </div>
 
-          {/* Overlay Search Input at Bottom of Hero */}
-          <div className="absolute left-6 right-6 bottom-4 md:left-10 md:bottom-6 z-20 max-w-xl">
-            <div className="relative flex items-center bg-white rounded-2xl shadow-md border border-stone-200 px-3.5 py-2.5">
-              <Search className="h-4 w-4 text-stone-400 mr-2.5 shrink-0" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t("filters.searchPlaceholder") || "Search subcategory..."}
-                className="w-full text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 bg-transparent border-none outline-none font-medium"
-              />
-            </div>
+        {/* ─── 3. SUBCATEGORY FILTERS (Horizontal Scrollable Chips/Tabs) ─── */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+            {/* "All" Filter Chip */}
+            <button
+              type="button"
+              onClick={() => handleSubcategorySelect("All")}
+              className={`h-9 px-4 rounded-full text-xs font-extrabold transition-all duration-200 shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                activeSubcategory === "All"
+                  ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 scale-[1.02]"
+                  : "bg-white border border-stone-200/90 text-stone-700 hover:bg-stone-100 hover:border-stone-300"
+              }`}
+            >
+              <span>{t("common.all") || "All"}</span>
+            </button>
+
+            {/* Dynamic Subcategory Chips from Database / Master System */}
+            {masterSubcategories.map((subName) => {
+              const isSelected = activeSubcategory.toLowerCase() === subName.toLowerCase();
+              return (
+                <button
+                  key={subName}
+                  type="button"
+                  onClick={() => handleSubcategorySelect(subName)}
+                  className={`h-9 px-4 rounded-full text-xs font-extrabold transition-all duration-200 shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 scale-[1.02]"
+                      : "bg-white border border-stone-200/90 text-stone-700 hover:bg-stone-100 hover:border-stone-300"
+                  }`}
+                >
+                  <span>{getArtLabel(t, subName)}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* ─── Main 2-Column Section ─── */}
-        <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-6 md:gap-8 mb-8">
-          {/* Left Column: Event Categories List */}
-          <div className="bg-white rounded-2xl border border-stone-200/80 p-4 sm:p-5 shadow-xs h-fit">
+        {/* ─── Main Content Section ─── */}
+        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6 md:gap-8 mb-8">
+          {/* Left Column: Event Categories Sidebar (Desktop Only) */}
+          <div className="hidden md:block bg-white rounded-2xl border border-stone-200/80 p-4 shadow-xs h-fit">
             <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-stone-100">
-              <h2 className="text-xs sm:text-sm font-extrabold text-stone-900 uppercase tracking-wider">
+              <h2 className="text-xs font-extrabold text-stone-900 uppercase tracking-wider">
                 {decodedEvent} {t("nav.categories") || "Categories"}
               </h2>
-              <ChevronDown className="h-4 w-4 text-stone-400" />
             </div>
 
             <ul className="space-y-1">
@@ -526,19 +396,16 @@ export default function CategoryLevel2Page() {
                           `/events/${encodeURIComponent(decodedEvent)}/${encodeURIComponent(catName)}`
                         )
                       }
-                      className={`w-full text-left px-3 py-2.5 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center justify-between group cursor-pointer ${
+                      className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-all duration-200 flex items-center justify-between group cursor-pointer ${
                         isActive
-                          ? "bg-orange-50 text-orange-600 font-extrabold border-l-4 border-orange-500 shadow-2xs"
+                          ? "bg-orange-50 text-orange-600 font-extrabold border-l-3 border-orange-500 shadow-2xs"
                           : "text-stone-700 hover:text-orange-600 hover:bg-stone-50 font-semibold"
                       }`}
                     >
-                      <span className="flex items-center gap-2.5 truncate">
-                        <span className="text-base shrink-0">{catIcon}</span>
+                      <span className="flex items-center gap-2 truncate">
+                        <span className="text-sm shrink-0">{catIcon}</span>
                         <span className="truncate">{catName}</span>
                       </span>
-                      {isActive && (
-                        <span className="h-2 w-2 rounded-full bg-orange-500 shrink-0" />
-                      )}
                     </button>
                   </li>
                 );
@@ -546,37 +413,204 @@ export default function CategoryLevel2Page() {
             </ul>
           </div>
 
-          {/* Right Column: Subcategory Cards Grid */}
+          {/* Right Column: Artist Results Grid on the SAME Page */}
           <div>
-            <h2 className="text-lg md:text-xl font-extrabold text-stone-900 mb-4 tracking-tight">
-              {categoryTitle} {t("filters.subcategories") || "Subcategories"}
+            {/* Filter Controls Row (Location, Price, Sort) */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {/* Location Selector */}
+              <SearchableCityDropdown
+                selectedCity={selectedCity}
+                onSelectCity={setSelectedCity}
+                availableArtists={realArtists}
+              />
+
+              {/* Sort Selector */}
+              <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
+                <span className="text-stone-400 font-normal mr-1">Sort:</span>
+                <select
+                  value={selectedSort}
+                  onChange={(e) => setSelectedSort(e.target.value)}
+                  className="bg-transparent border-none outline-none cursor-pointer pr-2 font-bold text-stone-800"
+                >
+                  <option value="Recommended">Recommended</option>
+                  <option value="Rating">Rating: High to Low</option>
+                  <option value="PriceLow">Price: Low to High</option>
+                  <option value="PriceHigh">Price: High to Low</option>
+                </select>
+              </div>
+
+              {/* Price Selector */}
+              <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
+                <span className="text-stone-400 font-normal mr-1">Budget:</span>
+                <select
+                  value={selectedPrice}
+                  onChange={(e) => setSelectedPrice(e.target.value)}
+                  className="bg-transparent border-none outline-none cursor-pointer pr-2 font-bold text-stone-800"
+                >
+                  <option value="All">All Prices</option>
+                  <option value="Under20k">Under ₹20,000</option>
+                  <option value="20kTo30k">₹20,000 - ₹30,000</option>
+                  <option value="Above30k">Above ₹30,000</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Subheading Count */}
+            <h2 className="text-sm sm:text-base font-extrabold text-stone-900 mb-4 tracking-tight">
+              {getSectionHeading(decodedCategory, activeSubcategory)}
+              <span className="text-stone-400 font-semibold ml-2">({displayedArtists.length})</span>
             </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-              {filteredSubcategories.map((subName) => (
-                <div
-                  key={subName}
-                  onClick={() => handleSubcategoryClick(subName)}
-                  className="group flex flex-col justify-between cursor-pointer bg-white rounded-2xl border border-stone-200/80 p-4 shadow-xs hover:border-orange-500 hover:shadow-md transition-all duration-300 min-h-[110px]"
-                >
-                  <div>
-                    <h3 className="text-sm sm:text-base font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors leading-snug">
-                      {subName}
-                    </h3>
-                    <p className="mt-1 text-xs font-medium text-stone-500">
-                      {t("home.verifiedArtistsVendors") || "Verified artists & vendors"}
-                    </p>
-                  </div>
-                  <div className="mt-3 flex items-center gap-1 text-xs font-bold text-orange-600 group-hover:translate-x-0.5 transition-transform">
-                    <span>{t("home.exploreArtistsArrow") || "Explore Artists →"}</span>
-                  </div>
+            {/* Empty State */}
+            {displayedArtists.length === 0 && !loading && (
+              <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-3xl border border-stone-200 p-6 shadow-xs my-4">
+                <div className="h-14 w-14 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 mb-3">
+                  <MapPin className="h-6 w-6 stroke-[1.75]" />
                 </div>
-              ))}
+                <h3 className="text-base font-extrabold text-stone-900 mb-1">
+                  {getEmptyTitle(decodedCategory, activeSubcategory, selectedCity)}
+                </h3>
+                <p className="text-xs font-medium text-stone-500 max-w-sm mb-4">
+                  {selectedCity && selectedCity !== "All Cities"
+                    ? "Try another city or select All Cities to browse available options."
+                    : activeSubcategory && activeSubcategory !== "All"
+                    ? `Try exploring other styles or ${getExploreButtonText(decodedCategory).toLowerCase()}.`
+                    : "We're continuously onboarding new talent. Please check back soon or explore other categories."}
+                </p>
+                {selectedCity && selectedCity !== "All Cities" ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCity("All Cities")}
+                    className="px-4 py-2 rounded-full bg-orange-600 text-white font-extrabold text-xs shadow-xs hover:bg-orange-700 transition"
+                  >
+                    Show All Cities
+                  </button>
+                ) : activeSubcategory && activeSubcategory !== "All" ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSubcategorySelect("All")}
+                    className="px-4 py-2 rounded-full bg-stone-900 text-white font-extrabold text-xs shadow-xs hover:bg-orange-600 transition"
+                  >
+                    {getExploreButtonText(decodedCategory)}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/categories")}
+                    className="px-4 py-2 rounded-full bg-stone-900 text-white font-extrabold text-xs shadow-xs hover:bg-orange-600 transition"
+                  >
+                    Explore Other Categories
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Artists Responsive Grid (Compact Responsive Grid) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+              {displayedArtists.map((artist) => {
+                const isFav = favorites.has(artist.id);
+
+                return (
+                  <div
+                    key={artist.id}
+                    onClick={() => navigate(`/artist/${artist.id}`)}
+                    className="group relative flex flex-col justify-between p-3 rounded-2xl bg-white border border-stone-200/80 shadow-xs hover:border-orange-500 hover:shadow-md transition-all duration-300 cursor-pointer"
+                  >
+                    {/* Top Image & Favorite */}
+                    <div className="relative h-32 sm:h-36 w-full overflow-hidden rounded-xl bg-stone-100 mb-2.5 shrink-0">
+                      <img
+                        src={artist.image}
+                        alt={artist.name}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        loading="lazy"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          const fallback = imageRegistry.getUniqueImage({
+                            category: artist.subCategory || "Performers",
+                            type: "artist",
+                            key: artist.id,
+                          });
+                          if (target.src !== fallback) {
+                            target.src = fallback;
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(artist.id);
+                        }}
+                        className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition cursor-pointer"
+                      >
+                        <Heart
+                          className={`h-3.5 w-3.5 ${
+                            isFav ? "fill-rose-500 text-rose-500" : ""
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Content Details */}
+                    <div className="flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors truncate">
+                            {artist.name}
+                          </h3>
+                          {artist.isVerified && (
+                            <BadgeCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                          )}
+                        </div>
+
+                        {/* Service Badges */}
+                        <div className="flex flex-wrap gap-1 mb-1.5 min-h-[22px]">
+                          {(artist.servicesList && artist.servicesList.length > 0 ? artist.servicesList : [artist.subCategory]).slice(0, 2).map((srv) => (
+                            <span key={srv} className="inline-block rounded-md bg-orange-50 text-orange-700 border border-orange-100/60 px-1.5 py-0.5 text-[9px] font-extrabold truncate max-w-[110px]">
+                              {getArtLabel(t, srv)}
+                            </span>
+                          ))}
+                          {(artist.servicesList?.length || 1) > 2 && (
+                            <span className="inline-block rounded-md bg-stone-100 text-stone-600 px-1.5 py-0.5 text-[9px] font-extrabold">
+                              +{(artist.servicesList?.length || 1) - 2} more
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Rating & Location */}
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-stone-600 pt-1.5 border-t border-stone-100">
+                          <div className="flex items-center gap-0.5 text-amber-500">
+                            <Star className="h-3 w-3 fill-current" />
+                            <span className="font-extrabold text-stone-900">{artist.rating}</span>
+                          </div>
+                          <div className="flex items-center gap-0.5 text-stone-500 truncate max-w-[90px]">
+                            <MapPin className="h-3 w-3 text-stone-400 shrink-0" />
+                            <span className="truncate">{artist.location}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer Price & View Action */}
+                      <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between">
+                        <div>
+                          <span className="text-[9px] text-stone-400 block font-medium leading-none">Starts from</span>
+                          <span className="font-extrabold text-stone-900 text-xs mt-0.5 block">
+                            ₹{artist.startingPrice}
+                          </span>
+                        </div>
+                        <span className="inline-flex items-center gap-0.5 text-[11px] font-extrabold text-orange-600 group-hover:translate-x-0.5 transition-transform">
+                          Profile <ChevronRight className="h-3 w-3" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* ─── Bottom Callout Banner ("Can't find what you're looking for?") ─── */}
+        {/* ─── Bottom Callout Banner ─── */}
         <div className="rounded-2xl bg-gradient-to-r from-orange-50/90 via-amber-50/80 to-orange-50/90 border border-orange-200/70 p-4 sm:p-6 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-2xs">

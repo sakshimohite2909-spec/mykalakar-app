@@ -28,6 +28,7 @@ export type ArtistCardViewModel = {
   name: string;
   category: string;
   subCategory: string;
+  allServices?: string[];
   priceRange: string;
   image: string;
   location: string;
@@ -192,17 +193,20 @@ export function buildArtistCards(
     const artistId = normalize(artist.id || artist.uid);
     if (!artistId) return;
 
-    if (options?.deduplicateByArtist && seenArtistIds.has(artistId)) {
+    const shouldDeduplicate = options?.deduplicateByArtist !== false;
+    if (shouldDeduplicate && seenArtistIds.has(artistId)) {
       return;
     }
 
     const services = getArtistServices(artist);
     if (!services.length) return;
 
+    const allServices = compactUnique(services.map((s) => s.subCategory));
+
     const location = compactUnique([artist.district || artist.city, artist.state]).join(", ") || normalize(artist.location) || "Maharashtra";
     const ratingSummary = getArtistRatingSummary(artist);
 
-    const servicesToBuild = options?.deduplicateByArtist ? services.slice(0, 1) : services;
+    const servicesToBuild = shouldDeduplicate ? services.slice(0, 1) : services;
 
     servicesToBuild.forEach((service, serviceIndex) => {
       const cardId = `${artistId}_${service.serviceId}`;
@@ -216,6 +220,7 @@ export function buildArtistCards(
         name: correctTypo(safeString(artist.displayName || artist.name || artist.stageName || artist.professionalName, "Premium Artist")),
         category: normalizeCategory(service.category),
         subCategory: correctTypo(service.subCategory),
+        allServices,
         priceRange: service.priceRange,
         image,
         location,

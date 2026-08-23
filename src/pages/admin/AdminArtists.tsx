@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { initialArtists } from "@/data/mockData";
 import { firebaseErrorMessage, logFirebaseError, requireAuthUid, sanitizePayload, toastForFirestoreError } from "@/lib/firebaseSafe";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
-import { CATEGORY_STRUCTURE, MAIN_CATEGORIES, normalizeArtistRecord } from "@/constants/artistSystem";
+import { CATEGORY_STRUCTURE, MAIN_CATEGORIES, normalizeArtistRecord, extractArtistServices } from "@/constants/artistSystem";
 import { imageRegistry } from "@/services/ImageRegistryService";
 import { useAuth } from "@/contexts/AuthContext";
 import { getUsableImageUrl } from "@/utils/fallbackImages";
@@ -160,7 +160,13 @@ export default function AdminArtists() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-none font-black text-[9px] uppercase tracking-widest px-3 py-1.5">{a.category}</Badge>
+                    <div className="flex flex-wrap gap-1 max-w-[200px]">
+                      {extractArtistServices(a).map((srv, idx) => (
+                        <Badge key={idx} variant="secondary" className="bg-orange-50 text-orange-700 border-none font-black text-[9px] uppercase tracking-widest px-2 py-1">
+                          {srv.subcategory || srv.category || srv.artForm}
+                        </Badge>
+                      ))}
+                    </div>
                   </TableCell>
                   <TableCell className="text-sm font-bold text-stone-600">{a.district}, {a.state}</TableCell>
                   <TableCell>

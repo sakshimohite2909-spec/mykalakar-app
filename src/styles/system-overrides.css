@@ -46,21 +46,21 @@
 }
 
 .theme-light {
-  --bg-primary: #f7f8fa;
+  --bg-primary: #FDFBF7;
   --text-primary: #10131a;
   --text-muted: #5d667a;
-  --cinematic-bg: #f7f8fa;
+  --cinematic-bg: #FDFBF7;
   --cinematic-text: #10131a;
   --cinematic-muted: #5d667a;
   --cinematic-dim: #7a8498;
-  --cinematic-panel: rgba(255, 255, 255, 0.72);
-  --cinematic-panel-strong: rgba(255, 255, 255, 0.86);
-  --cinematic-panel-soft: rgba(255, 255, 255, 0.48);
-  --cinematic-border: rgba(17, 24, 39, 0.09);
-  --cinematic-border-strong: rgba(17, 24, 39, 0.14);
+  --cinematic-panel: rgba(255, 255, 255, 0.78);
+  --cinematic-panel-strong: rgba(255, 255, 255, 0.92);
+  --cinematic-panel-soft: rgba(253, 251, 247, 0.6);
+  --cinematic-border: rgba(17, 24, 39, 0.08);
+  --cinematic-border-strong: rgba(17, 24, 39, 0.13);
   --cinematic-shadow: 0 24px 70px rgba(41, 55, 92, 0.12);
   --cinematic-glow: 0 0 38px rgba(124, 60, 255, 0.18), 0 0 70px rgba(34, 211, 238, 0.12);
-  --app-background: #f7f8fa;
+  --app-background: #FDFBF7;
 }
 
 /* 1. Global Reset & Rendering Stability */
@@ -214,7 +214,7 @@ img {
 /* 4. Navigation & Content Clearance */
 .site-header {
   height: 80px; /* Force strict h-20 / 80px */
-  z-index: 40;
+  z-index: 50;
   position: fixed;
   top: 0;
   left: 0;

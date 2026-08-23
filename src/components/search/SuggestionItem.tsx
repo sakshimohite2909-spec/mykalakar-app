@@ -1,16 +1,19 @@
 import { MapPin, Music2, Search, UserRound } from "lucide-react";
-import { useI18n } from "@/i18n/I18nProvider";
 
 export type SpotlightSuggestion = {
   id: string;
   label: string;
-  type: "category" | "location" | "artist" | "query";
+  type: "category" | "subcategory" | "location" | "artist" | "query";
   value: string;
-  score: number;
+  score?: number;
+  location?: string;
+  image?: string;
+  subLabel?: string;
 };
 
 const icons = {
   category: Music2,
+  subcategory: Music2,
   location: MapPin,
   artist: UserRound,
   query: Search,
@@ -24,7 +27,7 @@ function highlight(label: string, query: string) {
   return (
     <>
       {label.slice(0, index)}
-      <mark className="rounded bg-orange-100 px-0.5 text-orange-700">{label.slice(index, index + clean.length)}</mark>
+      <mark className="rounded bg-orange-100/90 px-0.5 text-orange-700 font-extrabold">{label.slice(index, index + clean.length)}</mark>
       {label.slice(index + clean.length)}
     </>
   );
@@ -41,8 +44,8 @@ export function SuggestionItem({
   active: boolean;
   onSelect: (suggestion: SpotlightSuggestion) => void;
 }) {
-  const { t } = useI18n(); // ADDED FOR i18n
-  const Icon = icons[suggestion.type];
+  const Icon = icons[suggestion.type] || Music2;
+
   return (
     <button
       type="button"
@@ -50,19 +53,42 @@ export function SuggestionItem({
         event.preventDefault();
         onSelect(suggestion);
       }}
-      className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left transition ${
-        active ? "bg-stone-950 text-white" : "text-stone-700 hover:bg-stone-50"
+      className={`flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left transition-all duration-150 cursor-pointer ${
+        active ? "bg-stone-900 text-white shadow-xs" : "text-stone-800 hover:bg-orange-50/70"
       }`}
     >
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-white/14" : "bg-orange-50 text-orange-600"}`}>
-        <Icon className="h-4 w-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-extrabold">{highlight(suggestion.label, query)}</span>
-        <span className={`block text-[10px] font-black uppercase tracking-widest ${active ? "text-white/55" : "text-stone-400"}`}>
-          {t(`spotlight.type.${suggestion.type}`)} {/* ADDED FOR i18n */}
+      {/* Small Relevant Icon or Artist Thumbnail */}
+      {suggestion.type === "artist" && suggestion.image ? (
+        <img
+          src={suggestion.image}
+          alt=""
+          className="h-7 w-7 rounded-full object-cover shrink-0 border border-stone-200"
+        />
+      ) : (
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+            active ? "bg-white/15 text-orange-400" : "bg-orange-100/80 text-orange-600"
+          }`}
+        >
+          <Icon className="h-3.5 w-3.5" />
         </span>
-      </span>
+      )}
+
+      {/* Result Name & Secondary Metadata */}
+      <div className="min-w-0 flex-1">
+        <span className="block truncate text-xs sm:text-sm font-semibold leading-snug">
+          {highlight(suggestion.label, query)}
+        </span>
+        {suggestion.type === "artist" && suggestion.location && (
+          <span
+            className={`block truncate text-[11px] font-normal ${
+              active ? "text-stone-300" : "text-stone-400"
+            }`}
+          >
+            {suggestion.location}
+          </span>
+        )}
+      </div>
     </button>
   );
 }
