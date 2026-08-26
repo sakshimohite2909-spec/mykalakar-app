@@ -35,6 +35,8 @@ export type ArtistCardViewModel = {
   rating: number;
   reviews: number;
   verified: boolean;
+  verificationTier?: "basic" | "identity_verified" | "artist_verified" | "trusted_artist";
+  verification?: any;
   featured: boolean;
   bio: string;
   tags: string[];
@@ -227,6 +229,8 @@ export function buildArtistCards(
         rating: safeNumber(ratingSummary.averageRating, 0),
         reviews: safeNumber(ratingSummary.totalRatings, 0),
         verified: safeBoolean(artist.verified),
+        verificationTier: artist.verificationTier || artist.verification?.tier || (artist.verified ? "artist_verified" : "basic"),
+        verification: artist.verification || null,
         featured: safeBoolean(artist.featured || artist.trending || artist.featuredExp),
         bio: safeString(artist.artistProfile?.bio || artist.bio || `Professional ${service.subCategory} available for curated events.`),
         tags: compactUnique([

@@ -13,7 +13,7 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, withTimeout } from "@/lib/firebaseSafe";
+import { FIREBASE_READ_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, withTimeout, sanitizePayload } from "@/lib/firebaseSafe";
 import { getArtistArtForms, normalizeArtistRecord, normalizeArtistType } from "@/constants/artistSystem";
 
 const numberOrZero = (value: unknown) => Number(value) || 0;
@@ -138,6 +138,23 @@ function toArtistDocument(applicationId: string, data: Record<string, any>) {
     },
     status: "active",
     verified: true,
+    verificationTier: data.verificationTier || (data.isPremium ? "trusted_artist" : "artist_verified"),
+    verification: data.verification || {
+      tier: data.verificationTier || (data.isPremium ? "trusted_artist" : "artist_verified"),
+      verified: true,
+      checklist: {
+        mobileVerified: true,
+        identityVerified: true,
+        locationVerified: true,
+        portfolioVerified: true,
+        performanceVerified: Boolean(data.isPremium),
+        referenceVerified: Boolean(data.isPremium),
+        affiliationVerified: Boolean(data.affiliationName),
+      },
+      affiliationName: data.affiliationName || "",
+      verifiedAt: serverTimestamp(),
+      verifiedBy: "admin",
+    },
     trending: Boolean(data.trending),
     approvedAt: serverTimestamp(),
     createdAt: data.createdAt || serverTimestamp(),
@@ -168,29 +185,47 @@ function bookingFromInquiry(inquiryId: string, data: Record<string, any>) {
 
 export async function getPendingArtists() {
   const snap = await withTimeout(
-    getDocs(query(collection(db, "artist_applications"), where("status", "==", "pending"), orderBy("createdAt", "desc"))),
+    getDocs(query(collection(db, "artist_applications"), where("status", "==", "pending"))),
     FIREBASE_READ_TIMEOUT_MS,
     "Could not load pending artists."
   );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  docs.sort((a: any, b: any) => {
+    const tA = a.createdAt?.toDate?.()?.getTime() || 0;
+    const tB = b.createdAt?.toDate?.()?.getTime() || 0;
+    return tB - tA;
+  });
+  return docs;
 }
 
 export async function getApprovedArtists() {
   const snap = await withTimeout(
-    getDocs(query(collection(db, "artists"), where("status", "==", "active"), orderBy("createdAt", "desc"))),
+    getDocs(query(collection(db, "artists"), where("status", "in", ["active", "approved"]))),
     FIREBASE_READ_TIMEOUT_MS,
     "Could not load approved artists."
   );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  docs.sort((a: any, b: any) => {
+    const tA = a.createdAt?.toDate?.()?.getTime() || 0;
+    const tB = b.createdAt?.toDate?.()?.getTime() || 0;
+    return tB - tA;
+  });
+  return docs;
 }
 
 export async function getAllUsers() {
   const snap = await withTimeout(
-    getDocs(query(collection(db, "users"), where("role", "==", "customer"), orderBy("createdAt", "desc"))),
+    getDocs(query(collection(db, "users"), where("role", "==", "customer"))),
     FIREBASE_READ_TIMEOUT_MS,
     "Could not load users."
   );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  docs.sort((a: any, b: any) => {
+    const tA = a.createdAt?.toDate?.()?.getTime() || 0;
+    const tB = b.createdAt?.toDate?.()?.getTime() || 0;
+    return tB - tA;
+  });
+  return docs;
 }
 
 export async function approveArtist(applicationId: string) {
@@ -199,42 +234,55 @@ export async function approveArtist(applicationId: string) {
   if (!appSnap.exists()) throw new Error("Application not found");
 
   const data = appSnap.data();
-  const uid = data.uid;
+  const uid = data.uid || applicationId;
   if (!uid) throw new Error("Application is missing uid");
 
-  const batch = writeBatch(db);
-  batch.update(appRef, {
-    status: "approved",
-    verified: true,
-    reviewedAt: serverTimestamp(),
-    approvedAt: serverTimestamp(),
+  const artistDocPayload = sanitizePayload(toArtistDocument(applicationId, data));
+  const userDocPayload = sanitizePayload({
+    uid,
+    name: data.name || "",
+    username: data.username || "",
+    email: data.email || "",
+    phone: data.mobileNumber || data.phone || "",
+    profilePhoto: data.media?.profilePhoto || data.profilePhoto || "",
+    artistProfile: {
+      artForms: getArtistArtForms(data),
+      experience: numberOrZero(data.experience),
+      bio: data.bio || "",
+      location: data.location || data.district || data.city || data.state || "",
+      profileImage: data.media?.profilePhoto || data.profilePhoto || "",
+    },
+    role: "artist",
+    status: "active",
     updatedAt: serverTimestamp(),
   });
-  batch.set(doc(db, "artists", uid), toArtistDocument(applicationId, data), { merge: true });
-  batch.set(
-    doc(db, "users", uid),
-    {
-      uid,
-      name: data.name || "",
-      username: data.username || "",
-      email: data.email || "",
-      phone: data.mobileNumber || data.phone || "",
-      profilePhoto: data.media?.profilePhoto || data.profilePhoto || "",
-      artistProfile: {
-        artForms: getArtistArtForms(data),
-        experience: numberOrZero(data.experience),
-        bio: data.bio || "",
-        location: data.location || data.district || data.city || data.state || "",
-        profileImage: data.media?.profilePhoto || data.profilePhoto || "",
-      },
-      role: "artist",
-      status: "active",
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
 
-  await withTimeout(batch.commit(), FIREBASE_WRITE_TIMEOUT_MS, "Could not approve this artist.");
+  try {
+    const batch = writeBatch(db);
+    batch.update(appRef, {
+      status: "approved",
+      verified: true,
+      reviewedAt: serverTimestamp(),
+      approvedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.set(doc(db, "artists", uid), artistDocPayload, { merge: true });
+    batch.set(doc(db, "users", uid), userDocPayload, { merge: true });
+    await withTimeout(batch.commit(), FIREBASE_WRITE_TIMEOUT_MS, "Could not approve this artist.");
+  } catch (batchErr) {
+    console.warn("[approveArtist] Batch commit failed, attempting resilient single writes:", batchErr);
+    await updateDoc(appRef, {
+      status: "approved",
+      verified: true,
+      reviewedAt: serverTimestamp(),
+      approvedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await setDoc(doc(db, "artists", uid), artistDocPayload, { merge: true });
+    await setDoc(doc(db, "users", uid), userDocPayload, { merge: true }).catch((uErr) => {
+      console.warn("User profile update fallback skipped:", uErr);
+    });
+  }
 }
 
 export async function rejectArtist(applicationId: string, reason = "") {
@@ -252,11 +300,17 @@ export async function rejectArtist(applicationId: string, reason = "") {
 
 export async function getPendingAdminRequests() {
   const snap = await withTimeout(
-    getDocs(query(collection(db, "admin_requests"), where("status", "==", "pending"), orderBy("requestedAt", "desc"))),
+    getDocs(query(collection(db, "admin_requests"), where("status", "==", "pending"))),
     FIREBASE_READ_TIMEOUT_MS,
     "Could not load admin requests."
   );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  docs.sort((a: any, b: any) => {
+    const tA = a.requestedAt?.toDate?.()?.getTime() || a.createdAt?.toDate?.()?.getTime() || 0;
+    const tB = b.requestedAt?.toDate?.()?.getTime() || b.createdAt?.toDate?.()?.getTime() || 0;
+    return tB - tA;
+  });
+  return docs;
 }
 
 export async function approveAdminRequest(requestId: string) {

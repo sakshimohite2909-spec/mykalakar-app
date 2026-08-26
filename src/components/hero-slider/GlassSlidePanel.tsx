@@ -16,7 +16,9 @@ export function GlassSlidePanel({ slide, activeIndex, slideCount }: GlassSlidePa
   const { t } = useI18n();
   const [modalOpen, setModalOpen] = useState(false);
 
-  const headingText = slide?.heading || "";
+  const localizedEyebrow = slide?.id ? t(`hero.slide${slide.id}.eyebrow`) : slide?.eyebrow || "";
+  const localizedHeading = slide?.id ? t(`hero.slide${slide.id}.title`) : slide?.heading || "";
+  const headingText = localizedHeading || slide?.heading || "";
   const words = headingText.trim().split(" ");
   const lastWord = words.length > 1 ? words.pop() : "";
   const remainingText = words.join(" ");
@@ -33,7 +35,7 @@ export function GlassSlidePanel({ slide, activeIndex, slideCount }: GlassSlidePa
             {/* 1. Category Eyebrow Badge */}
             <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/40 text-orange-400 text-[10px] font-bold tracking-wider uppercase backdrop-blur-md">
               <Sparkles className="h-3 w-3 text-orange-400" />
-              <span>{slide.eyebrow}</span>
+              <span>{localizedEyebrow || slide.eyebrow}</span>
             </div>
 
             {/* 2. Headline: Line 1 (White Bold) & Line 2 (Orange Italic) */}

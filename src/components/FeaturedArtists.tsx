@@ -9,6 +9,9 @@ import { buildArtistCards, type ArtistCardViewModel } from "@/services/marketpla
 import { useI18n } from "@/i18n/I18nProvider";
 import { cn } from "@/lib/utils";
 import { getLocalizedBio } from "@/utils/bioLocalizer";
+import { getArtLabel } from "@/lib/artLabels";
+
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
 
 function getLocalizedLocation(locationStr: string, t: (k: string) => string): string {
   if (!locationStr) return "";
@@ -90,15 +93,25 @@ export function ArtistCard({ artist, index = 0 }: ArtistCardProps) {
           <div className="flex flex-1 flex-col space-y-4 p-7">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1">
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2 flex-wrap">
                   <h3 className="truncate text-2xl font-black leading-none tracking-tight text-stone-950 transition-colors group-hover:text-orange-600">
                     {artist.name || "Premium Artist"}
                   </h3>
-                  {artist.verified || isPremium ? (
-                    <BadgeCheck className={cn("h-4 w-4 shrink-0", isPremium ? "text-amber-500" : "text-orange-500")} />
-                  ) : null}
+                  <VerificationBadge artist={artist.artist || artist} size="sm" />
                 </div>
                 <p className="text-xs font-bold uppercase tracking-widest text-stone-400">{artType}</p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {(artist.allServices && artist.allServices.length > 0 ? artist.allServices : [artType]).slice(0, 3).map((srv) => (
+                    <span key={srv} className="inline-block rounded-md bg-orange-50 text-orange-700 border border-orange-100/60 px-1.5 py-0.5 text-[9px] font-extrabold truncate max-w-[110px]">
+                      {getArtLabel(t, srv)}
+                    </span>
+                  ))}
+                  {(artist.allServices?.length || 1) > 3 && (
+                    <span className="inline-block rounded-md bg-stone-100 text-stone-600 px-1.5 py-0.5 text-[9px] font-extrabold">
+                      +{(artist.allServices?.length || 1) - 3} more
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-1.5 rounded-sm bg-stone-50 px-2 py-1 text-xs font-black text-stone-400">
                 <MapPin className="h-3.5 w-3.5 text-orange-600" />

@@ -28,11 +28,13 @@ import { extractArtistServices, matchesArtistCity } from "@/constants/artistSyst
 import { SearchableCityDropdown } from "@/components/search/SearchableCityDropdown";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
 
 interface ArtistCardData {
   id: string;
   name: string;
   isVerified: boolean;
+  rawItem?: any;
   rating: number;
   reviewsCount: number;
   location: string;
@@ -41,7 +43,6 @@ interface ArtistCardData {
   image: string;
   subCategory: string;
   servicesList?: string[];
-  rawItem?: any;
 }
 
 const MOCK_ARTISTS: ArtistCardData[] = [];
@@ -363,7 +364,7 @@ export default function SubcategoryLevel3Page() {
 
         {/* ─── Count Subheading ─── */}
         <h2 className="text-base sm:text-lg font-extrabold text-stone-900 mb-5 tracking-tight">
-          {displayArtists.length > 0 ? `${displayArtists.length} Verified` : "No"} {displayTitle} in {selectedCity}
+          {displayArtists.length > 0 ? `${displayArtists.length} ${t("category.verified") || "Verified"}` : t("common.all")} {displayTitle} {selectedCity && selectedCity !== "All Cities" ? `${t("common.in") || "in"} ${selectedCity}` : ""}
         </h2>
 
         {/* ─── Empty State if No Database Artists ─── */}
@@ -374,13 +375,13 @@ export default function SubcategoryLevel3Page() {
             </div>
             <h3 className="text-xl font-extrabold text-stone-900 mb-2">
               {selectedCity && selectedCity !== "All Cities"
-                ? `No artists available in ${selectedCity}`
-                : t("empty.artistsTitle") || "No artists registered yet"}
+                ? t("category.noArtistsInCity", { city: selectedCity })
+                : t("category.noArtistsAvailable", { name: displayTitle })}
             </h3>
             <p className="text-sm font-medium text-stone-500 max-w-md mb-6 leading-relaxed">
               {selectedCity && selectedCity !== "All Cities"
-                ? "Try another city or select All Cities to browse available artists."
-                : `There are currently no active artists or vendors registered under ${displayTitle}.`}
+                ? t("empty.tryAnotherCity") || "Try another city or select All Cities to browse available artists."
+                : t("empty.noArtistsInSubcategory", { name: displayTitle }) || `There are currently no active artists registered under ${displayTitle}.`}
             </p>
             {selectedCity && selectedCity !== "All Cities" ? (
               <button
@@ -388,7 +389,7 @@ export default function SubcategoryLevel3Page() {
                 onClick={() => setSelectedCity("All Cities")}
                 className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
               >
-                Show All Cities
+                {t("search.allCities") || "Show All Cities"}
               </button>
             ) : (
               <Link
@@ -453,9 +454,7 @@ export default function SubcategoryLevel3Page() {
                       <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors truncate">
                         {artist.name}
                       </h3>
-                      {artist.isVerified && (
-                        <BadgeCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                      )}
+                      <VerificationBadge artist={artist.rawItem || artist} size="compact" />
                     </div>
 
                     {/* Service Badges */}
@@ -488,13 +487,13 @@ export default function SubcategoryLevel3Page() {
                   {/* Footer Price & View Action */}
                   <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between">
                     <div>
-                      <span className="text-[9px] text-stone-400 block font-medium leading-none">Starts from</span>
+                      <span className="text-[9px] text-stone-400 block font-medium leading-none">{t("category.startingFrom") || "Starts from"}</span>
                       <span className="font-extrabold text-stone-900 text-xs mt-0.5 block">
                         ₹{artist.startingPrice}
                       </span>
                     </div>
                     <span className="inline-flex items-center gap-0.5 text-[11px] font-extrabold text-orange-600 group-hover:translate-x-0.5 transition-transform">
-                      Profile <ChevronRight className="h-3 w-3" />
+                      {t("category.viewProfile") || "Profile"} <ChevronRight className="h-3 w-3" />
                     </span>
                   </div>
                 </div>
@@ -563,16 +562,16 @@ export default function SubcategoryLevel3Page() {
           <DialogContent className="sm:max-w-md bg-white border-stone-200 p-5 rounded-3xl shadow-2xl">
             <DialogHeader className="border-b border-stone-100 pb-3">
               <DialogTitle className="text-lg font-black text-stone-900 flex items-center justify-between">
-                <span>Filter Artists</span>
+                <span>{t("search.filterArtists") || "Filter Artists"}</span>
                 <button
                   onClick={resetAllFilters}
                   className="text-xs font-bold text-orange-600 hover:underline"
                 >
-                  Reset All
+                  {t("search.clearFilters") || "Reset All"}
                 </button>
               </DialogTitle>
               <DialogDescription className="text-xs font-medium text-stone-500">
-                Refine your search with specific artist criteria
+                {t("search.refineSearch") || "Refine your search with specific artist criteria"}
               </DialogDescription>
             </DialogHeader>
 
@@ -582,7 +581,7 @@ export default function SubcategoryLevel3Page() {
                 <div className="flex items-center gap-2">
                   <BadgeCheck className="h-5 w-5 text-blue-500 fill-blue-500/10" />
                   <span className="text-xs font-extrabold text-stone-800">
-                    Verified Artists Only
+                    {t("search.verifiedOnly") || "Verified Artists Only"}
                   </span>
                 </div>
                 <button
@@ -603,7 +602,7 @@ export default function SubcategoryLevel3Page() {
               {/* Rating Filter */}
               <div>
                 <label className="text-xs font-extrabold text-stone-800 block mb-2">
-                  Minimum Rating
+                  {t("filter.rating") || "Minimum Rating"}
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[4.8, 4.5, 4.0].map((ratingVal) => (
@@ -630,7 +629,7 @@ export default function SubcategoryLevel3Page() {
               {/* Experience Filter */}
               <div>
                 <label className="text-xs font-extrabold text-stone-800 block mb-2">
-                  Experience
+                  {t("filter.experience") || "Experience"}
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[5, 8, 10].map((expVal) => (
@@ -645,7 +644,7 @@ export default function SubcategoryLevel3Page() {
                           : "border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
                       }`}
                     >
-                      {expVal}+ Years
+                      {expVal}+ {t("common.years") || "Years"}
                     </button>
                   ))}
                 </div>
@@ -657,7 +656,7 @@ export default function SubcategoryLevel3Page() {
                 onClick={() => setIsFilterDrawerOpen(false)}
                 className="w-full h-11 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-extrabold text-xs shadow-md transition"
               >
-                Apply Filters ({displayArtists.length} Artists)
+                {t("filter.apply") || "Apply Filters"} ({displayArtists.length})
               </button>
             </div>
           </DialogContent>

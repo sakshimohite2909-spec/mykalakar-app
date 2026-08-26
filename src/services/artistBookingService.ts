@@ -51,6 +51,9 @@ export interface CreateBookingInput {
   authorizedAmount?: number;
   status?: BookingStatus;
   paymentStatus?: string;
+  selectedService?: string;
+  serviceCategory?: string;
+  serviceEvent?: string;
 }
 
 const BOOKING_COLLECTION = "bookings";
@@ -98,19 +101,24 @@ function mapSnapshot<T>(snapshot: QuerySnapshot<DocumentData>, mapper: (id: stri
 }
 
 export function normalizeBooking(id: string, data: DocumentData): BookingEvent {
+  const status = normalizeStatus(data.status);
+  const eventDate = normalizeDateOnly(String(data.eventDate || ""));
+  const createdDate = dateToIso(data.createdAt || data.date);
+  const updatedDate = dateToIso(data.updatedAt) || createdDate;
+
   return {
     id,
-    artistId: String(data.artistId || data.artistUid || ""),
-    clientName: String(data.clientName || data.customerName || ""),
-    clientPhone: String(data.clientPhone || data.customerPhone || data.phone || ""),
-    clientAddress: String(data.clientAddress || data.customerAddress || ""),
-    venueLocation: String(data.venueLocation || data.eventLocation || data.location || ""),
-    eventDate: normalizeDateOnly(String(data.eventDate || data.date || "")),
-    performanceType: String(data.performanceType || data.eventType || ""),
-    additionalNotes: String(data.additionalNotes || data.message || ""),
-    status: normalizeStatus(data.status),
-    createdAt: dateToIso(data.createdAt),
-    updatedAt: dateToIso(data.updatedAt),
+    artistId: String(data.artistId || data.artistUID || ""),
+    clientName: String(data.clientName || data.name || data.customerName || "Customer"),
+    clientPhone: String(data.clientPhone || data.phone || data.customerPhone || "Phone not provided"),
+    clientAddress: String(data.clientAddress || data.address || data.customerAddress || ""),
+    venueLocation: String(data.venueLocation || data.location || data.eventLocation || "Location not provided"),
+    eventDate,
+    performanceType: String(data.performanceType || data.artForm || data.service || data.eventType || "Performance"),
+    additionalNotes: String(data.additionalNotes || data.message || data.notes || ""),
+    status,
+    createdAt: createdDate,
+    updatedAt: updatedDate,
     customerId: data.customerId ? String(data.customerId) : undefined,
     customerEmail: data.customerEmail ? String(data.customerEmail) : undefined,
     artistName: data.artistName ? String(data.artistName) : undefined,
@@ -124,19 +132,24 @@ export function normalizeBooking(id: string, data: DocumentData): BookingEvent {
     authorizedAmount: data.authorizedAmount ? Number(data.authorizedAmount) : undefined,
     confirmedPrice: data.confirmedPrice ? Number(data.confirmedPrice) : undefined,
     telecallerStatus: data.telecallerStatus ? String(data.telecallerStatus) : undefined,
-    isEscrowReleased: data.isEscrowReleased !== undefined ? Boolean(data.isEscrowReleased) : undefined,
+    isEscrowReleased: Boolean(data.isEscrowReleased),
+    selectedService: data.selectedService ? String(data.selectedService) : undefined,
+    serviceCategory: data.serviceCategory ? String(data.serviceCategory) : undefined,
+    serviceEvent: data.serviceEvent ? String(data.serviceEvent) : undefined,
     counterOfferAmount: data.counterOfferAmount ? Number(data.counterOfferAmount) : undefined,
     counterOfferNotes: data.counterOfferNotes ? String(data.counterOfferNotes) : undefined,
     originalAmount: data.originalAmount ? Number(data.originalAmount) : undefined,
     disputeNotes: data.disputeNotes ? String(data.disputeNotes) : undefined,
-    counterOfferDate: data.counterOfferDate ? String(data.counterOfferDate) : undefined,
+    counterOfferDate: data.counterOfferDate ? normalizeDateOnly(String(data.counterOfferDate)) : undefined,
     counterOfferStartTime: data.counterOfferStartTime ? String(data.counterOfferStartTime) : undefined,
     counterOfferEndTime: data.counterOfferEndTime ? String(data.counterOfferEndTime) : undefined,
     counterOfferLocation: data.counterOfferLocation ? String(data.counterOfferLocation) : undefined,
-    isPaymentCaptured: data.isPaymentCaptured !== undefined ? Boolean(data.isPaymentCaptured) : undefined,
+    isPaymentCaptured: Boolean(data.isPaymentCaptured),
     escrowState: data.escrowState || undefined,
     disputedBy: data.disputedBy || undefined,
-    disputeCategory: data.disputeCategory || undefined,
+    disputeCategory: data.disputeCategory ? String(data.disputeCategory) : undefined,
+    refundPolicy: (data.refundPolicy as RefundPolicy) || undefined,
+    refundAmount: data.refundAmount ? Number(data.refundAmount) : undefined,
     disputeEvidenceUrl: data.disputeEvidenceUrl || undefined,
     splitRefundAmount: data.splitRefundAmount ? Number(data.splitRefundAmount) : undefined,
     slaStartTime: data.slaStartTime ? String(data.slaStartTime) : undefined,
@@ -194,6 +207,9 @@ export function buildBookingPayload(input: CreateBookingInput): BookingEvent {
     holdExpiryTime: input.holdExpiryTime,
     paymentGateway: input.paymentGateway,
     authorizedAmount: input.authorizedAmount,
+    selectedService: input.selectedService,
+    serviceCategory: input.serviceCategory,
+    serviceEvent: input.serviceEvent,
     slaStartTime: input.status === "PENDING_ARTIST_RESPONSE" ? now : undefined,
     slaDeadlineTime: input.status === "PENDING_ARTIST_RESPONSE" ? new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() : undefined,
   };

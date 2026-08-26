@@ -32,6 +32,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/I18nProvider";
+import { getArtLabel } from "@/lib/artLabels";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -283,7 +284,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                       id="brief-event-name"
                       type="text"
                       required
-                      placeholder="e.g. Cultural Folk Performance Event"
+                      placeholder={t("event.namePlaceholder") || "e.g. Cultural Folk Performance Event"}
                       value={form.eventName}
                       onChange={(e) => set("eventName", e.target.value)}
                       className={inputCls}
@@ -291,7 +292,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                   </Field>
 
                   {/* Row 1.5 — Event Cover Photo URL */}
-                  <Field label="Event Banner / Photo URL (Optional)" icon={ImageIcon}>
+                  <Field label={t("event.bannerPhotoUrl") || "Event Banner / Photo URL (Optional)"} icon={ImageIcon}>
                     <input
                       id="brief-event-image"
                       type="url"
@@ -321,7 +322,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                         id="brief-location"
                         type="text"
                         required
-                        placeholder="e.g. Pune, Maharashtra"
+                        placeholder={t("event.locationPlaceholder") || "e.g. Pune, Maharashtra"}
                         value={form.location}
                         onChange={(e) => set("location", e.target.value)}
                         className={inputCls}
@@ -351,11 +352,11 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                           className={cn(inputCls, "appearance-none pr-9 cursor-pointer")}
                         >
                           <option value="" disabled className="text-stone-400">
-                            Select type…
+                            {t("booking.selectPerformanceType") || "Select type…"}
                           </option>
-                          {PERFORMANCE_TYPES.map((t) => (
-                            <option key={t} value={t} className="text-stone-900 font-medium">
-                              {t}
+                          {PERFORMANCE_TYPES.map((pType) => (
+                            <option key={pType} value={pType} className="text-stone-900 font-medium">
+                              {getArtLabel(t, pType)}
                             </option>
                           ))}
                         </select>
@@ -381,7 +382,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                                 : "border-stone-200 bg-stone-50/80 text-stone-600 hover:border-orange-300 hover:bg-orange-50/50 hover:text-[#E25C1D]"
                             )}
                           >
-                            {cat}
+                            {getArtLabel(t, cat)}
                           </button>
                         );
                       })}
@@ -393,7 +394,7 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                     <textarea
                       id="brief-requirements"
                       rows={3}
-                      placeholder="Describe what you need — skills, experience, special setups, or any specific artist preferences…"
+                      placeholder={t("event.requirementsPlaceholder") || "Describe what you need — skills, experience, special setups, or any specific artist preferences…"}
                       value={form.professionalRequirements}
                       onChange={(e) => set("professionalRequirements", e.target.value)}
                       className={cn(

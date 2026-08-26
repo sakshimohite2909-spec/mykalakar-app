@@ -1,291 +1,377 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { imageRegistry } from "@/services/ImageRegistryService";
 import { getUsableImageUrl } from "@/utils/fallbackImages";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BookingSummaryCards } from "@/components/artist-bookings/BookingSummaryCards";
 import { useArtistBookings } from "@/hooks/useArtistBookings";
 import { Link } from "react-router-dom";
 import {
-    Eye,
-    Star,
-    CalendarCheck,
-    Users,
-    TrendingUp,
-    BadgeCheck,
-    Edit,
-    ArrowRight,
-    Music,
-    MapPin,
-    Phone,
-    Clock,
-    Settings,
+  Eye,
+  Star,
+  CalendarCheck,
+  CalendarDays,
+  CalendarClock,
+  CheckCircle2,
+  TrendingUp,
+  ShieldCheck,
+  Edit,
+  ArrowRight,
+  Music,
+  MapPin,
+  Phone,
+  Clock,
+  IndianRupee,
+  UserCircle,
+  ExternalLink,
+  MessageSquare,
 } from "lucide-react";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
+import { BookingStatusBadge } from "@/components/artist-bookings/BookingStatusBadge";
+import { BookingDetailModal } from "@/components/artist-bookings/BookingDetailModal";
+import type { BookingEvent } from "@/types/booking";
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatDate(dateString?: string) {
+  if (!dateString) return "Date TBD";
+  try {
+    return new Date(`${dateString}T00:00:00`).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return dateString;
+  }
+}
 
 export default function ArtistDashboard() {
-    const { artistData } = useAuth();
-    const { summary, loadingBookings } = useArtistBookings();
+  const { artistData } = useAuth();
+  const {
+    bookings,
+    summary,
+    earningsSummary,
+    loadingBookings,
+    updateStatus,
+  } = useArtistBookings();
+  const [selectedBooking, setSelectedBooking] = useState<BookingEvent | null>(null);
 
-    if (!artistData) return null;
+  if (!artistData) return null;
 
-    const fallbackProfileImage = imageRegistry.getUniqueImage({
-        category: artistData.subcategory || artistData.artForm || artistData.category || "Default",
-        type: "artist",
-        key: artistData.id || artistData.uid || artistData.name || "dashboard-profile",
-    });
-    const artistProfileImage = getUsableImageUrl(artistData.media?.profilePhoto || artistData.profilePhoto) || fallbackProfileImage;
-    const fallbackGalleryImages = imageRegistry.getCatalogImages(
-        artistData.subcategory || artistData.artForm || artistData.category || "artists"
-    ).slice(0, 4);
-    const galleryPreview = (artistData.media?.galleryPhotos || artistData.galleryPhotos || fallbackGalleryImages).filter(Boolean);
+  const fallbackProfileImage = imageRegistry.getUniqueImage({
+    category: artistData.subcategory || artistData.artForm || artistData.category || "Default",
+    type: "artist",
+    key: artistData.id || artistData.uid || artistData.name || "dashboard-profile",
+  });
+  const artistProfileImage = getUsableImageUrl(artistData.media?.profilePhoto || artistData.profilePhoto) || fallbackProfileImage;
 
-    // Calculate profile completion
-    const requiredFields = [
-        artistData.name,
-        artistData.mobileNumber || artistData.phone,
-        artistData.bio,
-        artistData.media?.profilePhoto || artistData.profilePhoto,
-        artistData.subcategory || artistData.category,
-        artistData.district || artistData.city,
-        artistData.experience,
-    ];
-    const filledFields = requiredFields.filter(Boolean);
-    const completionPercent = Math.round((filledFields.length / requiredFields.length) * 100);
+  // ── 5 Core Metrics Requested by User ──
+  const metricCards = [
+    {
+      label: "Profile Views",
+      value: (artistData.stats?.profileViews || artistData.profileViews || 0).toLocaleString("en-IN"),
+      subtext: "Total profile impressions",
+      icon: Eye,
+      color: "text-blue-600",
+      bg: "bg-blue-50 border-blue-100",
+      link: `/artist/${artistData.id}`,
+    },
+    {
+      label: "Booking Requests",
+      value: loadingBookings ? "..." : summary.pending,
+      subtext: "Awaiting your response",
+      icon: CalendarClock,
+      color: "text-amber-600",
+      bg: "bg-amber-50 border-amber-100",
+      link: "/artist/dashboard/bookings",
+    },
+    {
+      label: "Upcoming Events",
+      value: loadingBookings ? "..." : summary.upcoming,
+      subtext: "Confirmed stage shows",
+      icon: CalendarDays,
+      color: "text-indigo-600",
+      bg: "bg-indigo-50 border-indigo-100",
+      link: "/artist/dashboard/upcoming",
+    },
+    {
+      label: "Completed Bookings",
+      value: loadingBookings ? "..." : summary.completed,
+      subtext: "Past performances",
+      icon: CheckCircle2,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50 border-emerald-100",
+      link: "/artist/dashboard/completed",
+    },
+    {
+      label: "Earnings",
+      value: loadingBookings ? "..." : formatCurrency(earningsSummary.total),
+      subtext: `₹${earningsSummary.paid.toLocaleString("en-IN")} paid • ₹${earningsSummary.pending.toLocaleString("en-IN")} pending`,
+      icon: IndianRupee,
+      color: "text-orange-600",
+      bg: "bg-orange-50 border-orange-100",
+      link: "/artist/dashboard/earnings",
+    },
+  ];
 
-    const stats = [
-        { label: "Profile Views", value: artistData.stats?.profileViews || artistData.profileViews || 0, icon: Eye, color: "text-blue-500", bg: "bg-blue-500/10" },
-        { label: "Rating", value: `${artistData.rating || 0} ⭐`, icon: Star, color: "text-yellow-500", bg: "bg-yellow-500/10" },
-        { label: "Total Bookings", value: loadingBookings ? "..." : summary.pending + summary.confirmed + summary.completed, icon: CalendarCheck, color: "text-green-500", bg: "bg-green-500/10" },
-        { label: "Followers", value: artistData.stats?.followers || artistData.followers || 0, icon: Users, color: "text-purple-500", bg: "bg-purple-500/10" },
-    ];
+  // Recent 5 booking requests
+  const recentBookings = bookings.slice(0, 5);
 
-    return (
-        <div className="space-y-6">
-            {/* Welcome Section */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="font-display text-2xl md:text-3xl font-bold">
-                            Welcome back, <span className="gradient-text">{artistData.name?.split(" ")[0]}!</span> 👋
-                        </h1>
-                        <p className="text-muted-foreground mt-1">Here's what's happening with your profile</p>
-                    </div>
-                    <Link to="/artist/dashboard/profile">
-                        <Button className="gradient-bg border-0 text-primary-foreground">
-                            <Edit className="h-4 w-4 mr-2" /> Edit Profile
-                        </Button>
-                    </Link>
-                </div>
-            </motion.div>
-
-            {/* Profile Completion */}
-            {completionPercent < 100 && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-                    <Card className="border-primary/20 bg-primary/5">
-                        <CardContent className="p-5">
-                            <div className="flex items-center justify-between mb-3">
-                                <div>
-                                    <p className="font-semibold text-sm">Complete Your Profile</p>
-                                    <p className="text-xs text-muted-foreground">A complete profile gets 5x more visibility</p>
-                                </div>
-                                <span className="text-2xl font-bold text-primary">{completionPercent}%</span>
-                            </div>
-                            <div className="w-full bg-secondary rounded-full h-2.5">
-                                <div
-                                    className="gradient-bg h-2.5 rounded-full transition-all duration-500"
-                                    style={{ width: `${completionPercent}%` }}
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </motion.div>
-            )}
-
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
-                <BookingSummaryCards summary={summary} loading={loadingBookings} />
-            </motion.div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {stats.map((stat, index) => (
-                    <motion.div
-                        key={stat.label}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 + index * 0.05 }}
-                    >
-                        <Card className="hover-lift">
-                            <CardContent className="p-5">
-                                <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center mb-3`}>
-                                    <stat.icon className={`h-5 w-5 ${stat.color}`} />
-                                </div>
-                                <p className="text-2xl font-bold">{stat.value}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-                ))}
+  return (
+    <div className="space-y-6">
+      {/* ── Top Welcome & Profile Action ── */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-stone-200 shadow-sm">
+          <div className="flex items-center gap-4">
+            <img
+              src={artistProfileImage}
+              alt={artistData.name}
+              className="w-16 h-16 rounded-2xl object-cover border-2 border-stone-100 shadow-sm shrink-0"
+            />
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-display text-xl md:text-2xl font-black text-stone-900">
+                  Welcome, {artistData.name?.split(" ")[0]}! 👋
+                </h1>
+                <VerificationBadge artist={artistData} size="sm" />
+              </div>
+              <p className="text-xs font-semibold text-stone-500 mt-1 flex items-center gap-2 flex-wrap">
+                <span>{artistData.subcategory || artistData.category || "Artist"}</span>
+                <span>•</span>
+                <span>{artistData.district || artistData.city}, {artistData.state}</span>
+                <span>•</span>
+                <span className="text-orange-600 font-extrabold flex items-center gap-0.5">
+                  <Star className="h-3 w-3 fill-orange-500" /> {artistData.rating || 5.0} ({artistData.reviews || 0} reviews)
+                </span>
+              </p>
             </div>
+          </div>
 
-            {/* Profile Preview Card */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                <Card>
-                    <CardContent className="p-6">
-                        <h3 className="font-display font-semibold text-lg mb-4 flex items-center gap-2">
-                            <Music className="h-5 w-5 text-primary" /> Your Profile Preview
-                        </h3>
-                        <div className="flex flex-col md:flex-row gap-6">
-                            {/* Photo */}
-                            <div className="flex-shrink-0">
-                                <img
-                                    src={artistProfileImage}
-                                    alt={artistData.name}
-                                    className="w-28 h-28 rounded-2xl object-cover border-2 border-border"
-                                />
-                            </div>
-
-                            {/* Info */}
-                            <div className="flex-1 space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <h2 className="font-display text-xl font-bold">{artistData.name}</h2>
-                                    {artistData.verified && <BadgeCheck className="h-5 w-5 text-primary" />}
-                                    {artistData.trending && (
-                                        <Badge className="bg-orange-500/10 text-orange-500 border-orange-500/20">
-                                            <TrendingUp className="h-3 w-3 mr-1" /> Trending
-                                        </Badge>
-                                    )}
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                                    <span className="flex items-center gap-1">
-                                        <Music className="h-3.5 w-3.5" /> {artistData.category} / {artistData.subcategory}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <MapPin className="h-3.5 w-3.5" /> {artistData.district || artistData.city}, {artistData.state}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <Clock className="h-3.5 w-3.5" /> {artistData.experience} yrs exp
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <Phone className="h-3.5 w-3.5" /> {artistData.mobileNumber || artistData.phone}
-                                    </span>
-                                </div>
-
-                                <p className="text-sm text-muted-foreground line-clamp-2">{artistData.bio || "No bio added yet."}</p>
-
-                                <div className="flex items-center gap-2 text-sm">
-                                    <span
-                                        className={`inline-flex items-center gap-1 font-medium px-2.5 py-1 rounded-full ${artistData.availability === "available"
-                                                ? "bg-green-500/10 text-green-600"
-                                                : "bg-red-500/10 text-red-600"
-                                            }`}
-                                    >
-                                        ● {artistData.availability === "available" ? "Available" : "Busy"}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <Star className="h-3.5 w-3.5 fill-yellow-500 text-yellow-500" />
-                                        {artistData.stats?.rating || artistData.rating || 0} ({artistData.stats?.reviews || artistData.reviews || 0} reviews)
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Gallery Preview */}
-                        {galleryPreview.length > 0 && (
-                            <div className="mt-5">
-                                <p className="text-sm font-medium mb-2">Gallery ({galleryPreview.length} photos)</p>
-                                <div className="flex gap-2 overflow-x-auto pb-2">
-                                    {galleryPreview.slice(0, 6).map((p: string, i: number) => (
-                                        <img
-                                            key={i}
-                                            src={p}
-                                            className="w-20 h-20 rounded-lg object-cover flex-shrink-0 border"
-                                            alt={`Gallery ${i + 1}`}
-                                        />
-                                    ))}
-                                    {galleryPreview.length > 6 && (
-                                        <div className="w-20 h-20 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0 border text-sm font-medium">
-                                            +{galleryPreview.length - 6}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Actions */}
-                        <div className="flex gap-3 mt-5 pt-4 border-t border-border/50">
-                            <Link to="/artist/dashboard/profile" className="flex-1">
-                                <Button variant="outline" className="w-full">
-                                    <Edit className="h-4 w-4 mr-2" /> Edit Profile
-                                </Button>
-                            </Link>
-                            <Link to={`/artist/${artistData.id}`} className="flex-1">
-                                <Button variant="outline" className="w-full">
-                                    <Eye className="h-4 w-4 mr-2" /> View Public Page
-                                </Button>
-                            </Link>
-                        </div>
-                    </CardContent>
-                </Card>
-            </motion.div>
-
-            {/* Quick Actions */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Link to="/artist/dashboard/profile">
-                        <Card className="hover-lift cursor-pointer group">
-                            <CardContent className="p-5 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                        <Edit className="h-5 w-5 text-primary" />
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold text-sm">Update Profile</p>
-                                        <p className="text-xs text-muted-foreground">Edit your details</p>
-                                    </div>
-                                </div>
-                                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                            </CardContent>
-                        </Card>
-                    </Link>
-
-                    <Link to="/artist/dashboard/bookings">
-                        <Card className="hover-lift cursor-pointer group">
-                            <CardContent className="p-5 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                                        <CalendarCheck className="h-5 w-5 text-green-500" />
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold text-sm">Booking Requests</p>
-                                        <p className="text-xs text-muted-foreground">Manage inquiries</p>
-                                    </div>
-                                </div>
-                                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                            </CardContent>
-                        </Card>
-                    </Link>
-
-                    <Link to="/artist/dashboard/settings">
-                        <Card className="hover-lift cursor-pointer group">
-                            <CardContent className="p-5 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                                        <Settings className="h-5 w-5 text-orange-500" />
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold text-sm">Account Settings</p>
-                                        <p className="text-xs text-muted-foreground">Password & email</p>
-                                    </div>
-                                </div>
-                                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                            </CardContent>
-                        </Card>
-                    </Link>
-                </div>
-            </motion.div>
+          <div className="flex items-center gap-2">
+            <Link to="/artist/dashboard/profile">
+              <Button variant="outline" className="rounded-xl font-extrabold text-xs h-10 border-stone-200">
+                <Edit className="h-3.5 w-3.5 mr-1.5" /> Edit Profile
+              </Button>
+            </Link>
+            <Link to={`/artist/${artistData.id}`} target="_blank">
+              <Button variant="ghost" className="rounded-xl font-bold text-xs h-10 text-stone-600 hover:text-stone-900">
+                <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Public View
+              </Button>
+            </Link>
+          </div>
         </div>
-    );
+      </motion.div>
+
+      {/* ── 5 Core Metrics Grid ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        {metricCards.map((stat, index) => {
+          const Icon = stat.icon;
+          return (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 * (index + 1) }}
+            >
+              <Link to={stat.link} className="block group">
+                <Card className={`rounded-2xl border transition-all duration-200 group-hover:shadow-md group-hover:-translate-y-0.5 ${stat.bg}`}>
+                  <CardContent className="p-4 flex flex-col justify-between h-full">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-stone-500">
+                        {stat.label}
+                      </span>
+                      <div className={`p-1.5 rounded-xl bg-white shadow-xs ${stat.color}`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-black text-stone-950 tracking-tight">
+                        {stat.value}
+                      </p>
+                      <p className="text-[10px] font-bold text-stone-500 mt-1 truncate">
+                        {stat.subtext}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* ── Section: Booking Requests Table ── */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+        <Card className="rounded-3xl border-stone-200 shadow-sm overflow-hidden bg-white">
+          <CardHeader className="p-6 border-b border-stone-100 flex flex-row items-center justify-between bg-stone-50/50">
+            <div>
+              <CardTitle className="text-lg font-black text-stone-900 flex items-center gap-2">
+                <CalendarCheck className="h-5 w-5 text-orange-600" />
+                Recent Booking Requests
+              </CardTitle>
+              <p className="text-xs text-stone-500 font-semibold mt-0.5">
+                Inquiries and performance bookings from clients
+              </p>
+            </div>
+            <Link to="/artist/dashboard/bookings">
+              <Button variant="ghost" className="font-black text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-xl">
+                View All Requests <ArrowRight className="h-3.5 w-3.5 ml-1" />
+              </Button>
+            </Link>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {recentBookings.length === 0 ? (
+              <div className="text-center py-12 px-4">
+                <CalendarClock className="h-10 w-10 text-stone-300 mx-auto mb-2" />
+                <p className="text-sm font-black text-stone-700">No booking requests yet</p>
+                <p className="text-xs text-stone-400 font-semibold mt-0.5">
+                  When organizers and clients send inquiries, they will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-stone-50/70 text-stone-400 uppercase tracking-widest font-black text-[10px]">
+                    <tr>
+                      <th className="px-6 py-3.5">Customer</th>
+                      <th className="px-6 py-3.5">Date</th>
+                      <th className="px-6 py-3.5">Location</th>
+                      <th className="px-6 py-3.5">Status</th>
+                      <th className="px-6 py-3.5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100 font-medium text-stone-800">
+                    {recentBookings.map((b) => (
+                      <tr key={b.id} className="hover:bg-stone-50/50 transition">
+                        <td className="px-6 py-4">
+                          <div className="font-extrabold text-stone-900 text-sm">
+                            {b.clientName || "Event Client"}
+                          </div>
+                          <div className="text-stone-400 text-xs font-semibold">
+                            {b.performanceType || "Performance"}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-stone-700 font-bold">
+                          {formatDate(b.eventDate)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-stone-600 font-semibold max-w-[180px] truncate">
+                          {b.venueLocation || "Location TBD"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <BookingStatusBadge status={b.status} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedBooking(b)}
+                            className="h-8 px-3 rounded-lg font-bold text-xs border-stone-200 hover:bg-orange-50 hover:text-orange-600"
+                          >
+                            Review
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* ── Quick Hub Links (Profile, Calendar, Earnings, Reviews) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* My Profile */}
+        <Link to="/artist/dashboard/profile">
+          <Card className="rounded-2xl border-stone-200 hover:border-orange-300 hover:shadow-md transition group p-5 bg-white h-full">
+            <div className="flex items-center gap-3.5">
+              <div className="h-10 w-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                <UserCircle className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-black text-stone-900 group-hover:text-orange-600 transition">
+                  My Profile
+                </h3>
+                <p className="text-xs text-stone-500 font-medium truncate">Edit bio, gallery & prices</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-stone-400 group-hover:text-orange-600 transition shrink-0" />
+            </div>
+          </Card>
+        </Link>
+
+        {/* Calendar */}
+        <Link to="/artist/dashboard/calendar">
+          <Card className="rounded-2xl border-stone-200 hover:border-indigo-300 hover:shadow-md transition group p-5 bg-white h-full">
+            <div className="flex items-center gap-3.5">
+              <div className="h-10 w-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                <CalendarDays className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-black text-stone-900 group-hover:text-indigo-600 transition">
+                  Calendar
+                </h3>
+                <p className="text-xs text-stone-500 font-medium truncate">Available / Booked schedule</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-stone-400 group-hover:text-indigo-600 transition shrink-0" />
+            </div>
+          </Card>
+        </Link>
+
+        {/* Earnings */}
+        <Link to="/artist/dashboard/earnings">
+          <Card className="rounded-2xl border-stone-200 hover:border-emerald-300 hover:shadow-md transition group p-5 bg-white h-full">
+            <div className="flex items-center gap-3.5">
+              <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                <IndianRupee className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-black text-stone-900 group-hover:text-emerald-600 transition">
+                  Earnings
+                </h3>
+                <p className="text-xs text-stone-500 font-medium truncate">Total, Pending, Paid</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-stone-400 group-hover:text-emerald-600 transition shrink-0" />
+            </div>
+          </Card>
+        </Link>
+
+        {/* Reviews */}
+        <Link to="/artist/dashboard/reviews">
+          <Card className="rounded-2xl border-stone-200 hover:border-yellow-300 hover:shadow-md transition group p-5 bg-white h-full">
+            <div className="flex items-center gap-3.5">
+              <div className="h-10 w-10 rounded-xl bg-yellow-100 text-yellow-600 flex items-center justify-center shrink-0">
+                <Star className="h-5 w-5 fill-yellow-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-black text-stone-900 group-hover:text-yellow-600 transition">
+                  Reviews
+                </h3>
+                <p className="text-xs text-stone-500 font-medium truncate">Customer ratings & feedback</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-stone-400 group-hover:text-yellow-600 transition shrink-0" />
+            </div>
+          </Card>
+        </Link>
+      </div>
+
+      {/* Booking Detail Modal */}
+      <BookingDetailModal
+        booking={selectedBooking}
+        open={Boolean(selectedBooking)}
+        onOpenChange={(open) => !open && setSelectedBooking(null)}
+        onStatusChange={updateStatus}
+      />
+    </div>
+  );
 }

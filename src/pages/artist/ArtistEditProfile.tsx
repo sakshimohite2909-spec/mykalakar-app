@@ -17,6 +17,9 @@ import {
   getEventTypes,
   getCategoriesForEvent,
   getSubcategoriesForCategory,
+  ALL_EVENT_TYPES,
+  getArtOptionDetails,
+  type MasterArtOption,
 } from "@/constants/artistSystem";
 import { getYoutubeVideoId } from "@/lib/youtube";
 import { updateUnifiedArtistProfile } from "@/services/UnifiedProfileService";
@@ -28,6 +31,8 @@ import {
     SearchableLanguageSelect,
     SearchableSingleSelect,
 } from "@/components/artist/ArtistProfileInputs";
+import { SearchableArtSelector } from "@/components/artist/SearchableArtSelector";
+import { Check } from "lucide-react";
 import {
     Save,
     Loader2,
@@ -87,7 +92,7 @@ export default function ArtistEditProfile() {
     const [socialLinks, setSocialLinks] = useState<Array<{ platform: string; url: string }>>([]);
     const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
     const [reelPreviews, setReelPreviews] = useState<Array<{ id: string; url: string; title: string }>>([]);
-    const [services, setServices] = useState<Array<{ id: string; event: string; category: string; subcategory: string }>>([]);
+    const [services, setServices] = useState<Array<{ id: string; event: string; eventTypes?: string[]; category: string; subcategory: string }>>([]);
 
     const profileInputRef = useRef<HTMLInputElement>(null);
     const coverInputRef = useRef<HTMLInputElement>(null);
@@ -97,7 +102,16 @@ export default function ArtistEditProfile() {
 
     const addService = () => {
         setIsDirty(true);
-        setServices((prev) => [...prev, { id: `srv-${Date.now()}`, event: "Varkari Sampraday", category: "", subcategory: "" }]);
+        setServices((prev) => [
+            ...prev,
+            {
+                id: `srv-${Date.now()}`,
+                event: "Wedding",
+                eventTypes: ["Wedding", "Birthday", "Cultural Event"],
+                category: "",
+                subcategory: "",
+            },
+        ]);
     };
 
     const removeService = (id: string) => {
@@ -105,15 +119,40 @@ export default function ArtistEditProfile() {
         setServices((prev) => prev.filter((s) => s.id !== id));
     };
 
-    const updateService = (id: string, field: "event" | "category" | "subcategory", value: string) => {
+    const updateServiceWithArt = (id: string, opt: MasterArtOption) => {
         setIsDirty(true);
         setServices((prev) =>
             prev.map((s) => {
                 if (s.id !== id) return s;
-                if (field === "event") return { ...s, event: value, category: "", subcategory: "" };
-                if (field === "category") return { ...s, category: value, subcategory: "" };
-                return { ...s, subcategory: value };
+                return {
+                    ...s,
+                    subcategory: opt.name,
+                    category: opt.primaryCategory,
+                    event: opt.defaultEventTypes[0] || "Wedding",
+                    eventTypes: opt.defaultEventTypes,
+                };
             })
+        );
+    };
+
+    const updateServiceEventTypes = (id: string, eventTypes: string[]) => {
+        setIsDirty(true);
+        setServices((prev) =>
+            prev.map((s) => {
+                if (s.id !== id) return s;
+                return {
+                    ...s,
+                    eventTypes,
+                    event: eventTypes[0] || s.event || "Wedding",
+                };
+            })
+        );
+    };
+
+    const updateServiceCategory = (id: string, category: string) => {
+        setIsDirty(true);
+        setServices((prev) =>
+            prev.map((s) => (s.id === id ? { ...s, category } : s))
         );
     };
 
@@ -213,7 +252,8 @@ export default function ArtistEditProfile() {
             setServices(
                 loadedServices.map((s, idx) => ({
                     id: s.id || `srv-${idx}`,
-                    event: s.event || "Varkari Sampraday",
+                    event: s.event || "Wedding",
+                    eventTypes: (s as any).eventTypes || (s.event ? [s.event] : ["Wedding", "Birthday", "Cultural Event"]),
                     category: s.category || "",
                     subcategory: s.subcategory || s.artForm || "",
                 }))
@@ -491,9 +531,47 @@ export default function ArtistEditProfile() {
             }
         }
 
+        // Services validation
+        if (!services || services.length === 0) {
+            toast({
+                variant: "destructive",
+                title: "Service Required",
+                description: "At least one service/art form is required for your profile.",
+            });
+            return;
+        }
+
+        if (services.some((s) => !s.category || !s.subcategory)) {
+            toast({
+                variant: "destructive",
+                title: "Incomplete Services",
+                description: "Please select both a Category and Subcategory for all added services.",
+            });
+            return;
+        }
+
+        // Prevent duplicate category + subcategory services
+        const serviceKeys = new Set<string>();
+        for (const s of services) {
+            const key = `${s.category.trim().toLowerCase()}:::${s.subcategory.trim().toLowerCase()}`;
+            if (serviceKeys.has(key)) {
+                toast({
+                    variant: "destructive",
+                    title: "Duplicate Service Detected",
+                    description: "You have added the same Category and Subcategory combination more than once. Please choose distinct services or remove duplicates.",
+                });
+                return;
+            }
+            serviceKeys.add(key);
+        }
+
         setLoading(true);
         try {
             const ownerId = artistData.uid || artistData.id;
+
+            const allArtForms = Array.from(
+                new Set(services.map((s) => s.subcategory || (s as any).artForm).filter(Boolean))
+            );
 
             const updatedCategoriesArray = Array.isArray(artistData.categoriesArray) && artistData.categoriesArray.length
                 ? artistData.categoriesArray.map((entry: any, index: number) => {
@@ -572,6 +650,8 @@ export default function ArtistEditProfile() {
                         subcategory: s.subcategory,
                         artForm: s.subcategory,
                     })),
+                    categories: allArtForms,
+                    artForms: allArtForms,
                     eventType: services[0]?.event || artistData.eventType || "Varkari Sampraday",
                     category: services[0]?.category || artistData.category || "",
                     subcategory: services[0]?.subcategory || artistData.subcategory || "",
@@ -913,75 +993,104 @@ export default function ArtistEditProfile() {
 
                         <div className="space-y-4">
                             {services.map((service, index) => {
-                                const categoryOptions = service.event ? getCategoriesForEvent(service.event).map((c) => c.name) : [];
-                                const subcategoryOptions = service.event && service.category ? getSubcategoriesForCategory(service.event, service.category) : [];
+                                const details = getArtOptionDetails(service.subcategory);
+                                const selectedEvents = service.eventTypes && service.eventTypes.length > 0 ? service.eventTypes : [service.event || "Wedding"];
 
                                 return (
-                                    <div key={service.id} className="p-4 rounded-xl border border-border/60 bg-secondary/30 space-y-3">
+                                    <div key={service.id} className="p-4 rounded-2xl border border-orange-100 bg-orange-50/40 space-y-4 shadow-sm">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Service {index + 1}</span>
-                                            {index > 0 && (
+                                            <span className="text-xs font-black text-orange-700 uppercase tracking-wider">Service {index + 1}</span>
+                                            {services.length > 1 && (
                                                 <button
                                                     type="button"
                                                     onClick={() => removeService(service.id)}
-                                                    className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold"
+                                                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-bold text-red-500 transition hover:bg-red-50"
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" /> Remove
                                                 </button>
                                             )}
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                            {/* Event */}
-                                            <div>
-                                                <Label className="text-xs font-bold mb-1.5 block">Event</Label>
-                                                <Select
-                                                    value={service.event || ""}
-                                                    onValueChange={(val) => updateService(service.id, "event", val)}
-                                                >
-                                                    <SelectTrigger><SelectValue placeholder="Select Event" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {getEventTypes().map((evt) => (
-                                                            <SelectItem key={evt} value={evt}>{evt}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
+                                        {/* 1. What do you offer? */}
+                                        <SearchableArtSelector
+                                            label="What do you offer?"
+                                            value={service.subcategory}
+                                            placeholder="Search or select your art / service..."
+                                            onSelect={(opt) => updateServiceWithArt(service.id, opt)}
+                                        />
 
-                                            {/* Category */}
-                                            <div>
-                                                <Label className="text-xs font-bold mb-1.5 block">Category</Label>
-                                                <Select
-                                                    value={service.category || ""}
-                                                    disabled={!service.event}
-                                                    onValueChange={(val) => updateService(service.id, "category", val)}
-                                                >
-                                                    <SelectTrigger><SelectValue placeholder={service.event ? "Select Category" : "Select Event first"} /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {categoryOptions.map((cat) => (
-                                                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
+                                        {/* 2. Auto-identified Category & Subcategory */}
+                                        {service.subcategory && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div>
+                                                    <Label className="text-xs font-bold mb-1.5 block">Category</Label>
+                                                    {details.allCategories.length > 1 ? (
+                                                        <Select
+                                                            value={service.category || details.primaryCategory}
+                                                            onValueChange={(val) => updateServiceCategory(service.id, val)}
+                                                        >
+                                                            <SelectTrigger className="bg-white"><SelectValue placeholder="Select Category" /></SelectTrigger>
+                                                            <SelectContent>
+                                                                {details.allCategories.map((cat) => (
+                                                                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    ) : (
+                                                        <div className="flex h-10 items-center rounded-md border border-input bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm">
+                                                            {service.category || details.primaryCategory}
+                                                        </div>
+                                                    )}
+                                                </div>
 
-                                            {/* Subcategory */}
-                                            <div>
-                                                <Label className="text-xs font-bold mb-1.5 block">Subcategory</Label>
-                                                <Select
-                                                    value={service.subcategory || ""}
-                                                    disabled={!service.category}
-                                                    onValueChange={(val) => updateService(service.id, "subcategory", val)}
-                                                >
-                                                    <SelectTrigger><SelectValue placeholder={service.category ? "Select Subcategory" : "Select Category first"} /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {subcategoryOptions.map((sub) => (
-                                                            <SelectItem key={sub} value={sub}>{sub}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <div>
+                                                    <Label className="text-xs font-bold mb-1.5 block">Subcategory / Art Form</Label>
+                                                    <div className="flex h-10 items-center rounded-md border border-input bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm">
+                                                        {service.subcategory}
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
+
+                                        {/* 3. Where do you perform this? */}
+                                        {service.subcategory && (
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold block">Where do you perform this? (Select Event Types)</Label>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {ALL_EVENT_TYPES.map((evt) => {
+                                                        const isSelected = selectedEvents.includes(evt);
+                                                        return (
+                                                            <button
+                                                                key={evt}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    let nextEvents: string[];
+                                                                    if (isSelected) {
+                                                                        if (selectedEvents.length === 1) return;
+                                                                        nextEvents = selectedEvents.filter((e) => e !== evt);
+                                                                    } else {
+                                                                        nextEvents = [...selectedEvents, evt];
+                                                                    }
+                                                                    updateServiceEventTypes(service.id, nextEvents);
+                                                                }}
+                                                                className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-extrabold transition-all select-none ${
+                                                                    isSelected
+                                                                        ? "border-orange-500 bg-orange-500 text-white shadow-sm shadow-orange-200"
+                                                                        : "border-slate-200 bg-white text-slate-700 hover:border-orange-300 hover:bg-orange-50/50"
+                                                                }`}
+                                                            >
+                                                                <span className={`flex h-3.5 w-3.5 items-center justify-center rounded-sm border ${
+                                                                    isSelected ? "border-white bg-white text-orange-600" : "border-slate-300 bg-white"
+                                                                }`}>
+                                                                    {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                                                                </span>
+                                                                <span>{evt}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}

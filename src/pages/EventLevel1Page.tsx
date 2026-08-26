@@ -32,7 +32,7 @@ import {
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import NewRequirementModal from "@/components/NewRequirementModal";
-import { getCategoriesForEvent, MAIN_EVENT_CARDS, matchesArtistCity } from "@/constants/artistSystem";
+import { getCategoriesForEvent, MAIN_EVENT_CARDS, matchesArtistCity, extractArtistServices } from "@/constants/artistSystem";
 import { SearchableCityDropdown } from "@/components/search/SearchableCityDropdown";
 import { getActiveArtistsPage, clearDataCache } from "@/services/dataService";
 import { resolveArtistProfilePhoto } from "@/services/dataNormalizer";
@@ -45,50 +45,56 @@ const isServiceCategory = (cat: string) =>
 const isOrganizationCategory = (cat: string) =>
   /organization|sanstha|troupe|academy/i.test(cat || "");
 
-const getSectionHeading = (categoryName: string, subName: string) => {
+const getSectionHeading = (categoryName: string, subName: string, t: (k: string, opt?: any) => string) => {
+  const catLabel = getArtLabel(t, categoryName);
+  const subLabel = subName === "All" ? catLabel : getArtLabel(t, subName);
   if (isServiceCategory(categoryName) || isServiceCategory(subName)) {
-    return subName === "All" ? `Available ${categoryName}` : `${subName} Services`;
+    return subName === "All" ? t("category.availableServices", { name: catLabel }) : t("category.servicesIn", { name: subLabel });
   }
   if (isOrganizationCategory(categoryName) || isOrganizationCategory(subName)) {
-    return subName === "All" ? `Organizations in ${categoryName}` : `${subName} Organizations`;
+    return subName === "All" ? t("category.availableOrganizations", { name: catLabel }) : t("category.organizationsIn", { name: subLabel });
   }
-  return `Artists in ${subName === "All" ? categoryName : subName}`;
+  return t("category.artistsIn", { name: subLabel });
 };
 
-const getHeroSubtitle = (categoryName: string) => {
+const getHeroSubtitle = (categoryName: string, t: (k: string) => string) => {
   if (isServiceCategory(categoryName)) {
-    return "Find and book verified event service providers and vendors for your event.";
+    return t("category.heroSubtitleService");
   }
   if (isOrganizationCategory(categoryName)) {
-    return "Discover registered organizations, troupes, and groups for your event.";
+    return t("category.heroSubtitleOrg");
   }
-  return "Find and book verified professional artists for your event.";
+  return t("category.heroSubtitleArtist");
 };
 
-const getEmptyTitle = (categoryName: string, subName: string, selectedCity?: string) => {
+const getEmptyTitle = (categoryName: string, subName: string, selectedCity?: string, t?: (k: string, opt?: any) => string) => {
+  if (!t) return "";
+  const catLabel = getArtLabel(t, categoryName);
+  const subLabel = subName === "All" ? catLabel : getArtLabel(t, subName);
   if (selectedCity && selectedCity !== "All Cities") {
     return isServiceCategory(categoryName)
-      ? `No services available in ${selectedCity}`
-      : `No artists available in ${selectedCity}`;
+      ? t("category.noServicesInCity", { city: selectedCity })
+      : t("category.noArtistsInCity", { city: selectedCity });
   }
   if (subName && subName !== "All") {
     return isServiceCategory(categoryName) || isServiceCategory(subName)
-      ? `No ${subName} services available right now`
-      : `No ${subName} artists available right now`;
+      ? t("category.noServicesAvailable", { name: subLabel })
+      : t("category.noArtistsAvailable", { name: subLabel });
   }
   return isServiceCategory(categoryName)
-    ? "Currently no services available"
-    : "Currently no artists available";
+    ? t("category.noServicesAvailable", { name: catLabel })
+    : t("category.noArtistsAvailable", { name: catLabel });
 };
 
-const getExploreButtonText = (categoryName: string) => {
+const getExploreButtonText = (categoryName: string, t: (k: string, opt?: any) => string) => {
+  const clean = getArtLabel(t, categoryName.replace(/\s*services?$/i, "").replace(/\s*organizations?$/i, "").replace(/\s*artists?$/i, "").trim());
   if (isServiceCategory(categoryName)) {
-    return `View All ${categoryName.replace(/\s*services?$/i, "").trim()} Services`;
+    return t("category.viewAllServices", { name: clean });
   }
   if (isOrganizationCategory(categoryName)) {
-    return `View All ${categoryName.replace(/\s*organizations?$/i, "").trim()} Organizations`;
+    return t("category.viewAllOrgs", { name: clean });
   }
-  return `View All ${categoryName.replace(/\s*artists?$/i, "").trim()} Artists`;
+  return t("category.viewAllArtists", { name: clean });
 };
 
 const CATEGORY_ICON_MAP: Record<string, any> = {
@@ -143,6 +149,7 @@ interface ArtistCardData {
   image: string;
   subCategory: string;
   categoryGroup?: string;
+  servicesList?: string[];
   rawItem?: any;
 }
 
@@ -209,6 +216,7 @@ export default function EventLevel1Page() {
               type: "artist",
               key: item.uid || item.id || item.displayName || item.name || "artist-card",
             });
+            const servicesList = extractArtistServices(item).map((s) => s.subcategory || s.artForm || s.category);
 
             return {
               id: item.uid || item.id || String(Math.random()),
@@ -226,6 +234,8 @@ export default function EventLevel1Page() {
               image: uploadedImage || fallbackImage,
               subCategory: subCat,
               categoryGroup: item.categoryGroup || item.category || item.group || "",
+              servicesList: servicesList.length > 0 ? servicesList : [subCat],
+              rawItem: item,
             };
           });
           setRealArtists(mapped);
@@ -411,16 +421,16 @@ export default function EventLevel1Page() {
                   <UserCheck className="h-6 w-6 stroke-[2]" />
                 </div>
                 <h3 className="text-sm font-extrabold text-stone-900 leading-tight">
-                  Are you an Artist?
+                  {t("artist.cta.title") || "Are you an Artist?"}
                 </h3>
                 <p className="mt-1 text-xs font-medium text-stone-600 leading-relaxed max-w-[200px]">
-                  Join MyKalakar and grow your reach.
+                  {t("artist.cta.desc") || "Join MyKalakar and grow your reach."}
                 </p>
                 <button
                   onClick={() => navigate("/register")}
                   className="mt-4 w-full py-2.5 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs shadow-xs hover:shadow-md transition-all cursor-pointer active:scale-95"
                 >
-                  Join as Artist
+                  {t("nav.joinArtist") || "Join as Artist"}
                 </button>
               </div>
             </div>
@@ -433,10 +443,10 @@ export default function EventLevel1Page() {
                   <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-stone-950 via-stone-900 to-stone-800 text-white p-6 sm:p-7 flex items-center shadow-md min-h-[140px]">
                     <div className="relative z-10 max-w-lg">
                       <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                        {activeCategory.name}
+                        {getArtLabel(t, activeCategory.name)}
                       </h1>
                       <p className="mt-1.5 text-xs sm:text-sm text-stone-300 font-medium leading-relaxed">
-                        {getHeroSubtitle(activeCategory.name)}
+                        {getHeroSubtitle(activeCategory.name, t)}
                       </p>
                     </div>
 
@@ -502,38 +512,38 @@ export default function EventLevel1Page() {
 
                     {/* Sort Selector */}
                     <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
-                      <span className="text-stone-400 font-normal mr-1">Sort:</span>
+                      <span className="text-stone-400 font-normal mr-1">{t("search.sortBy") || "Sort:"}</span>
                       <select
                         value={selectedSort}
                         onChange={(e) => setSelectedSort(e.target.value)}
                         className="bg-transparent border-none outline-none cursor-pointer pr-2 font-bold text-stone-800"
                       >
-                        <option value="Recommended">Recommended</option>
-                        <option value="Rating">Rating: High to Low</option>
-                        <option value="PriceLow">Price: Low to High</option>
-                        <option value="PriceHigh">Price: High to Low</option>
+                        <option value="Recommended">{t("sort.recommended") || "Recommended"}</option>
+                        <option value="Rating">{t("search.ratingHighToLow") || "Rating: High to Low"}</option>
+                        <option value="PriceLow">{t("search.priceLowToHigh") || "Price: Low to High"}</option>
+                        <option value="PriceHigh">{t("search.priceHighToLow") || "Price: High to Low"}</option>
                       </select>
                     </div>
 
                     {/* Price Selector */}
                     <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
-                      <span className="text-stone-400 font-normal mr-1">Budget:</span>
+                      <span className="text-stone-400 font-normal mr-1">{t("filter.price") || "Budget:"}</span>
                       <select
                         value={selectedPrice}
                         onChange={(e) => setSelectedPrice(e.target.value)}
                         className="bg-transparent border-none outline-none cursor-pointer pr-2 font-bold text-stone-800"
                       >
-                        <option value="All">All Prices</option>
-                        <option value="Under20k">Under ₹20,000</option>
+                        <option value="All">{t("price.all") || "All Prices"}</option>
+                        <option value="Under20k">{t("price.under20k") || "Under ₹20,000"}</option>
                         <option value="20kTo30k">₹20,000 - ₹30,000</option>
-                        <option value="Above30k">Above ₹30,000</option>
+                        <option value="Above30k">{t("price.above30k") || "Above ₹30,000"}</option>
                       </select>
                     </div>
                   </div>
 
                   {/* Subheading Count */}
                   <h2 className="text-sm font-extrabold text-stone-900 tracking-tight">
-                    {getSectionHeading(activeCategory.name, activeSubcategory)}
+                    {getSectionHeading(activeCategory.name, activeSubcategory, t)}
                     <span className="text-stone-400 font-semibold ml-2">({displayedArtists.length})</span>
                   </h2>
 
@@ -544,13 +554,13 @@ export default function EventLevel1Page() {
                         <MapPin className="h-6 w-6 stroke-[1.75]" />
                       </div>
                       <h3 className="text-base font-extrabold text-stone-900 mb-1">
-                        {getEmptyTitle(activeCategory.name, activeSubcategory, selectedCity)}
+                        {getEmptyTitle(activeCategory.name, activeSubcategory, selectedCity, t)}
                       </h3>
                       <p className="text-xs font-medium text-stone-500 max-w-sm mb-4">
                         {selectedCity && selectedCity !== "All Cities"
                           ? "Try another city or select All Cities to browse available options."
                           : activeSubcategory && activeSubcategory !== "All"
-                          ? `Try exploring other styles or ${getExploreButtonText(activeCategory.name).toLowerCase()}.`
+                          ? `Try exploring other styles or ${getExploreButtonText(activeCategory.name, t).toLowerCase()}.`
                           : "We're continuously onboarding new providers. Please check back soon or explore other categories."}
                       </p>
                       {selectedCity && selectedCity !== "All Cities" ? (
@@ -559,7 +569,7 @@ export default function EventLevel1Page() {
                           onClick={() => setSelectedCity("All Cities")}
                           className="px-4 py-2 rounded-full bg-orange-600 text-white font-extrabold text-xs shadow-xs hover:bg-orange-700 transition"
                         >
-                          Show All Cities
+                          {t("search.allCities") || "Show All Cities"}
                         </button>
                       ) : activeSubcategory && activeSubcategory !== "All" ? (
                         <button
@@ -567,21 +577,21 @@ export default function EventLevel1Page() {
                           onClick={() => setActiveSubcategory("All")}
                           className="px-4 py-2 rounded-full bg-stone-900 text-white font-extrabold text-xs shadow-xs hover:bg-orange-600 transition"
                         >
-                          {getExploreButtonText(activeCategory.name)}
+                          {getExploreButtonText(activeCategory.name, t)}
                         </button>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => navigate("/events")}
+                          onClick={() => navigate("/categories")}
                           className="px-4 py-2 rounded-full bg-stone-900 text-white font-extrabold text-xs shadow-xs hover:bg-orange-600 transition"
                         >
-                          Explore Other Events
+                          {t("common.explore") || "Explore Categories"}
                         </button>
                       )}
                     </div>
                   )}
 
-                  {/* ARTISTS GRID ON THE SAME PAGE (Compact Grid) */}
+                  {/* Artists Responsive Grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                     {displayedArtists.map((artist) => {
                       const isFav = favorites.has(artist.id);
@@ -590,10 +600,10 @@ export default function EventLevel1Page() {
                         <div
                           key={artist.id}
                           onClick={() => navigate(`/artist/${artist.id}`)}
-                          className="group relative flex flex-col justify-between p-3 rounded-2xl bg-white border border-stone-200/80 shadow-xs hover:border-orange-500 hover:shadow-md transition-all duration-300 cursor-pointer"
+                          className="group relative flex flex-col justify-between p-2.5 sm:p-3 rounded-2xl bg-white border border-stone-200/80 shadow-xs hover:border-orange-500 hover:shadow-md transition-all duration-300 cursor-pointer select-none"
                         >
-                          {/* Top Image & Favorite */}
-                          <div className="relative h-32 sm:h-36 w-full overflow-hidden rounded-xl bg-stone-100 mb-2.5 shrink-0">
+                          {/* Image Thumbnail */}
+                          <div className="relative h-28 sm:h-32 w-full overflow-hidden rounded-xl bg-stone-100 mb-2 shrink-0">
                             <img
                               src={artist.image}
                               alt={artist.name}
@@ -617,21 +627,21 @@ export default function EventLevel1Page() {
                                 e.stopPropagation();
                                 toggleFavorite(artist.id);
                               }}
-                              className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition cursor-pointer"
+                              className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition cursor-pointer"
                             >
                               <Heart
-                                className={`h-3.5 w-3.5 ${
+                                className={`h-3 w-3 ${
                                   isFav ? "fill-rose-500 text-rose-500" : ""
                                 }`}
                               />
                             </button>
                           </div>
 
-                          {/* Content Details */}
+                          {/* Details Content */}
                           <div className="flex-1 flex flex-col justify-between">
                             <div>
                               <div className="flex items-center justify-between gap-1 mb-0.5">
-                                <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors truncate">
+                                <h3 className="text-xs font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors truncate">
                                   {artist.name}
                                 </h3>
                                 {artist.isVerified && (
@@ -639,33 +649,43 @@ export default function EventLevel1Page() {
                                 )}
                               </div>
 
-                              <p className="text-[11px] font-semibold text-stone-500 mb-1.5 truncate">
-                                {getArtLabel(t, artist.subCategory)}
-                              </p>
+                              {/* Service Badges */}
+                              <div className="flex flex-wrap gap-1 mb-1.5 min-h-[20px]">
+                                {(artist.servicesList && artist.servicesList.length > 0 ? artist.servicesList : [artist.subCategory]).slice(0, 2).map((srv) => (
+                                  <span key={srv} className="inline-block rounded-md bg-orange-50 text-orange-700 border border-orange-100/60 px-1.5 py-0.5 text-[8.5px] font-extrabold truncate max-w-[95px]">
+                                    {getArtLabel(t, srv)}
+                                  </span>
+                                ))}
+                                {(artist.servicesList?.length || 1) > 2 && (
+                                  <span className="inline-block rounded-md bg-stone-100 text-stone-600 px-1.5 py-0.5 text-[8.5px] font-extrabold">
+                                    +{(artist.servicesList?.length || 1) - 2}
+                                  </span>
+                                )}
+                              </div>
 
                               {/* Rating & Location */}
-                              <div className="flex items-center justify-between text-[11px] font-semibold text-stone-600 pt-1.5 border-t border-stone-100">
+                              <div className="flex items-center justify-between text-[10.5px] font-semibold text-stone-600 pt-1 border-t border-stone-100">
                                 <div className="flex items-center gap-0.5 text-amber-500">
                                   <Star className="h-3 w-3 fill-current" />
                                   <span className="font-extrabold text-stone-900">{artist.rating}</span>
                                 </div>
-                                <div className="flex items-center gap-0.5 text-stone-500 truncate max-w-[90px]">
-                                  <MapPin className="h-3 w-3 text-stone-400 shrink-0" />
+                                <div className="flex items-center gap-0.5 text-stone-500 truncate max-w-[75px]">
+                                  <MapPin className="h-2.5 w-2.5 text-stone-400 shrink-0" />
                                   <span className="truncate">{artist.location}</span>
                                 </div>
                               </div>
                             </div>
 
                             {/* Footer Price & View Action */}
-                            <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between">
+                            <div className="mt-1.5 pt-1.5 border-t border-stone-100 flex items-center justify-between">
                               <div>
-                                <span className="text-[9px] text-stone-400 block font-medium leading-none">Starts from</span>
+                                <span className="text-[8px] text-stone-400 block font-medium leading-none">{t("category.startingFrom") || "Starts from"}</span>
                                 <span className="font-extrabold text-stone-900 text-xs mt-0.5 block">
                                   ₹{artist.startingPrice}
                                 </span>
                               </div>
-                              <span className="inline-flex items-center gap-0.5 text-[11px] font-extrabold text-orange-600 group-hover:translate-x-0.5 transition-transform">
-                                Profile <ChevronRight className="h-3 w-3" />
+                              <span className="inline-flex items-center gap-0.5 text-[10.5px] font-extrabold text-orange-600 group-hover:translate-x-0.5 transition-transform">
+                                {t("category.viewProfile") || "Profile"} <ChevronRight className="h-2.5 w-2.5" />
                               </span>
                             </div>
                           </div>

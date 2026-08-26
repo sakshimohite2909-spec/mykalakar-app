@@ -817,6 +817,7 @@ export function getArtistArtForms(artist: Record<string, any>): string[] {
   const categories = Array.isArray(artist.categories) ? artist.categories : [];
   const categoriesArray = Array.isArray(artist.categoriesArray) ? artist.categoriesArray : [];
   const artsList = Array.isArray(artist.artsList) ? artist.artsList : [];
+  const services = Array.isArray(artist.services) ? artist.services : [];
   const categoryValue = String(artist.category ?? "").trim();
   const getArtValues = (art: Record<string, any> | string) =>
     typeof art === "string"
@@ -830,6 +831,7 @@ export function getArtistArtForms(artist: Record<string, any>): string[] {
     ...profileArtForms,
     ...categoriesArray.flatMap(getArtValues),
     ...artsList.flatMap(getArtValues),
+    ...services.flatMap(getArtValues),
   ];
 
   return Array.from(new Set(candidates.map(c => String(c ?? "").trim()).filter(Boolean)));
@@ -1067,10 +1069,400 @@ export function matchesArtistCity(artist: Record<string, any>, selectedCity: str
     return true; // Fallback: include artists with unassigned location
   }
 
-  return locations.some((loc) => {
-    const lLower = loc.toLowerCase();
-    return lLower.includes(target) || target.includes(lLower);
-  });
+  return locations.some((loc) => loc.toLowerCase().includes(target) || target.includes(loc.toLowerCase()));
+}
+
+export const ALL_EVENT_TYPES = [
+  "Wedding",
+  "Birthday",
+  "Cultural Event",
+  "Religious Event",
+  "Corporate Event",
+  "Festival Event",
+  "College Event",
+  "Varkari Sampraday",
+  "Other Events",
+] as const;
+
+export interface MasterArtOption {
+  name: string;
+  icon: string;
+  primaryCategory: string;
+  allCategories: string[];
+  defaultEventTypes: string[];
+}
+
+const ART_FORM_ICON_MAP: Record<string, string> = {
+  "singer": "🎤",
+  "singers": "🎤",
+  "live singer": "🎤",
+  "karaoke singer": "🎤",
+  "karaoke singers": "🎤",
+  "gayak": "🎤",
+  "kirtankar": "🕉️",
+  "pravachankar": "🕉️",
+  "anchor": "🎙️",
+  "anchor (emcee)": "🎙️",
+  "anchors / hosts": "🎙️",
+  "game host / anchor": "🎙️",
+  "motivational speakers": "🎙️",
+  "keynote speakers": "🎙️",
+  "harmonium vadak": "🎹",
+  "harmonium player": "🎹",
+  "tabla vadak": "🥁",
+  "mridangamani": "🪘",
+  "mrudungmani": "🪘",
+  "dholki vadak": "🥁",
+  "dhol-tasha pathak": "🥁",
+  "dhol pathak": "🥁",
+  "lezim pathak": "🥁",
+  "zanj pathak": "🥁",
+  "dj": "🎧",
+  "djs": "🎧",
+  "live bands": "🎸",
+  "orchestra": "🎻",
+  "dance group": "💃",
+  "kids dance group": "💃",
+  "choreographer": "💃",
+  "photographer": "📸",
+  "wedding photographer": "📸",
+  "candid photographer": "📸",
+  "traditional photographer": "📸",
+  "corporate photographer": "📸",
+  "birthday photographer": "📸",
+  "photography": "📸",
+  "videographer": "🎥",
+  "wedding videographer": "🎥",
+  "cinematic videographer": "🎥",
+  "event videographer": "🎥",
+  "videography": "🎥",
+  "drone photography": "🛸",
+  "magician": "🪄",
+  "magicians": "🪄",
+  "puppet show": "🎭",
+  "mimicry artist": "🎭",
+  "stand-up comedians": "🎭",
+  "clowns / mascot": "🤡",
+  "bridal makeup artist": "💄",
+  "groom makeup artist": "💄",
+  "mehendi artist": "✨",
+  "makeup artists": "💄",
+  "mehndi artists": "✨",
+  "hairstylist": "✂️",
+  "pandit / priest": "🚩",
+  "bhagwat katha kathan": "📜",
+  "ram katha": "📜",
+  "bhajani mandal": "🚩",
+  "shastriya bhajan": "🚩",
+  "gondhal": "🪕",
+  "jagran": "🪕",
+  "bharud": "🪕",
+  "bharudkar": "🪕",
+  "shahiri & powada": "🪕",
+  "folk artist": "🪕",
+  "sound system": "🔊",
+  "lighting": "💡",
+  "stage setup": "🎪",
+  "balloon decoration": "🎈",
+  "theme decoration": "🎀",
+  "flower decoration": "💐",
+  "wedding decorator": "🌺",
+  "mandap decoration": "🌺",
+  "fireworks": "🎆",
+};
+
+export function getIconForArtForm(artFormName: string): string {
+  const norm = String(artFormName || "").trim().toLowerCase();
+  if (ART_FORM_ICON_MAP[norm]) return ART_FORM_ICON_MAP[norm];
+  for (const [key, icon] of Object.entries(ART_FORM_ICON_MAP)) {
+    if (norm.includes(key) || key.includes(norm)) return icon;
+  }
+  return "✨";
+}
+
+const EVENT_NAMES_SET = new Set<string>([
+  "Wedding",
+  "Birthday",
+  "Cultural Event",
+  "Religious Event",
+  "Corporate Event",
+  "Festival Event",
+  "College Event",
+  "Varkari Sampraday",
+  "Spiritual & Varkari Sampraday",
+  "Other Events",
+  "All Events",
+  "All Cities",
+  "All",
+]);
+
+const CANONICAL_PRIMARY_CATEGORY: Record<string, string> = {
+  "dj": "Music & Dance",
+  "djs": "Music & Dance",
+  "singer": "Vocal Artists",
+  "singers": "Vocal Artists",
+  "live singer": "Vocal Artists",
+  "karaoke singer": "Vocal Artists",
+  "karaoke singers": "Vocal Artists",
+  "gayak": "Vocal Artists",
+  "kirtankar": "Spiritual Speakers",
+  "pravachankar": "Spiritual Speakers",
+  "anchor": "Hosts & Speakers",
+  "anchor (emcee)": "Hosts & Speakers",
+  "anchors / hosts": "Hosts & Speakers",
+  "game host / anchor": "Hosts & Speakers",
+  "harmonium vadak": "Instrumental Artists",
+  "harmonium player": "Instrumental Artists",
+  "tabla vadak": "Instrumental Artists",
+  "mridangamani": "Instrumental Artists",
+  "mrudungmani": "Instrumental Artists",
+  "dholki vadak": "Instrumental Artists",
+  "dhol-tasha pathak": "Festival Ensembles",
+  "dhol pathak": "Traditional & Folk Arts",
+  "lezim pathak": "Traditional & Folk Arts",
+  "zanj pathak": "Traditional & Folk Arts",
+  "dance group": "Music & Dance",
+  "kids dance group": "Music & Dance",
+  "choreographer": "Music & Dance",
+  "photographer": "Photography & Videography",
+  "wedding photographer": "Photography & Videography",
+  "candid photographer": "Photography & Videography",
+  "traditional photographer": "Photography & Videography",
+  "corporate photographer": "Photography & Videography",
+  "birthday photographer": "Photography & Videography",
+  "cinematic videographer": "Photography & Videography",
+  "videographer": "Photography & Videography",
+  "wedding videographer": "Photography & Videography",
+  "event videographer": "Photography & Videography",
+  "drone photography": "Photography & Videography",
+  "bridal makeup artist": "Bridal & Groom Services",
+  "groom makeup artist": "Bridal & Groom Services",
+  "mehendi artist": "Bridal & Groom Services",
+  "makeup artists": "Bridal & Groom Services",
+  "mehndi artists": "Bridal & Groom Services",
+  "hairstylist": "Bridal & Groom Services",
+  "magician": "Entertainers",
+  "magicians": "Entertainers",
+  "puppet show": "Entertainers",
+  "clowns / mascot": "Entertainers",
+  "mimicry artist": "Entertainers",
+  "stand-up comedians": "Entertainment",
+  "live bands": "Entertainment",
+  "orchestra": "Entertainment",
+  "wedding band": "Entertainment",
+  "pandit / priest": "Spiritual & Bhajan",
+  "bhajani mandal": "Vocal Artists",
+  "shastriya bhajan": "Vocal Artists",
+  "bharudkar": "Folk & Performing Groups",
+  "gondhal": "Folk & Performing Groups",
+  "jagran": "Folk & Performing Groups",
+  "bharud": "Folk & Performing Groups",
+  "shahiri & powada": "Folk & Performing Groups",
+  "folk artist": "Traditional & Folk Arts",
+  "sound system": "Audio & Visual Setup",
+  "lighting": "Audio & Visual Setup",
+  "stage setup": "Audio & Visual Setup",
+  "balloon decoration": "Decoration & Setup",
+  "theme decoration": "Decoration & Setup",
+  "flower decoration": "Decoration",
+  "mandap decoration": "Decoration",
+  "wedding decorator": "Decoration",
+  "fireworks": "Festival Ensembles",
+};
+
+let cachedMasterArtOptions: MasterArtOption[] | null = null;
+
+export function getAllMasterArtOptions(): MasterArtOption[] {
+  if (cachedMasterArtOptions) return cachedMasterArtOptions;
+
+  const artMap = new Map<string, {
+    categories: Set<string>;
+    eventTypes: Set<string>;
+  }>();
+
+  // 1. Process 3-level EVENT_CATEGORY_HIERARCHY
+  for (const [eName, eData] of Object.entries(EVENT_CATEGORY_HIERARCHY)) {
+    for (const [gName, gData] of Object.entries(eData.groups)) {
+      for (const sub of gData.subcategories) {
+        const cleanSub = sub.trim();
+        if (!cleanSub) continue;
+        if (!artMap.has(cleanSub)) {
+          artMap.set(cleanSub, {
+            categories: new Set(),
+            eventTypes: new Set(),
+          });
+        }
+        const item = artMap.get(cleanSub)!;
+        // Group names in hierarchy are actual Categories (e.g. "Music & Dance", "Vocal Artists")
+        if (!EVENT_NAMES_SET.has(gName)) {
+          item.categories.add(gName);
+        }
+        // eName is Event Type (e.g. "Wedding", "Birthday", "College Event")
+        if (ALL_EVENT_TYPES.includes(eName as any)) {
+          item.eventTypes.add(eName);
+        }
+      }
+    }
+  }
+
+  // 2. Process legacy CATEGORY_STRUCTURE
+  for (const [cName, cData] of Object.entries(CATEGORY_STRUCTURE)) {
+    for (const sub of cData.subcategories) {
+      const cleanSub = sub.trim();
+      if (!cleanSub) continue;
+      if (!artMap.has(cleanSub)) {
+        artMap.set(cleanSub, {
+          categories: new Set(),
+          eventTypes: new Set(),
+        });
+      }
+      const item = artMap.get(cleanSub)!;
+      // Only add to categories if it is NOT an Event Type
+      if (!EVENT_NAMES_SET.has(cName)) {
+        item.categories.add(cName);
+      }
+    }
+  }
+
+  // Common popular aliases to ensure artists find their art directly
+  const popularPriority = [
+    "Live Singer",
+    "Singer",
+    "Singers",
+    "Karaoke Singer",
+    "Gayak",
+    "Kirtankar",
+    "Pravachankar",
+    "Anchor (Emcee)",
+    "Anchors / Hosts",
+    "Harmonium Vadak",
+    "Tabla Vadak",
+    "Mridangamani",
+    "Dholki Vadak",
+    "Dhol-Tasha Pathak",
+    "Lezim Pathak",
+    "DJ",
+    "Live Bands",
+    "Dance Group",
+    "Choreographer",
+    "Wedding Photographer",
+    "Candid Photographer",
+    "Photographer",
+    "Cinematic Videographer",
+    "Drone Photography",
+    "Bridal Makeup Artist",
+    "Mehendi Artist",
+    "Magician",
+    "Puppet Show",
+    "Stand-up Comedians",
+    "Pandit / Priest",
+    "Bhajani Mandal",
+    "Shastriya Bhajan",
+    "Bharudkar",
+    "Gondhal",
+    "Shahiri & Powada",
+    "Sound System",
+    "Balloon Decoration",
+    "Theme Decoration",
+  ];
+
+  // Guarantee common aliases exist
+  if (!artMap.has("Singer")) {
+    artMap.set("Singer", {
+      categories: new Set(["Vocal Artists", "Performers", "Live Music"]),
+      eventTypes: new Set(["Wedding", "Birthday", "Cultural Event", "Corporate Event", "Festival Event", "College Event"]),
+    });
+  }
+  if (!artMap.has("DJ")) {
+    artMap.set("DJ", {
+      categories: new Set(["Music & Dance", "Entertainment", "College Acts", "Performers"]),
+      eventTypes: new Set(["Wedding", "Birthday", "College Event", "Corporate Event", "Festival Event"]),
+    });
+  }
+  if (!artMap.has("Photographer")) {
+    artMap.set("Photographer", {
+      categories: new Set(["Photography & Videography", "Event Services"]),
+      eventTypes: new Set(["Wedding", "Birthday", "Corporate Event", "Cultural Event", "Other Events"]),
+    });
+  }
+
+  const buildArtOption = (name: string, data: { categories: Set<string>; eventTypes: Set<string> }): MasterArtOption => {
+    const rawCategories = Array.from(data.categories).filter((cat) => !EVENT_NAMES_SET.has(cat) && cat.toLowerCase() !== name.toLowerCase());
+    const canonical = CANONICAL_PRIMARY_CATEGORY[name.toLowerCase()];
+    
+    let allCategories: string[] = [];
+    if (canonical) {
+      const rest = rawCategories.filter((c) => c !== canonical);
+      allCategories = [canonical, ...rest];
+    } else {
+      allCategories = rawCategories.length > 0 ? rawCategories : ["Entertainment"];
+    }
+
+    const defaultEventTypes = Array.from(data.eventTypes).filter((e) => ALL_EVENT_TYPES.includes(e as any));
+
+    return {
+      name,
+      icon: getIconForArtForm(name),
+      primaryCategory: allCategories[0] || "Entertainment",
+      allCategories: allCategories.length > 0 ? allCategories : ["Entertainment"],
+      defaultEventTypes: defaultEventTypes.length > 0 ? defaultEventTypes : ["Wedding", "Birthday", "Cultural Event", "Corporate Event"],
+    };
+  };
+
+  const result: MasterArtOption[] = [];
+  const processedNames = new Set<string>();
+
+  // Add popular priority first
+  for (const name of popularPriority) {
+    if (artMap.has(name) && !processedNames.has(name.toLowerCase())) {
+      result.push(buildArtOption(name, artMap.get(name)!));
+      processedNames.add(name.toLowerCase());
+    }
+  }
+
+  // Add the rest
+  for (const [name, data] of artMap.entries()) {
+    if (!processedNames.has(name.toLowerCase())) {
+      result.push(buildArtOption(name, data));
+      processedNames.add(name.toLowerCase());
+    }
+  }
+
+  cachedMasterArtOptions = result;
+  return result;
+}
+
+export function getArtOptionDetails(artFormName: string): {
+  name: string;
+  icon: string;
+  primaryCategory: string;
+  allCategories: string[];
+  defaultEventTypes: string[];
+} {
+  const norm = String(artFormName || "").trim().toLowerCase();
+  const all = getAllMasterArtOptions();
+  const matched = all.find((item) => item.name.toLowerCase() === norm);
+  if (matched) return matched;
+
+  // Partial match fallback
+  const partial = all.find((item) => item.name.toLowerCase().includes(norm) || norm.includes(item.name.toLowerCase()));
+  if (partial) {
+    return {
+      ...partial,
+      name: artFormName.trim(),
+    };
+  }
+
+  const canonical = CANONICAL_PRIMARY_CATEGORY[norm];
+  const primaryCat = canonical || "Entertainment";
+
+  return {
+    name: artFormName.trim(),
+    icon: getIconForArtForm(artFormName),
+    primaryCategory: primaryCat,
+    allCategories: [primaryCat],
+    defaultEventTypes: ["Wedding", "Birthday", "Cultural Event"],
+  };
 }
 
 

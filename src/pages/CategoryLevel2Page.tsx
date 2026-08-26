@@ -31,50 +31,56 @@ const isServiceCategory = (cat: string) =>
 const isOrganizationCategory = (cat: string) =>
   /organization|sanstha|troupe|academy/i.test(cat || "");
 
-const getSectionHeading = (categoryName: string, subName: string) => {
+const getSectionHeading = (categoryName: string, subName: string, t: (k: string, opt?: any) => string) => {
+  const catLabel = getArtLabel(t, categoryName);
+  const subLabel = subName === "All" ? catLabel : getArtLabel(t, subName);
   if (isServiceCategory(categoryName) || isServiceCategory(subName)) {
-    return subName === "All" ? `Available ${categoryName}` : `${subName} Services`;
+    return subName === "All" ? t("category.availableServices", { name: catLabel }) : t("category.servicesIn", { name: subLabel });
   }
   if (isOrganizationCategory(categoryName) || isOrganizationCategory(subName)) {
-    return subName === "All" ? `Organizations in ${categoryName}` : `${subName} Organizations`;
+    return subName === "All" ? t("category.availableOrganizations", { name: catLabel }) : t("category.organizationsIn", { name: subLabel });
   }
-  return `Artists in ${subName === "All" ? categoryName : subName}`;
+  return t("category.artistsIn", { name: subLabel });
 };
 
-const getHeroSubtitle = (categoryName: string) => {
+const getHeroSubtitle = (categoryName: string, t: (k: string) => string) => {
   if (isServiceCategory(categoryName)) {
-    return "Find and book verified event service providers and vendors for your event.";
+    return t("category.heroSubtitleService");
   }
   if (isOrganizationCategory(categoryName)) {
-    return "Discover registered organizations, troupes, and groups for your event.";
+    return t("category.heroSubtitleOrg");
   }
-  return "Find and book verified professional artists for your event.";
+  return t("category.heroSubtitleArtist");
 };
 
-const getEmptyTitle = (categoryName: string, subName: string, selectedCity?: string) => {
+const getEmptyTitle = (categoryName: string, subName: string, selectedCity?: string, t?: (k: string, opt?: any) => string) => {
+  if (!t) return "";
+  const catLabel = getArtLabel(t, categoryName);
+  const subLabel = subName === "All" ? catLabel : getArtLabel(t, subName);
   if (selectedCity && selectedCity !== "All Cities") {
     return isServiceCategory(categoryName)
-      ? `No services available in ${selectedCity}`
-      : `No artists available in ${selectedCity}`;
+      ? t("category.noServicesInCity", { city: selectedCity })
+      : t("category.noArtistsInCity", { city: selectedCity });
   }
   if (subName && subName !== "All") {
     return isServiceCategory(categoryName) || isServiceCategory(subName)
-      ? `No ${subName} services available right now`
-      : `No ${subName} artists available right now`;
+      ? t("category.noServicesAvailable", { name: subLabel })
+      : t("category.noArtistsAvailable", { name: subLabel });
   }
   return isServiceCategory(categoryName)
-    ? "Currently no services available"
-    : "Currently no artists available";
+    ? t("category.noServicesAvailable", { name: catLabel })
+    : t("category.noArtistsAvailable", { name: catLabel });
 };
 
-const getExploreButtonText = (categoryName: string) => {
+const getExploreButtonText = (categoryName: string, t: (k: string, opt?: any) => string) => {
+  const clean = getArtLabel(t, categoryName.replace(/\s*services?$/i, "").replace(/\s*organizations?$/i, "").replace(/\s*artists?$/i, "").trim());
   if (isServiceCategory(categoryName)) {
-    return `View All ${categoryName.replace(/\s*services?$/i, "").trim()} Services`;
+    return t("category.viewAllServices", { name: clean });
   }
   if (isOrganizationCategory(categoryName)) {
-    return `View All ${categoryName.replace(/\s*organizations?$/i, "").trim()} Organizations`;
+    return t("category.viewAllOrgs", { name: clean });
   }
-  return `View All ${categoryName.replace(/\s*artists?$/i, "").trim()} Artists`;
+  return t("category.viewAllArtists", { name: clean });
 };
 
 interface ArtistCardData {
@@ -318,10 +324,10 @@ export default function CategoryLevel2Page() {
         <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-stone-950 via-stone-900 to-stone-800 text-white p-6 sm:p-8 mb-6 min-h-[160px] sm:min-h-[180px] flex items-center shadow-lg">
           <div className="relative z-10 max-w-xl">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
-              {decodedCategory}
+              {getArtLabel(t, decodedCategory)}
             </h1>
             <p className="mt-2 text-xs sm:text-sm text-stone-300 font-medium leading-relaxed">
-              {getHeroSubtitle(decodedCategory)}
+              {getHeroSubtitle(decodedCategory, t)}
             </p>
           </div>
 
@@ -378,7 +384,7 @@ export default function CategoryLevel2Page() {
           <div className="hidden md:block bg-white rounded-2xl border border-stone-200/80 p-4 shadow-xs h-fit">
             <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-stone-100">
               <h2 className="text-xs font-extrabold text-stone-900 uppercase tracking-wider">
-                {decodedEvent} {t("nav.categories") || "Categories"}
+                {getArtLabel(t, decodedEvent)} {t("nav.categories") || "Categories"}
               </h2>
             </div>
 
@@ -404,7 +410,7 @@ export default function CategoryLevel2Page() {
                     >
                       <span className="flex items-center gap-2 truncate">
                         <span className="text-sm shrink-0">{catIcon}</span>
-                        <span className="truncate">{catName}</span>
+                        <span className="truncate">{getArtLabel(t, catName)}</span>
                       </span>
                     </button>
                   </li>
@@ -426,38 +432,38 @@ export default function CategoryLevel2Page() {
 
               {/* Sort Selector */}
               <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
-                <span className="text-stone-400 font-normal mr-1">Sort:</span>
+                <span className="text-stone-400 font-normal mr-1">{t("search.sortBy") || "Sort:"}</span>
                 <select
                   value={selectedSort}
                   onChange={(e) => setSelectedSort(e.target.value)}
                   className="bg-transparent border-none outline-none cursor-pointer pr-2 font-bold text-stone-800"
                 >
-                  <option value="Recommended">Recommended</option>
-                  <option value="Rating">Rating: High to Low</option>
-                  <option value="PriceLow">Price: Low to High</option>
-                  <option value="PriceHigh">Price: High to Low</option>
+                  <option value="Recommended">{t("sort.recommended") || "Recommended"}</option>
+                  <option value="Rating">{t("search.ratingHighToLow") || "Rating: High to Low"}</option>
+                  <option value="PriceLow">{t("search.priceLowToHigh") || "Price: Low to High"}</option>
+                  <option value="PriceHigh">{t("search.priceHighToLow") || "Price: High to Low"}</option>
                 </select>
               </div>
 
               {/* Price Selector */}
               <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
-                <span className="text-stone-400 font-normal mr-1">Budget:</span>
+                <span className="text-stone-400 font-normal mr-1">{t("filter.price") || "Budget:"}</span>
                 <select
                   value={selectedPrice}
                   onChange={(e) => setSelectedPrice(e.target.value)}
                   className="bg-transparent border-none outline-none cursor-pointer pr-2 font-bold text-stone-800"
                 >
-                  <option value="All">All Prices</option>
-                  <option value="Under20k">Under ₹20,000</option>
+                  <option value="All">{t("price.all") || "All Prices"}</option>
+                  <option value="Under20k">{t("price.under20k") || "Under ₹20,000"}</option>
                   <option value="20kTo30k">₹20,000 - ₹30,000</option>
-                  <option value="Above30k">Above ₹30,000</option>
+                  <option value="Above30k">{t("price.above30k") || "Above ₹30,000"}</option>
                 </select>
               </div>
             </div>
 
             {/* Subheading Count */}
             <h2 className="text-sm sm:text-base font-extrabold text-stone-900 mb-4 tracking-tight">
-              {getSectionHeading(decodedCategory, activeSubcategory)}
+              {getSectionHeading(decodedCategory, activeSubcategory, t)}
               <span className="text-stone-400 font-semibold ml-2">({displayedArtists.length})</span>
             </h2>
 
@@ -468,13 +474,13 @@ export default function CategoryLevel2Page() {
                   <MapPin className="h-6 w-6 stroke-[1.75]" />
                 </div>
                 <h3 className="text-base font-extrabold text-stone-900 mb-1">
-                  {getEmptyTitle(decodedCategory, activeSubcategory, selectedCity)}
+                  {getEmptyTitle(decodedCategory, activeSubcategory, selectedCity, t)}
                 </h3>
                 <p className="text-xs font-medium text-stone-500 max-w-sm mb-4">
                   {selectedCity && selectedCity !== "All Cities"
                     ? "Try another city or select All Cities to browse available options."
                     : activeSubcategory && activeSubcategory !== "All"
-                    ? `Try exploring other styles or ${getExploreButtonText(decodedCategory).toLowerCase()}.`
+                    ? `Try exploring other styles or ${getExploreButtonText(decodedCategory, t).toLowerCase()}.`
                     : "We're continuously onboarding new talent. Please check back soon or explore other categories."}
                 </p>
                 {selectedCity && selectedCity !== "All Cities" ? (
@@ -483,7 +489,7 @@ export default function CategoryLevel2Page() {
                     onClick={() => setSelectedCity("All Cities")}
                     className="px-4 py-2 rounded-full bg-orange-600 text-white font-extrabold text-xs shadow-xs hover:bg-orange-700 transition"
                   >
-                    Show All Cities
+                    {t("search.allCities") || "Show All Cities"}
                   </button>
                 ) : activeSubcategory && activeSubcategory !== "All" ? (
                   <button
@@ -491,7 +497,7 @@ export default function CategoryLevel2Page() {
                     onClick={() => handleSubcategorySelect("All")}
                     className="px-4 py-2 rounded-full bg-stone-900 text-white font-extrabold text-xs shadow-xs hover:bg-orange-600 transition"
                   >
-                    {getExploreButtonText(decodedCategory)}
+                    {getExploreButtonText(decodedCategory, t)}
                   </button>
                 ) : (
                   <button
@@ -499,7 +505,7 @@ export default function CategoryLevel2Page() {
                     onClick={() => navigate("/categories")}
                     className="px-4 py-2 rounded-full bg-stone-900 text-white font-extrabold text-xs shadow-xs hover:bg-orange-600 transition"
                   >
-                    Explore Other Categories
+                    {t("common.explore") || "Explore Categories"}
                   </button>
                 )}
               </div>

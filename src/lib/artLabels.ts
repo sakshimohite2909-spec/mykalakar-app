@@ -1,93 +1,266 @@
 import { normalizeCategoryKey } from "@/constants/artistSystem";
 
 const ART_LABEL_KEYS: Record<string, string> = {
-  performers: "artLabel.performers", // ADDED FOR i18n
-  "event-services": "artLabel.eventServices", // ADDED FOR i18n
-  "folk-and-traditional-arts": "artLabel.folkTraditionalArts", // ADDED FOR i18n
-  "spiritual-and-varkari-sampraday": "artLabel.spiritualVarkari", // ADDED FOR i18n
-  "karaoke-singers": "artLabel.karaokeSingers", // ADDED FOR i18n
-  orchestra: "artLabel.orchestra", // ADDED FOR i18n
-  magicians: "artLabel.magicians", // ADDED FOR i18n
-  "puppet-show": "artLabel.puppetShow", // ADDED FOR i18n
-  djs: "artLabel.djs", // ADDED FOR i18n
-  "anchors-hosts": "artLabel.anchorsHosts", // ADDED FOR i18n
-  "motivational-speakers": "artLabel.motivationalSpeakers", // ADDED FOR i18n
-  actors: "artLabel.actors", // ADDED FOR i18n
-  singers: "artLabel.singers", // ADDED FOR i18n
-  photography: "artLabel.photography", // ADDED FOR i18n
-  videography: "artLabel.videography", // ADDED FOR i18n
-  "makeup-artists": "artLabel.makeupArtists", // ADDED FOR i18n
-  "mehndi-artists": "artLabel.mehndiArtists", // ADDED FOR i18n
+  // Main Categories & Groups
+  "varkari-sampraday": "category.varkariSampraday",
+  "varkari sampraday": "category.varkariSampraday",
+  "spiritual-and-varkari-sampraday": "category.varkariSampraday",
+  "wedding": "category.wedding",
+  "performers": "category.performers",
+  "event-services": "category.eventServices",
+  "event services": "category.eventServices",
+  "folk-and-traditional-arts": "category.folkTraditionalArts",
+  "folk & traditional arts": "category.folkTraditionalArts",
+  "birthday": "category.birthday",
+  "corporate-event": "category.corporateEvent",
+  "corporate event": "category.corporateEvent",
+  "cultural-event": "category.culturalEvent",
+  "cultural event": "category.culturalEvent",
+  "religious-event": "category.religiousEvent",
+  "religious event": "category.religiousEvent",
+  "college-event": "category.collegeEvent",
+  "college event": "category.collegeEvent",
+  "festival-event": "category.festivalEvent",
+  "festival event": "category.festivalEvent",
+  "other-events": "category.otherEvents",
+  "other events": "category.otherEvents",
+
+  // Group Headings
+  "spiritual-speakers": "group.spiritualSpeakers",
+  "spiritual speakers": "group.spiritualSpeakers",
+  "vocal-artists": "group.vocalArtists",
+  "vocal artists": "group.vocalArtists",
+  "instrumental-artists": "group.instrumentalArtists",
+  "instrumental artists": "group.instrumentalArtists",
+  "organizations": "group.organizations",
+  "venues": "group.venues",
+  "bridal-and-groom-services": "group.bridalGroomServices",
+  "bridal & groom services": "group.bridalGroomServices",
+  "photography-and-videography": "group.photographyVideography",
+  "photography & videography": "group.photographyVideography",
+  "entertainment": "group.entertainment",
+  "catering": "group.catering",
+  "decoration": "group.decoration",
+
+  // Subcategories - Varkari Sampraday & Devotional
+  "kirtankar": "artLabel.kirtankar",
+  "pravachankar": "artLabel.pravachankar",
+  "vyaspithchalak": "artLabel.vyaspeethChalak",
+  "vyaspeeth-chalak": "artLabel.vyaspeethChalak",
+  "chopdar": "artLabel.chopdar",
+  "bhagwat-katha-kathan": "artLabel.bhagwatKatha",
+  "bhagwat katha kathan": "artLabel.bhagwatKatha",
+  "ram-katha": "artLabel.ramKatha",
+  "ram katha": "artLabel.ramKatha",
+  "gayak": "artLabel.gayak",
+  "bharudkar": "artLabel.bharudkar",
+  "bhajani-mandal": "artLabel.bhajaniMandal",
+  "bhajani mandal": "artLabel.bhajaniMandal",
+  "shastriya-bhajan": "artLabel.shastriyaBhajan",
+  "shastriya bhajan": "artLabel.shastriyaBhajan",
+  "mridangamani": "artLabel.mrudungmani",
+  "mrudungmani": "artLabel.mrudungmani",
+  "vinekari": "artLabel.veenekari",
+  "veenekari": "artLabel.veenekari",
+  "talkari": "artLabel.taalKari",
+  "taal-kari": "artLabel.taalKari",
+  "chiplya-player": "artLabel.chiplyaPlayer",
+  "tabla-vadak": "artLabel.tablaVadak",
+  "tabla vadak": "artLabel.tablaVadak",
+  "harmonium-vadak": "artLabel.harmoniumVadak",
+  "harmonium vadak": "artLabel.harmoniumVadak",
+  "dholki-vadak": "artLabel.dholkiVadak",
+  "dholki vadak": "artLabel.dholkiVadak",
+  "warkari-sanstha": "artLabel.varkariSanstha",
+  "varkari-sanstha": "artLabel.varkariSanstha",
+  "warkari sanstha": "artLabel.varkariSanstha",
+  "varkari sanstha": "artLabel.varkariSanstha",
+  "varkari": "artLabel.varkari",
+
+  // Subcategories - Traditional, Folk & Procession
+  "dhol-pathak": "artLabel.dholPathak",
   "dhol pathak": "artLabel.dholPathak",
-  "dhol-pathak": "artLabel.dholPathak", // ADDED FOR i18n
+  "dhol-tasha-pathak": "artLabel.dholPathak",
+  "dhol tasha pathak": "artLabel.dholPathak",
+  "zanj-pathak": "artLabel.zanjPathak",
   "zanj pathak": "artLabel.zanjPathak",
-  "zanj-pathak": "artLabel.zanjPathak", // ADDED FOR i18n
-  "zanz pathak": "artLabel.zanjPathak",
-  varkari: "artLabel.varkari",
-  gondhal: "artLabel.gondhal",
-  jagran: "artLabel.jagran",
-  bharud: "artLabel.bharud",
-  "shahiri-and-powada": "artLabel.shahiriPowada", // ADDED FOR i18n
-  "lezim-pathak": "artLabel.lezimPathak", // ADDED FOR i18n
-  "waghya-murali": "artLabel.waghyaMurali", // ADDED FOR i18n
-  "jalsa-and-dashavatar": "artLabel.jalsaDashavatar", // ADDED FOR i18n
-  "dhagaai-and-dholki": "artLabel.dhagaaiDholki", // ADDED FOR i18n
-  bahurupiya: "artLabel.bahurupiya", // ADDED FOR i18n
-  kirtankar: "artLabel.kirtankar",
-  pravachankar: "artLabel.pravachankar", // ADDED FOR i18n
-  "vyaspeeth-chalak": "artLabel.vyaspeethChalak", // ADDED FOR i18n
-  "chiplya-player": "artLabel.chiplyaPlayer", // ADDED FOR i18n
-  gayak: "artLabel.gayak", // ADDED FOR i18n
-  mrudungmani: "artLabel.mrudungmani", // ADDED FOR i18n
-  bharudkar: "artLabel.bharudkar", // ADDED FOR i18n
-  "sound-system": "artLabel.soundSystem", // ADDED FOR i18n
-  "mandap-and-decoration": "artLabel.mandapDecoration", // ADDED FOR i18n
-  veenekari: "artLabel.veenekari", // ADDED FOR i18n
-  "taal-kari": "artLabel.taalKari", // ADDED FOR i18n
-  "varkari-sanstha": "artLabel.varkariSanstha", // ADDED FOR i18n
-  "bhajani-mandal": "artLabel.bhajaniMandal", // ADDED FOR i18n
-  "shastriya-bhajan": "artLabel.shastriyaBhajan", // ADDED FOR i18n
-  "tabla-vadak": "artLabel.tablaVadak", // ADDED FOR i18n
-  "harmonium-vadak": "artLabel.harmoniumVadak", // ADDED FOR i18n
-  "dholki-vadak": "artLabel.dholkiVadak", // ADDED FOR i18n
-  lavani: "artLabel.lavani",
-  "folk dance": "artLabel.folkDance",
-  "folk-dance": "artLabel.folkDance", // ADDED FOR i18n
+  "zanz-pathak": "artLabel.zanjPathak",
+  "lezim-pathak": "artLabel.lezimPathak",
+  "lezim pathak": "artLabel.lezimPathak",
+  "gondhal": "artLabel.gondhal",
+  "jagran": "artLabel.jagran",
+  "bharud": "artLabel.bharud",
+  "shahiri-and-powada": "artLabel.shahiriPowada",
+  "shahiri & powada": "artLabel.shahiriPowada",
+  "powada": "artLabel.shahiriPowada",
+  "lavani": "artLabel.lavani",
+  "waghya-murali": "artLabel.waghyaMurali",
+  "waghya murali": "artLabel.waghyaMurali",
+  "jalsa-and-dashavatar": "artLabel.jalsaDashavatar",
+  "jalsa": "artLabel.jalsaDashavatar",
+  "dashavatar": "artLabel.jalsaDashavatar",
+  "dhagaai-and-dholki": "artLabel.dhagaaiDholki",
+  "bahurupiya": "artLabel.bahurupiya",
+  "vasudev": "artLabel.vasudev",
+  "tutari-vadak": "artLabel.tutariVadak",
+  "tutari vadak": "artLabel.tutariVadak",
+  "shehnai-vadak": "artLabel.shehnaiVadak",
+  "shehnai vadak": "artLabel.shehnaiVadak",
+  "halgi-vadak": "artLabel.halgiVadak",
+  "sambal-vadak": "artLabel.sambalVadak",
+
+  // Subcategories - Stage, Music, Dance & Entertainment
+  "singers": "artLabel.singers",
+  "singer": "artLabel.singer",
+  "live-singer": "artLabel.liveSinger",
+  "live singer": "artLabel.liveSinger",
+  "karaoke-singers": "artLabel.karaokeSingers",
+  "karaoke singer": "artLabel.karaokeSingers",
+  "orchestra": "artLabel.orchestra",
+  "wedding-band": "artLabel.weddingBand",
+  "wedding band": "artLabel.weddingBand",
+  "live-bands": "artLabel.liveBands",
+  "live bands": "artLabel.liveBands",
+  "djs": "artLabel.djs",
+  "dj": "artLabel.dj",
+  "anchors-hosts": "artLabel.anchorsHosts",
+  "anchor (emcee)": "artLabel.anchorsHosts",
+  "anchor / host": "artLabel.anchorsHosts",
+  "anchor / hosts": "artLabel.anchorsHosts",
+  "anchor": "artLabel.anchor",
+  "celebrity-artist": "artLabel.celebrityArtist",
+  "celebrity artist": "artLabel.celebrityArtist",
+  "celebrity-acts": "artLabel.celebrityArtist",
+  "dance-groups": "artLabel.danceGroups",
+  "dance group": "artLabel.danceGroups",
+  "dance-artists": "artLabel.danceArtists",
+  "dancer": "artLabel.dancer",
+  "choreographer": "artLabel.choreographer",
+  "magicians": "artLabel.magicians",
+  "magician": "artLabel.magicians",
+  "mimicry-artist": "artLabel.mimicryArtist",
+  "mimicry artist": "artLabel.mimicryArtist",
+  "puppet-show": "artLabel.puppetShow",
+  "puppet show": "artLabel.puppetShow",
+  "clowns-mascot": "artLabel.clownsMascot",
+  "clowns / mascot": "artLabel.clownsMascot",
+  "motivational-speakers": "artLabel.motivationalSpeakers",
+  "keynote-speaker": "artLabel.keynoteSpeaker",
+  "actors": "artLabel.actors",
+  "actor": "artLabel.actor",
+  "musicians": "artLabel.traditionalMusicians",
+  "musician": "artLabel.musician",
+  "traditional-musicians": "artLabel.traditionalMusicians",
   "traditional musicians": "artLabel.traditionalMusicians",
-  "traditional-musicians": "artLabel.traditionalMusicians", // ADDED FOR i18n
-  singer: "artLabel.singer",
-  musician: "artLabel.musician",
-  dancer: "artLabel.dancer",
-  anchor: "artLabel.anchor",
-  actor: "artLabel.actor",
-  dj: "artLabel.dj",
-  "music artists": "artLabel.musicArtists",
-  "music-artists": "artLabel.musicArtists", // ADDED FOR i18n
-  "dance artists": "artLabel.danceArtists",
-  "dance-artists": "artLabel.danceArtists", // ADDED FOR i18n
-  "stage and entertainment": "artLabel.stageEntertainment",
-  "stage-and-entertainment": "artLabel.stageEntertainment", // ADDED FOR i18n
-  "creative artists": "artLabel.creativeArtists",
-  "creative-artists": "artLabel.creativeArtists", // ADDED FOR i18n
+  "folk-dance": "artLabel.folkDance",
+  "folk dance": "artLabel.folkDance",
+  "folk-artist": "artLabel.folkArt",
+  "folk artist": "artLabel.folkArt",
+  "folk-art": "artLabel.folkArt",
   "folk art": "artLabel.folkArt",
-  "folk-art": "artLabel.folkArt", // ADDED FOR i18n
-  "event artists": "artLabel.eventArtists",
-  "event-artists": "artLabel.eventArtists", // ADDED FOR i18n
-  marriage: "eventType.marriage.name", // ADDED FOR i18n
-  wedding: "eventType.marriage.name", // ADDED FOR i18n
-  birthday: "eventType.birthday.name", // ADDED FOR i18n
-  "birthday-party": "eventType.birthday.name", // ADDED FOR i18n
-  corporate: "eventType.corporate.name", // ADDED FOR i18n
-  "corporate-event": "eventType.corporate.name", // ADDED FOR i18n
-  festival: "eventType.festival.name", // ADDED FOR i18n
-  "festival-celebration": "eventType.festival.name", // ADDED FOR i18n
-  spiritual: "eventType.spiritual.name", // ADDED FOR i18n
-  "spiritual-event": "eventType.spiritual.name", // ADDED FOR i18n
+
+  // Subcategories - Photography & Media
+  "photography": "artLabel.photography",
+  "videography": "artLabel.videography",
+  "wedding-photographer": "artLabel.weddingPhotographer",
+  "wedding photographer": "artLabel.weddingPhotographer",
+  "photographers": "artLabel.photography",
+  "candid-photographer": "artLabel.candidPhotographer",
+  "candid photographer": "artLabel.candidPhotographer",
+  "traditional-photographer": "artLabel.traditionalPhotographer",
+  "traditional photographer": "artLabel.traditionalPhotographer",
+  "wedding-videographer": "artLabel.weddingVideographer",
+  "wedding videographer": "artLabel.weddingVideographer",
+  "cinematic-videographer": "artLabel.cinematicVideographer",
+  "cinematic videographer": "artLabel.cinematicVideographer",
+  "drone-photography": "artLabel.dronePhotography",
+  "drone photography": "artLabel.dronePhotography",
+  "pre-wedding-shoot": "artLabel.preWeddingShoot",
+  "pre-wedding shoot": "artLabel.preWeddingShoot",
+  "live-streaming": "artLabel.liveStreaming",
+  "live streaming": "artLabel.liveStreaming",
+  "photo-booth": "artLabel.photoBooth",
+  "photo booth": "artLabel.photoBooth",
+  "corporate-photographer": "artLabel.corporatePhotographer",
+  "corporate photographer": "artLabel.corporatePhotographer",
+
+  // Subcategories - Makeup & Styling
+  "makeup-artists": "artLabel.makeupArtists",
+  "bridal-makeup-artist": "artLabel.bridalMakeup",
+  "bridal makeup artist": "artLabel.bridalMakeup",
+  "groom-makeup-artist": "artLabel.groomMakeup",
+  "groom makeup artist": "artLabel.groomMakeup",
+  "mehendi-artists": "artLabel.mehndiArtists",
+  "mehendi artist": "artLabel.mehndiArtists",
+  "mehendi": "artLabel.mehndiArtists",
+  "hairstylist": "artLabel.hairstylist",
+  "nail-artist": "artLabel.nailArtist",
+  "nail artist": "artLabel.nailArtist",
+  "saree-draping": "artLabel.sareeDraping",
+  "saree draping": "artLabel.sareeDraping",
+  "personal-stylist": "artLabel.personalStylist",
+  "personal stylist": "artLabel.personalStylist",
+
+  // Subcategories - Event Services, Venue, Setup & Catering
+  "sound-system": "artLabel.soundSystem",
+  "sound system": "artLabel.soundSystem",
+  "mandap-and-decoration": "artLabel.mandapDecoration",
+  "mandap-decoration": "artLabel.mandapDecoration",
+  "mandap decoration": "artLabel.mandapDecoration",
+  "stage-and-lighting": "artLabel.stageLighting",
+  "stage & lighting": "artLabel.stageLighting",
+  "stage-setup": "artLabel.stageLighting",
+  "stage setup": "artLabel.stageLighting",
+  "led-wall": "artLabel.ledWall",
+  "led wall": "artLabel.ledWall",
+  "led-wall-setup": "artLabel.ledWall",
+  "led wall setup": "artLabel.ledWall",
+  "balloon-decorators": "artLabel.balloonDecoration",
+  "balloon-decoration": "artLabel.balloonDecoration",
+  "balloon decoration": "artLabel.balloonDecoration",
+  "flower-decoration": "artLabel.flowerDecoration",
+  "flower decoration": "artLabel.flowerDecoration",
+  "stage-decoration": "artLabel.stageDecoration",
+  "stage decoration": "artLabel.stageDecoration",
+  "wedding-decorator": "artLabel.weddingDecorator",
+  "wedding decorator": "artLabel.weddingDecorator",
+  "decorators": "artLabel.weddingDecorator",
+  "catering-services": "group.catering",
+  "veg-catering": "artLabel.vegCatering",
+  "veg catering": "artLabel.vegCatering",
+  "non-veg-catering": "artLabel.nonVegCatering",
+  "non-veg catering": "artLabel.nonVegCatering",
+  "maharashtrian-catering": "artLabel.maharashtrianCatering",
+  "maharashtrian catering": "artLabel.maharashtrianCatering",
+  "banquet-hall": "artLabel.banquetHall",
+  "banquet hall": "artLabel.banquetHall",
+  "marriage-hall": "artLabel.marriageHall",
+  "marriage hall": "artLabel.marriageHall",
+  "lawn": "artLabel.lawn",
+  "resort": "artLabel.resort",
+  "hotel": "artLabel.hotel",
+  "pandit-priest": "artLabel.panditPriest",
+  "pandit / priest": "artLabel.panditPriest",
+  "pooja-pandit": "artLabel.poojaPandit",
+  "pooja pandit": "artLabel.poojaPandit",
+
+  // Event Types
+  "marriage": "eventType.marriage.name",
+  "birthday-party": "eventType.birthday.name",
+  "corporate": "eventType.corporate.name",
+  "festival": "eventType.festival.name",
+  "festival-celebration": "eventType.festival.name",
+  "spiritual": "eventType.spiritual.name",
+  "spiritual-event": "eventType.spiritual.name",
+  "cultural": "eventType.cultural.name",
+  "college": "eventType.college.name",
 };
 
-export function getArtLabel(t: (key: string) => string, value: unknown) {
+export function getArtLabel(t: (key: string, options?: any) => string, value: unknown) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
-  const key = ART_LABEL_KEYS[normalizeCategoryKey(raw)] ?? ART_LABEL_KEYS[raw.toLowerCase()]; // ADDED FOR i18n
+  if (raw === "All" || raw === "all") return t("common.all");
+  const norm = normalizeCategoryKey(raw);
+  const key = ART_LABEL_KEYS[norm] ?? ART_LABEL_KEYS[raw.toLowerCase()] ?? ART_LABEL_KEYS[raw];
   return key ? t(key) : raw;
 }

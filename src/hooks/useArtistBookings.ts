@@ -212,6 +212,25 @@ export function useArtistBookings() {
     [bookings]
   );
 
+  const earningsSummary = useMemo(() => {
+    let total = 0;
+    let pending = 0;
+    let paid = 0;
+
+    bookings.forEach((b) => {
+      const amt = Number(b.authorizedAmount || b.quotedPrice || (b as any).amount || (b as any).budget || 0);
+      if (["EVENT_COMPLETED", "PAYOUT_RELEASED", "completed"].includes(b.status)) {
+        paid += amt;
+        total += amt;
+      } else if (["CONFIRMED", "confirmed", "booked", "artist_confirmed", "SOFT_HOLD_ACTIVE", "PAYMENT_AUTHORIZED", "PENDING_ARTIST_RESPONSE"].includes(b.status)) {
+        pending += amt;
+        total += amt;
+      }
+    });
+
+    return { total, pending, paid };
+  }, [bookings]);
+
   return {
     artistId,
     bookings,
@@ -221,6 +240,7 @@ export function useArtistBookings() {
     availability,
     notifications,
     summary,
+    earningsSummary,
     loading: loadingBookings || loadingAvailability || loadingNotifications,
     loadingBookings,
     loadingAvailability,

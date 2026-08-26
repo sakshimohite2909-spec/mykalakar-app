@@ -57,6 +57,9 @@ export interface BookingEvent {
   confirmedPrice?: number;
   telecallerStatus?: string;
   isEscrowReleased?: boolean;
+  selectedService?: string;
+  serviceCategory?: string;
+  serviceEvent?: string;
   counterOfferAmount?: number;
   counterOfferNotes?: string;
   originalAmount?: number;
@@ -79,6 +82,8 @@ export interface BookingEvent {
   // Phase 3 SLA deadlines:
   slaStartTime?: string;
   slaDeadlineTime?: string;
+  refundPolicy?: RefundPolicy;
+  refundAmount?: number;
 }
 
 export interface RefundPolicy {

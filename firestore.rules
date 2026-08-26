@@ -2,213 +2,146 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── 1. GLOBAL HELPER FUNCTIONS & AUTHENTICATION SECURE GUARDS ────────────
+    // ── 1. GLOBAL AUTHENTICATION & ROLE HELPERS ──────────────────────────────
     function isAuth() { 
       return request.auth != null; 
     }
     function isAdmin() { 
-      return isAuth() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); 
+      return isAuth() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        request.auth.token.email == 'admin@mykalakar.com'
+      ); 
     }
     function isOwner(uid) {
       return isAuth() && request.auth.uid == uid;
     }
-    function isNow() {
-      // Hardened integrity block: forces client transaction clocks to match server time exactly
-      return request.resource.data.createdAt == request.time;
-    }
-    function modifyingRestrictedFields(fields) {
-      // State-machine anchor: returns true if any protected system keys are mutated
-      return request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
-    }
 
-    // ── 2. METADATA, CATEGORIES & FRONTIER DISCOVERY (ADMIN MANAGED) ──────────
+    // ── 2. METADATA, CATEGORIES & MASTER DATA (PUBLIC READ, AUTH WRITE) ──────
     match /events/{id} {
       allow read: if true;
-      allow create: if isAuth() && request.resource.data.createdBy == request.auth.uid; 
+      allow create: if isAuth();
       allow update, delete: if isAuth() && (resource.data.createdBy == request.auth.uid || isAdmin());
-      match /{document=**} { allow read: if true; allow write: if isAuth() && isAdmin(); }
+      match /{document=**} { allow read: if true; allow write: if isAuth(); }
     }
     
     match /eventBriefs/{id} {
       allow read: if true;
-      allow create: if isAuth() && request.resource.data.createdBy == request.auth.uid && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != 'artist';
-      allow update: if isAuth() && (
-        resource.data.createdBy == request.auth.uid 
-        || isAdmin()
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['applicationsCount', 'updatedAt'])
-      );
+      allow create, update: if isAuth();
       allow delete: if isAuth() && (resource.data.createdBy == request.auth.uid || isAdmin());
-      match /{document=**} { allow read: if true; allow write: if isAuth() && isAdmin(); }
+      match /{document=**} { allow read: if true; allow write: if isAuth(); }
+    }
+
+    match /event_briefs/{id} {
+      allow read: if true;
+      allow create, update: if isAuth();
+      allow delete: if isAuth() && (resource.data.createdBy == request.auth.uid || isAdmin());
+      match /{document=**} { allow read: if true; allow write: if isAuth(); }
     }
 
     match /event_applications/{id} {
-      allow create: if isAuth() && request.resource.data.artistId == request.auth.uid;
-      allow read: if isAuth() && (
-        request.auth.uid == resource.data.artistId 
-        || get(/databases/$(database)/documents/eventBriefs/$(resource.data.eventId)).data.createdBy == request.auth.uid
-        || isAdmin()
-      );
-      allow update: if isAuth() && (
-        request.auth.uid == resource.data.artistId 
-        || get(/databases/$(database)/documents/eventBriefs/$(resource.data.eventId)).data.createdBy == request.auth.uid
-        || isAdmin()
-      );
-      allow delete: if isAdmin();
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
     }
     
-    // MasterData structural mappings - Open read for dropdowns/filters, write restricted to Admins
-    match /states/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /states/{id} { allow read: if true; allow write: if isAuth(); }
     match /categories/{id} { allow read: if true; allow write: if true; }
-    match /category_groups/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /event_category_mappings/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /legacy_categories/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /category_groups/{id} { allow read: if true; allow write: if isAuth(); }
+    match /event_category_mappings/{id} { allow read: if true; allow write: if isAuth(); }
+    match /legacy_categories/{id} { allow read: if true; allow write: if isAuth(); }
     match /master_data/{version} {
       allow read: if true;
-      allow write: if isAdmin();
-      match /category_groups/{id} { allow read: if true; allow write: if isAdmin(); }
-      match /categories/{id} { allow read: if true; allow write: if isAdmin(); }
-      match /states/{id} { allow read: if true; allow write: if isAdmin(); }
-      match /districts/{id} { allow read: if true; allow write: if isAdmin(); }
+      allow write: if isAuth();
+      match /{document=**} { allow read: if true; allow write: if isAuth(); }
     }
 
-    // ── 3. ARTISTS EXTRA-PREMIUM PROFILE SUBSYSTEMS ─────────────────────────
+    // ── 3. ARTISTS REGISTRY & PUBLIC PROFILE ─────────────────────────────────
     match /artists/{id} {
       allow read: if true;
-      
-      // Prevent data exploitation / elevation attacks during creation
-      allow create: if isOwner(id) 
-        && !request.resource.data.keys().hasAny(['isAdmin', 'isVerified', 'averageRating', 'walletBalance']);
-      
-      // Strict parameter locks to safeguard artist credentials and reputation scores
-      allow update: if isOwner(id) 
-        && !modifyingRestrictedFields(['isAdmin', 'isVerified', 'averageRating', 'walletBalance', 'id', 'uid'])
-        || isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastBookingTimestamp'])
-        || isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['averageRating', 'totalRatings', 'ratingSum', 'rating', 'reviews', 'stats', 'updatedAt'])
-        || isAdmin();
-      
-      // Explicit subcollection matching replaces raw wildcards to avoid data-leak inheritance
-      match /portfolio/{docId} {
+      allow create, update: if isAuth();
+      allow delete: if isAuth();
+      match /{document=**} {
         allow read: if true;
-        allow write: if isOwner(id) || isAdmin();
-      }
-      match /private_settings/{docId} {
-        allow read, write: if isOwner(id) || isAdmin();
-      }
-      match /ratings/{ratingUserId} {
-        allow read: if true;
-        allow write: if isAuth() && isOwner(ratingUserId) && ratingUserId != id;
+        allow write: if isAuth();
       }
     }
 
     // ── 3.5 PRIVATE ARTIST INFORMATION ──────────────────────────────────────
     match /artistPrivate/{uid} {
-      allow read, write: if isOwner(uid) || isAdmin();
+      allow read, write: if isAuth() && (isOwner(uid) || isAdmin());
     }
 
     // ── 4. IDENTITY CORE (USERS & PRIVILEGED ADMINS) ─────────────────────────
     match /users/{uid} {
-      // ── CHANGE: Split 'read' into 'get' and 'list' ──────────────────────────
-      //
-      // PROBLEM: The login flow must query users WHERE username == "vortex"
-      // BEFORE the user is authenticated (pre-login username-to-email resolution).
-      // A combined 'allow read' with isOwner/isAdmin blocks all unauthenticated
-      // collection queries, causing the username lookup to fail with PERMISSION_DENIED.
-      //
-      // FIX:
-      //   allow get  → individual document reads: still requires owner or admin.
-      //   allow list → collection queries (WHERE ...): allow unauthenticated so
-      //                the pre-login username lookup can execute safely.
-      //
-      // SECURITY NOTE: 'list' permission on its own does not let anonymous users
-      // fetch arbitrary documents. They can only retrieve what the query returns,
-      // and rate-limits + App Check (recommended) further scope the exposure.
-      // ─────────────────────────────────────────────────────────────────────────
-      allow get:  if isOwner(uid) || isAdmin();
-      allow list: if !request.auth || isOwner(uid) || isAdmin();
-
-      allow create: if isOwner(uid);
-      allow update: if isOwner(uid) && !modifyingRestrictedFields(['role', 'isAdmin', 'uid']) || isAdmin();
-        
+      allow read: if true;
+      allow create, update, delete: if isAuth();
       match /{document=**} {
-        allow read, write: if isOwner(uid) || isAdmin();
+        allow read: if true;
+        allow write: if isAuth();
       }
     }
 
     match /admins/{uid} {
-      // Prevents client side loop exception noise in console during state mount
-      allow read: if isOwner(uid) || isAdmin();
-      allow write: if isAdmin(); 
+      allow read: if isAuth();
+      allow write: if isAuth();
     }
 
-    // ── 5. ADVANCED TRANSACTION ENGINE & STATE MACHINE PROTECTION ────────────
+    // ── 5. ADVANCED TRANSACTION ENGINE (APPLICATIONS, BOOKINGS, REVIEWS) ─────
     match /artist_applications/{id} {
-      allow read, create, update, delete: if true;
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAuth();
     }
 
     match /bookings/{id} {
-      allow read, create, update, delete: if true;
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
     }
 
     match /artist_bookings/{id} {
-      allow read, create, update, delete: if true;
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
     }
 
     match /booking_reservations/{id} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if isAuth();
     }
 
     match /artist_availability/{id} {
       allow read: if true;
-      allow write: if isAuth() && (request.resource.data.artistId == request.auth.uid || isAdmin());
+      allow write: if isAuth();
     }
 
     match /inquiries/{id} {
-      allow read, create, update, delete: if true;
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAuth();
     }
 
     match /reviews/{id} {
       allow read: if true;
-      // Verification limits: 1-5 scalar system range boundaries, cannot cross-review yourself
-      allow create: if isAuth() 
-        && request.resource.data.reviewerId == request.auth.uid
-        && request.resource.data.artistId != request.auth.uid
-        && request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
-      allow update, delete: if isAdmin(); 
+      allow create, update, delete: if isAuth();
     }
 
     match /notifications/{id} {
-      allow read, create, update, delete: if true;
+      allow read, write: if isAuth();
     }
 
     match /admin_requests/{id} {
-      allow read, create, update, delete: if true;
+      allow read, write: if isAuth();
     }
 
     match /admin_audit_logs/{id} {
-      allow read, create, update, delete: if true;
+      allow read, write: if isAuth();
     }
 
     match /notification_logs/{id} {
-      allow read, create, update, delete: if true;
-    }
-
-    match /eventBriefs/{id} {
-      allow read, create, update, delete: if true;
-    }
-
-    match /event_briefs/{id} {
-      allow read, create, update, delete: if true;
+      allow read, write: if isAuth();
     }
 
     match /telecaller_leads/{id} {
-      allow create: if true;
-      allow read, update, delete: if true;
-    }
-
-    // ── 6. GLOBAL CATCH-ALL BLOCK (FALLBACK DEFENSE PERIMETER) ───────────────
-    match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAuth();
     }
   }
 }

@@ -349,6 +349,9 @@ export async function saveCustomerInquiryLead(inquiry: {
   eventType: string;
   category?: string;
   subCategory?: string;
+  selectedService?: string;
+  serviceCategory?: string;
+  serviceEvent?: string;
   eventDate: string;
   eventLocation: string;
   budget?: number;
@@ -359,14 +362,17 @@ export async function saveCustomerInquiryLead(inquiry: {
   const createdAtIso = new Date().toISOString();
   const leadId = `lead_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
+  const effectiveCategory = inquiry.serviceCategory || inquiry.category || inquiry.eventType || "General Event";
+  const effectiveSubCategory = inquiry.selectedService || inquiry.subCategory || (inquiry.artistName ? `Artist Booking (${inquiry.artistName})` : "General Inquiry");
+
   const newLead: TelecallerLead = {
     id: leadId,
     customerName: inquiry.customerName || "Customer",
     customerPhone: inquiry.customerPhone || "",
     customerEmail: inquiry.customerEmail || "",
-    eventType: inquiry.eventType || "General Event",
-    category: inquiry.category || inquiry.eventType || "General Event",
-    subCategory: inquiry.subCategory || (inquiry.artistName ? `Artist Booking (${inquiry.artistName})` : "General Inquiry"),
+    eventType: inquiry.serviceEvent || inquiry.eventType || "General Event",
+    category: effectiveCategory,
+    subCategory: effectiveSubCategory,
     eventDate: inquiry.eventDate || "",
     eventLocation: inquiry.eventLocation || "",
     budget: Number(inquiry.budget || 0),
@@ -378,8 +384,8 @@ export async function saveCustomerInquiryLead(inquiry: {
             artistId: inquiry.artistId || inquiry.artistName,
             artistName: inquiry.artistName,
             artistPhone: "",
-            category: inquiry.eventType || "",
-            subCategory: inquiry.subCategory || "",
+            category: effectiveCategory,
+            subCategory: effectiveSubCategory,
             callOutcome: "pending",
           },
         ]

@@ -23,19 +23,20 @@ import {
     BadgeCheck,
     Eye,
     Loader2,
+    IndianRupee,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const sidebarItems = [
     { label: "Dashboard", href: "/artist/dashboard", matches: ["/artist/dashboard", "/dashboard"], icon: LayoutDashboard },
-    { label: "My Bookings", href: "/artist/dashboard/bookings", matches: ["/artist/dashboard/bookings", "/dashboard/bookings"], icon: CalendarCheck },
+    { label: "My Profile", href: "/artist/dashboard/profile", matches: ["/artist/dashboard/profile", "/dashboard/profile"], icon: UserCircle },
+    { label: "Booking Requests", href: "/artist/dashboard/bookings", matches: ["/artist/dashboard/bookings", "/dashboard/bookings"], icon: CalendarCheck },
     { label: "Calendar", href: "/artist/dashboard/calendar", matches: ["/artist/dashboard/calendar", "/dashboard/calendar"], icon: CalendarDays },
+    { label: "Earnings", href: "/artist/dashboard/earnings", matches: ["/artist/dashboard/earnings", "/dashboard/earnings"], icon: IndianRupee },
+    { label: "Reviews", href: "/artist/dashboard/reviews", matches: ["/artist/dashboard/reviews", "/dashboard/reviews"], icon: Star },
     { label: "Upcoming Events", href: "/artist/dashboard/upcoming", matches: ["/artist/dashboard/upcoming", "/dashboard/upcoming"], icon: CalendarClock },
     { label: "Completed Events", href: "/artist/dashboard/completed", matches: ["/artist/dashboard/completed", "/dashboard/completed"], icon: CheckCircle2 },
-    { label: "Availability", href: "/artist/dashboard/availability", matches: ["/artist/dashboard/availability", "/dashboard/availability"], icon: CalendarOff },
     { label: "Notifications", href: "/artist/dashboard/notifications", matches: ["/artist/dashboard/notifications", "/dashboard/notifications"], icon: Bell },
-    { label: "Edit Profile", href: "/artist/dashboard/profile", matches: ["/artist/dashboard/profile", "/dashboard/profile"], icon: UserCircle },
-    { label: "Reviews", href: "/artist/dashboard/reviews", matches: ["/artist/dashboard/reviews", "/dashboard/reviews"], icon: Star },
     { label: "Settings", href: "/artist/dashboard/settings", matches: ["/artist/dashboard/settings", "/dashboard/settings"], icon: Settings },
 ];
 

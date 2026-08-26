@@ -20,6 +20,7 @@ import {
   Star,
   Clock,
   CalendarDays,
+  Sparkles,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -62,6 +63,14 @@ interface Props {
   startingPrice?: string;
   artistAvatar?: string;
   artistLocation?: string;
+  services?: Array<{
+    id?: string;
+    event?: string;
+    category?: string;
+    subcategory?: string;
+    artForm?: string;
+    soloPrice?: string | number;
+  }>;
 }
 
 function parsePriceToNumber(rawPrice: string | number | undefined): number {
@@ -81,6 +90,7 @@ export default function BookingModal({
   startingPrice = "25,000",
   artistAvatar = "https://images.unsplash.com/photo-1537633552985-df8429e8048b?q=80&w=800&auto=format&fit=crop",
   artistLocation = "Pune, Maharashtra",
+  services = [],
 }: Props) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -89,6 +99,7 @@ export default function BookingModal({
   const [step, setStep] = useState(1);
   const [bookingCode, setBookingCode] = useState("");
   const [sameAsMobile, setSameAsMobile] = useState(false);
+  const [selectedService, setSelectedService] = useState<string>("");
 
   // Form states
   const [formData, setFormData] = useState({
@@ -125,12 +136,23 @@ export default function BookingModal({
     }
   }, [preselectedDate]);
 
+  // Set default selected service
+  useEffect(() => {
+    if (services && services.length > 0) {
+      const first = services[0].subcategory || services[0].artForm || services[0].category || "";
+      setSelectedService((prev) => prev || first);
+    }
+  }, [open, services]);
+
   // Reset wizard on open/close
   useEffect(() => {
     if (open) {
       setStep(1);
       setBookingCode("");
       setSameAsMobile(false);
+      if (services && services.length > 0) {
+        setSelectedService(services[0].subcategory || services[0].artForm || services[0].category || "");
+      }
       setPaymentDetails({
         cardholderName: "",
         cardNumber: "",
@@ -153,7 +175,7 @@ export default function BookingModal({
         authorizedAmount: "" as any,
       });
     }
-  }, [open, preselectedDate]);
+  }, [open, preselectedDate, services]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -252,6 +274,10 @@ export default function BookingModal({
     setLoading(true);
     try {
       const uid = requireAuthUid(currentUser);
+      const matchedService = services?.find(
+        (s) => (s.subcategory || s.artForm || s.category) === selectedService
+      );
+      const effectiveService = selectedService || formData.eventType || "Performance";
 
       // 1. Create booking in Firestore with status PENDING_TELECALLER_VERIFICATION
       const booking = await createArtistBooking({
@@ -262,7 +288,7 @@ export default function BookingModal({
         clientPhone: formData.customerPhone,
         clientAddress: formData.customerAddress,
         venueLocation: formData.eventLocation,
-        performanceType: formData.eventType,
+        performanceType: effectiveService,
         additionalNotes: formData.message,
         customerEmail: formData.customerEmail,
         eventDate: formData.eventDate,
@@ -273,6 +299,9 @@ export default function BookingModal({
         status: "PENDING_TELECALLER_VERIFICATION",
         paymentGateway: "razorpay",
         paymentStatus: "deferred_payment",
+        selectedService: effectiveService,
+        serviceCategory: matchedService?.category,
+        serviceEvent: matchedService?.event,
       });
 
       // 2. Save inquiry to Firestore collection
@@ -282,6 +311,9 @@ export default function BookingModal({
         customerPhone: formData.customerPhone,
         clientWhatsapp: formData.clientWhatsapp,
         eventType: formData.eventType,
+        selectedService: effectiveService,
+        serviceCategory: matchedService?.category,
+        serviceEvent: matchedService?.event,
         eventDate: formData.eventDate,
         eventLocation: formData.eventLocation,
         message: formData.message,
@@ -306,6 +338,9 @@ export default function BookingModal({
         customerPhone: formData.customerPhone,
         customerEmail: formData.customerEmail || currentUser?.email || "",
         eventType: formData.eventType,
+        selectedService: effectiveService,
+        serviceCategory: matchedService?.category,
+        serviceEvent: matchedService?.event,
         eventDate: formData.eventDate,
         eventLocation: formData.eventLocation,
         budget: Number(formData.authorizedAmount || 15000),
@@ -378,6 +413,46 @@ export default function BookingModal({
               exit={{ opacity: 0, x: 20 }}
               className="space-y-4 mt-2"
             >
+              {/* Multi-Service Selection: "What would you like to book this artist for?" */}
+              {services && services.length > 1 && (
+                <div className="space-y-2 rounded-2xl border border-orange-200 bg-orange-50/70 p-3.5 shadow-sm">
+                  <Label className="text-xs font-black text-orange-950 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-orange-600" />
+                    What would you like to book this artist for? *
+                  </Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                    {services.map((srv, sIdx) => {
+                      const sName = srv.subcategory || srv.artForm || srv.category || `Service ${sIdx + 1}`;
+                      const isSelected = selectedService === sName;
+                      return (
+                        <button
+                          key={`${sName}-${sIdx}`}
+                          type="button"
+                          onClick={() => setSelectedService(sName)}
+                          className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
+                            isSelected
+                              ? "border-orange-500 bg-white text-orange-950 font-black shadow-sm ring-2 ring-orange-400/20"
+                              : "border-stone-200/80 bg-white/70 text-stone-700 font-semibold hover:border-orange-200 hover:bg-white"
+                          }`}
+                        >
+                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                            isSelected ? "border-orange-600 bg-orange-600" : "border-stone-300"
+                          }`}>
+                            {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold leading-tight truncate">{getArtLabel(t, sName)}</p>
+                            {srv.category && (
+                              <p className="text-[10px] text-stone-400 font-medium truncate">{getArtLabel(t, srv.category)}</p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Row 1: Full Name */}
               <div className="space-y-1">
                 <Label className="text-xs font-bold text-stone-700">Your Full Name *</Label>
@@ -596,31 +671,31 @@ export default function BookingModal({
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 flex items-start gap-3 text-xs text-stone-700 leading-relaxed">
                 <ShieldCheck className="h-6 w-6 shrink-0 text-emerald-600 mt-0.5" />
                 <div>
-                  <span className="font-extrabold text-emerald-950 block text-sm mb-0.5">Zero Upfront Payment</span>
-                  No immediate payment required! Our MyKalakar Executive team will contact both you and the artist to finalize the event timing, venue details, and exact pricing.
+                  <span className="font-extrabold text-emerald-950 block text-sm mb-0.5">{t("booking.zeroPaymentTitle") || "Zero Upfront Payment"}</span>
+                  {t("booking.zeroPaymentDesc") || "No immediate payment required! Our MyKalakar Executive team will contact both you and the artist to finalize the event timing, venue details, and exact pricing."}
                 </div>
               </div>
 
               {/* Event Summary Details Card */}
               <div className="border border-stone-200 rounded-2xl bg-stone-50/80 p-4 space-y-2 text-xs font-semibold text-stone-700">
                 <div className="flex justify-between border-b border-stone-200/60 pb-2">
-                  <span>Client Name:</span>
+                  <span>{t("booking.clientName") || "Client Name:"}</span>
                   <strong className="text-stone-900">{formData.customerName}</strong>
                 </div>
                 <div className="flex justify-between border-b border-stone-200/60 pb-2">
-                  <span>Contact Number:</span>
+                  <span>{t("booking.contactNumber") || "Contact Number:"}</span>
                   <strong className="text-stone-900">{formData.customerPhone}</strong>
                 </div>
                 <div className="flex justify-between border-b border-stone-200/60 pb-2">
-                  <span>Event & Performance:</span>
-                  <strong className="text-stone-900">{formData.eventType}</strong>
+                  <span>{t("booking.eventPerformance") || "Event & Performance:"}</span>
+                  <strong className="text-stone-900">{getArtLabel(t, formData.eventType)}</strong>
                 </div>
                 <div className="flex justify-between border-b border-stone-200/60 pb-2">
-                  <span>Event Location:</span>
+                  <span>{t("booking.eventLocation") || "Event Location:"}</span>
                   <strong className="text-stone-900">{formData.eventLocation}</strong>
                 </div>
                 <div className="flex justify-between pt-1 text-sm font-extrabold">
-                  <span className="text-stone-800">Estimated Budget Offer:</span>
+                  <span className="text-stone-800">{t("booking.estimatedBudget") || "Estimated Budget Offer:"}</span>
                   <span className="text-orange-600">₹{Number(formData.authorizedAmount || 15000).toLocaleString("en-IN")}</span>
                 </div>
               </div>
@@ -632,7 +707,7 @@ export default function BookingModal({
                   className="w-1/3 py-5 rounded-xl font-bold text-xs"
                   onClick={() => setStep(1)}
                 >
-                  <ArrowLeft className="mr-1.5 h-4 w-4" /> Edit Details
+                  <ArrowLeft className="mr-1.5 h-4 w-4" /> {t("booking.editDetails") || "Edit Details"}
                 </Button>
                 <Button
                   onClick={handleSubmitBookingRequest}
@@ -642,11 +717,11 @@ export default function BookingModal({
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sending Request...
+                      {t("booking.sending") || "Sending Request..."}
                     </>
                   ) : (
                     <>
-                      Send Booking Request <Send className="ml-1.5 h-4 w-4" />
+                      {t("booking.sendRequest") || "Send Booking Request"} <Send className="ml-1.5 h-4 w-4" />
                     </>
                   )}
                 </Button>
@@ -669,13 +744,13 @@ export default function BookingModal({
 
               <div>
                 <h2 className="text-2xl font-black text-stone-900 tracking-tight">
-                  Booking Request Sent Successfully!
+                  {t("booking.requestSentSuccess") || "Booking Request Sent Successfully!"}
                 </h2>
                 <p className="text-xs sm:text-sm font-semibold text-stone-500 mt-1.5 max-w-md mx-auto leading-relaxed">
-                  Your request is being reviewed by our MyKalakar Executive Team. We will connect with you and {artistName} shortly.
+                  {t("booking.requestSentDesc", { name: artistName }) || `Your request is being reviewed by our MyKalakar Executive Team. We will connect with you and ${artistName} shortly.`}
                 </p>
                 <div className="inline-flex items-center rounded-full bg-stone-100 px-4 py-1.5 text-xs font-bold text-stone-700 mt-3 border border-stone-200">
-                  Booking Code: <span className="font-extrabold text-stone-900 ml-1">{bookingCode || "MK98765432"}</span>
+                  {t("booking.bookingCode") || "Booking Code:"} <span className="font-extrabold text-stone-900 ml-1">{bookingCode || "MK98765432"}</span>
                 </div>
               </div>
 
@@ -687,14 +762,14 @@ export default function BookingModal({
                   }}
                   className="h-10 rounded-full bg-stone-950 hover:bg-orange-600 px-6 text-xs font-extrabold text-white transition-colors"
                 >
-                  Go to Dashboard
+                  {t("booking.goToDashboard") || "Go to Dashboard"}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setStep(1)}
                   className="h-10 rounded-full border-stone-200 px-6 text-xs font-extrabold text-stone-700"
                 >
-                  Book Another Service
+                  {t("booking.bookAnother") || "Book Another Service"}
                 </Button>
               </div>
             </motion.div>

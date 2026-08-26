@@ -2,10 +2,31 @@ export const FIREBASE_READ_TIMEOUT_MS = 30000;
 export const FIREBASE_WRITE_TIMEOUT_MS = 30000;
 export const FIREBASE_UPLOAD_TIMEOUT_MS = 45000;
 
-export const sanitizePayload = (payload: any) =>
-  Object.fromEntries(
-    Object.entries(payload).filter(([_, v]) => v !== undefined)
-  );
+export const sanitizePayload = (payload: any): any => {
+  if (payload === null || payload === undefined) return payload;
+  if (Array.isArray(payload)) {
+    return payload.map(sanitizePayload);
+  }
+  if (typeof payload === "object" && !(payload instanceof Date)) {
+    // Preserve Firestore field values like serverTimestamp() or doc references
+    if (payload._methodName || (payload.constructor && payload.constructor.name !== "Object")) {
+      return payload;
+    }
+    const clean: Record<string, any> = {};
+    for (const [k, v] of Object.entries(payload)) {
+      if (v === undefined) continue;
+      // Strip oversized Base64 DataURLs or giant strings (> 20KB) from Firestore payloads to strictly guarantee document size < 1MB
+      if (typeof v === "string" && (v.startsWith("data:") || v.length > 20000)) {
+        console.warn(`[sanitizePayload] Stripped oversized base64/string from "${k}" (${(v.length / 1024).toFixed(1)} KB)`);
+        clean[k] = "";
+      } else {
+        clean[k] = sanitizePayload(v);
+      }
+    }
+    return clean;
+  }
+  return payload;
+};
 
 export const FIREBASE_ERROR_MESSAGES: Record<string, string> = {
   "auth/email-already-in-use": "This username is already registered.",

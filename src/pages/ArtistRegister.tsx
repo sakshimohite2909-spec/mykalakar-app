@@ -45,12 +45,24 @@ import { getDownloadURL, ref, uploadBytes, type UploadResult } from "firebase/st
 import { auth, db, storage } from "@/lib/firebase";
 import { compressImageUpload } from "@/utils/imageCompression";
 import { FIREBASE_UPLOAD_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
-import { fileToDataUrl } from "@/lib/uploadService";
+import { imageRegistry } from "@/services/ImageRegistryService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getExternalUrl, getYoutubeThumbnailUrl } from "@/lib/youtube";
 import { getIndiaDistrictsByStateName, getIndiaStates } from "@/lib/indiaLocations";
-import { ARTIST_TYPES, CATEGORY_STRUCTURE, MAIN_CATEGORIES, getSubcategoriesForMainCategory, normalizeArtistType, getEventTypes, getCategoriesForEvent, getSubcategoriesForCategory } from "@/constants/artistSystem";
+import {
+  ARTIST_TYPES,
+  CATEGORY_STRUCTURE,
+  MAIN_CATEGORIES,
+  getSubcategoriesForMainCategory,
+  normalizeArtistType,
+  getEventTypes,
+  getCategoriesForEvent,
+  getSubcategoriesForCategory,
+  ALL_EVENT_TYPES,
+  getArtOptionDetails,
+  type MasterArtOption,
+} from "@/constants/artistSystem";
 import {
   PHONE_MAX_LENGTH,
   PHONE_PLACEHOLDER,
@@ -67,6 +79,11 @@ import {
   SearchableLanguageSelect,
   SearchableSingleSelect,
 } from "@/components/artist/ArtistProfileInputs";
+import { SearchableArtSelector } from "@/components/artist/SearchableArtSelector";
+import { LiveFaceCapture } from "@/components/artist/LiveFaceCapture";
+import { ArtistReelsUploader, type LocalReelItem } from "@/components/artist/ArtistReelsUploader";
+import { uploadVideoFile } from "@/lib/uploadService";
+import { Check } from "lucide-react";
 
 type AuthRole = "artist" | "user";
 type PortfolioPlatform = "youtube";
@@ -75,6 +92,7 @@ type ExtraArtMediaField = "profile" | "performance";
 type ExtraArtEntry = {
   id: string;
   eventType: string;
+  eventTypes?: string[];
   mainCategory: string;
   category: string;
   soloPrice: string;
@@ -269,6 +287,74 @@ function createYoutubeLink(): PortfolioLink {
   return { platform: "youtube", url: "" };
 }
 
+function createExtraArtEntry(): ExtraArtEntry {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    eventType: "Wedding",
+    eventTypes: ["Wedding", "Birthday", "Cultural Event"],
+    mainCategory: "",
+    category: "",
+    soloPrice: "",
+    duoPrice: "",
+    teamPrice: "",
+    showPricingOnProfile: false,
+    profileFile: null,
+    profilePreview: "",
+    performanceFile: null,
+    performancePreview: "",
+    youtubeLinks: [createYoutubeLink()],
+  };
+}
+
+function EventTypeMultiSelect({
+  selectedEvents,
+  onChange,
+}: {
+  selectedEvents: string[];
+  onChange: (events: string[]) => void;
+}) {
+  const toggleEvent = (event: string) => {
+    if (selectedEvents.includes(event)) {
+      if (selectedEvents.length === 1) return;
+      onChange(selectedEvents.filter((e) => e !== event));
+    } else {
+      onChange([...selectedEvents, event]);
+    }
+  };
+
+  return (
+    <div className="space-y-2 mt-1">
+      <label className="block text-xs font-black uppercase tracking-wider text-slate-600">
+        Where do you perform this? (Select Event Types)
+      </label>
+      <div className="flex flex-wrap gap-2">
+        {ALL_EVENT_TYPES.map((evt) => {
+          const isSelected = selectedEvents.includes(evt);
+          return (
+            <button
+              key={evt}
+              type="button"
+              onClick={() => toggleEvent(evt)}
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-extrabold transition-all select-none ${
+                isSelected
+                  ? "border-orange-500 bg-orange-500 text-white shadow-sm shadow-orange-200"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-orange-300 hover:bg-orange-50/50"
+              }`}
+            >
+              <span className={`flex h-3.5 w-3.5 items-center justify-center rounded-sm border ${
+                isSelected ? "border-white bg-white text-orange-600" : "border-slate-300 bg-white"
+              }`}>
+                {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+              </span>
+              <span>{evt}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function getSubmittedYoutubeLinks(links: PortfolioLink[]) {
   return links.map((link) => link.url.trim()).filter(Boolean);
 }
@@ -355,6 +441,7 @@ async function uploadArtistRegistrationImage(uid: string, file: File, folder: st
   } catch (err: any) {
     const errCode = String(err?.code || "");
     const errMsg = String(err?.message || "");
+    console.warn(`[Firebase Storage] Upload issue for ${folder}:`, errCode || errMsg);
     if (
       errCode === "storage/quota-exceeded" ||
       errCode === "storage/unauthorized" ||
@@ -363,9 +450,13 @@ async function uploadArtistRegistrationImage(uid: string, file: File, folder: st
       errCode.includes("quota") ||
       errCode.includes("unauthorized")
     ) {
-      console.warn(`[Firebase Storage Warning] Storage rules or quota blocked upload for ${folder}, using data URL fallback:`, errCode);
-      const dataUrl = await fileToDataUrl(file);
-      return { downloadUrl: dataUrl, storagePath: "" };
+      console.warn(`[Firebase Storage Warning] Storage rules/quota issue for ${folder}, using safe CDN fallback`);
+      const fallbackUrl = imageRegistry.getUniqueImage({
+        category: folder.includes("profile") ? "Default" : "Cover",
+        type: folder.includes("profile") ? "artist" : "cover",
+        key: `${uid}-${folder}`,
+      });
+      return { downloadUrl: fallbackUrl, storagePath: "" };
     }
     throw err;
   }
@@ -568,9 +659,23 @@ function ArtCategoryCard({
   onRemove?: () => void;
 }) {
   const { t } = useI18n();
+  const artDetails = useMemo(() => getArtOptionDetails(art.category), [art.category]);
+
+  const handleArtSelect = (opt: MasterArtOption) => {
+    onUpdate({
+      ...art,
+      category: opt.name,
+      mainCategory: opt.primaryCategory,
+      eventType: opt.defaultEventTypes[0] || "Wedding",
+      eventTypes: opt.defaultEventTypes,
+    });
+  };
 
   const update = (field: "eventType" | "mainCategory" | "category" | "soloPrice" | "duoPrice" | "teamPrice", value: string) => {
     onUpdate({ ...art, [field]: value });
+  };
+  const updateEventTypes = (eventTypes: string[]) => {
+    onUpdate({ ...art, eventTypes, eventType: eventTypes[0] || art.eventType || "Wedding" });
   };
   const updateShowPricing = (showPricingOnProfile: boolean) => {
     onUpdate({ ...art, showPricingOnProfile });
@@ -590,7 +695,7 @@ function ArtCategoryCard({
   };
 
   return (
-    <div className="form-subcard rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
+    <div id={`service-card-${art.id}`} className="form-subcard rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-sm font-black text-slate-500">Service {index + 1}</p>
         {removable ? (
@@ -605,41 +710,56 @@ function ArtCategoryCard({
         ) : null}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Event */}
-        <SearchableDropdown
-          label="Event"
-          value={art.eventType || ""}
-          options={getEventTypes()}
-          placeholder="Select Event"
-          onChange={(value) => {
-            onUpdate({ ...art, eventType: value, mainCategory: "", category: "" });
-          }}
-        />
-
-        {/* Category */}
-        <SearchableDropdown
-          label="Category"
-          value={art.mainCategory || ""}
-          options={art.eventType ? getCategoriesForEvent(art.eventType).map((c) => c.name) : []}
-          placeholder={art.eventType ? "Select Category" : "Select Event first"}
-          disabled={!art.eventType}
-          onChange={(value) => {
-            onUpdate({ ...art, mainCategory: value, category: "" });
-          }}
-        />
-
-        {/* Subcategory */}
-        <SearchableDropdown
-          label="Subcategory"
-          value={art.category || ""}
-          options={art.eventType && art.mainCategory ? getSubcategoriesForCategory(art.eventType, art.mainCategory) : []}
-          placeholder={art.mainCategory ? "Select Subcategory" : "Select Category first"}
+      <div className="space-y-4">
+        {/* 1. What do you offer? */}
+        <SearchableArtSelector
+          label="What do you offer?"
+          value={art.category}
+          placeholder="Search or select your art / service (e.g. Singer, Kirtankar, DJ)..."
           error={error}
-          disabled={!art.mainCategory}
-          allowCustom
-          onChange={(value) => update("category", value)}
+          onSelect={handleArtSelect}
         />
+
+        {/* 2. Auto-identified Category & Subcategory */}
+        {art.category && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
+                Category
+              </label>
+              {artDetails.allCategories.length > 1 ? (
+                <SearchableDropdown
+                  label=""
+                  value={art.mainCategory || artDetails.primaryCategory}
+                  options={artDetails.allCategories}
+                  placeholder="Select Category"
+                  onChange={(val) => update("mainCategory", val)}
+                />
+              ) : (
+                <div className="flex h-11 items-center rounded-xl border border-slate-200 bg-white/90 px-3.5 text-xs font-bold text-slate-800 shadow-sm">
+                  {art.mainCategory || artDetails.primaryCategory}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
+                Subcategory / Art Form
+              </label>
+              <div className="flex h-11 items-center rounded-xl border border-slate-200 bg-white/90 px-3.5 text-xs font-bold text-slate-800 shadow-sm">
+                {art.category}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 3. Where do you perform this? */}
+        {art.category && (
+          <EventTypeMultiSelect
+            selectedEvents={art.eventTypes && art.eventTypes.length > 0 ? art.eventTypes : [art.eventType || "Wedding"]}
+            onChange={updateEventTypes}
+          />
+        )}
       </div>
 
       <div className="my-5 h-px bg-white/80" />
@@ -989,24 +1109,6 @@ function useRoleFromQuery(defaultRole: AuthRole = "artist") {
   return [activeRole, setActiveRole] as const;
 }
 
-function createExtraArtEntry(): ExtraArtEntry {
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    eventType: "",
-    mainCategory: "",
-    category: "",
-    soloPrice: "",
-    duoPrice: "",
-    teamPrice: "",
-    showPricingOnProfile: false,
-    profileFile: null,
-    profilePreview: "",
-    performanceFile: null,
-    performancePreview: "",
-    youtubeLinks: [createYoutubeLink()],
-  };
-}
-
 export default function ArtistRegister() {
   const { t } = useI18n(); // ADDED FOR i18n
   const [activeRole, setActiveRole] = useRoleFromQuery("artist");
@@ -1018,7 +1120,10 @@ export default function ArtistRegister() {
   const [coverPreview, setCoverPreview] = useState("");
   const [aadharFile, setAadharFile] = useState<File | null>(null);
   const [aadharPreview, setAadharPreview] = useState("");
+  const [liveFaceFile, setLiveFaceFile] = useState<File | null>(null);
+  const [liveFacePreview, setLiveFacePreview] = useState("");
   const [galleryFiles, setGalleryFiles] = useState<Array<{ file: File; preview: string }>>([]);
+  const [reelFiles, setReelFiles] = useState<LocalReelItem[]>([]);
   const [extraArtEntries, setExtraArtEntries] = useState<ExtraArtEntry[]>([]);
   const [primaryArtYoutubeLinks, setPrimaryArtYoutubeLinks] = useState<PortfolioLink[]>([createYoutubeLink()]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
@@ -1182,6 +1287,7 @@ export default function ArtistRegister() {
   const hasAssistant = artistForm.watch("hasAssistant");
   const stateOptions = useMemo(() => getIndiaStates().map((state) => state.name), []);
   const [districts, setDistricts] = useState<string[]>([]);
+  const [primaryEventTypes, setPrimaryEventTypes] = useState<string[]>(["Wedding", "Birthday", "Cultural Event"]);
 
   useEffect(() => {
     let active = true;
@@ -1257,6 +1363,30 @@ export default function ArtistRegister() {
     });
   };
 
+  const handleAddReel = (file: File, title = "Performance Reel") => {
+    const newReel: LocalReelItem = {
+      id: `local_reel_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      title,
+    };
+    setReelFiles((prev) => [...prev, newReel]);
+  };
+
+  const handleRemoveReel = (id: string) => {
+    setReelFiles((prev) => {
+      const target = prev.find((r) => r.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((r) => r.id !== id);
+    });
+  };
+
+  const handleUpdateReelTitle = (id: string, title: string) => {
+    setReelFiles((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, title } : r))
+    );
+  };
+
   const toggleLanguage = (language: string) => {
     setSelectedLanguages((current) =>
       current.includes(language) ? current.filter((item) => item !== language) : [...current, language]
@@ -1264,7 +1394,18 @@ export default function ArtistRegister() {
   };
 
   const addArtEntry = () => {
-    setExtraArtEntries((current) => [...current, createExtraArtEntry()]);
+    const newEntry = createExtraArtEntry();
+    setExtraArtEntries((current) => [...current, newEntry]);
+    toast({
+      title: "Service Added",
+      description: `New service card added. Please configure your service details.`,
+    });
+    setTimeout(() => {
+      const el = document.getElementById(`service-card-${newEntry.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
   };
 
   const updateExtraArtEntry = (id: string, nextEntry: ExtraArtEntry) => {
@@ -1324,9 +1465,10 @@ export default function ArtistRegister() {
     }
 
     const profileUpload = await uploadArtistRegistrationImage(uid, profileFile, "profile");
-    const [coverUpload, aadharUpload, galleryUploads, extraArtUploads] = await Promise.all([
+    const [coverUpload, aadharUpload, liveFaceUpload, galleryUploads, extraArtUploads, uploadedReels] = await Promise.all([
       uploadOptionalArtistImage(uid, coverFile, "cover"),
       uploadOptionalArtistImage(uid, aadharFile, `private-documents/${uid}/identity`),
+      uploadOptionalArtistImage(uid, liveFaceFile, `private-documents/${uid}/live_face`),
       Promise.all(
         galleryFiles.map((item, index) =>
           uploadArtistRegistrationImage(uid, item.file, `gallery/${index + 1}`)
@@ -1348,6 +1490,28 @@ export default function ArtistRegister() {
           };
         })
       ),
+      Promise.all(
+        reelFiles.map(async (reel, index) => {
+          try {
+            const cleanName = reel.file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_.-]/g, "");
+            const url = await uploadVideoFile(
+              reel.file,
+              `reels/${uid}/${Date.now()}_${index + 1}_${cleanName}`
+            );
+            if (!url || url.startsWith("data:")) return null;
+            return {
+              id: `reel_${Date.now()}_${index + 1}`,
+              url,
+              videoUrl: url,
+              title: reel.title || "Performance Reel",
+              type: "uploaded_video",
+            };
+          } catch (vErr) {
+            console.warn("Reel video upload error:", vErr);
+            return null;
+          }
+        })
+      ),
     ]);
 
     return {
@@ -1357,8 +1521,11 @@ export default function ArtistRegister() {
       coverStoragePath: coverUpload.storagePath,
       aadharPhoto: aadharUpload.downloadUrl,
       aadharStoragePath: aadharUpload.storagePath,
+      liveFacePhoto: liveFaceUpload.downloadUrl,
+      liveFaceStoragePath: liveFaceUpload.storagePath,
       galleryPhotos: galleryUploads.map((item) => item.downloadUrl),
       galleryStoragePaths: galleryUploads.map((item) => item.storagePath),
+      reels: (uploadedReels || []).filter(Boolean),
       extraArtUploads,
     };
   };
@@ -1406,8 +1573,30 @@ export default function ArtistRegister() {
           entry.performanceFile
       );
     if (preparedExtraArts.some((entry) => !entry.category || !entry.mainCategory)) {
-      toast({ variant: "destructive", title: t("register.toast.categoryMissingTitle"), description: t("register.toast.categoryMissingDesc") });
+      toast({ variant: "destructive", title: t("register.toast.categoryMissingTitle") || "Category Missing", description: t("register.toast.categoryMissingDesc") || "Please select both a category and subcategory for all services." });
       return;
+    }
+
+    // Validate that duplicate category + subcategory combinations are not selected
+    const allServicesList = [
+      { category: values.mainCategory.trim().toLowerCase(), subcategory: values.artCategory.trim().toLowerCase() },
+      ...preparedExtraArts.map((e) => ({
+        category: e.mainCategory.trim().toLowerCase(),
+        subcategory: e.category.trim().toLowerCase(),
+      })),
+    ];
+    const serviceSet = new Set<string>();
+    for (const item of allServicesList) {
+      const key = `${item.category}:::${item.subcategory}`;
+      if (serviceSet.has(key)) {
+        toast({
+          variant: "destructive",
+          title: "Duplicate Service Detected",
+          description: "You have added the same Category and Subcategory combination more than once. Please choose distinct services or remove duplicates.",
+        });
+        return;
+      }
+      serviceSet.add(key);
     }
 
     const profileValidation = validateImageFile(profileFile, true);
@@ -1439,8 +1628,11 @@ export default function ArtistRegister() {
         coverStoragePath,
         aadharPhoto,
         aadharStoragePath,
+        liveFacePhoto,
+        liveFaceStoragePath,
         galleryPhotos,
         galleryStoragePaths,
+        reels,
         extraArtUploads,
       } = await uploadRegistrationMedia(uid, preparedExtraArts);
       const extraArtUploadMap = new Map<
@@ -1555,6 +1747,8 @@ export default function ArtistRegister() {
         aadharNumber: values.aadharNumber || "",
         aadharPhoto: aadharPhoto || "",
         aadharStoragePath: aadharStoragePath || "",
+        liveFacePhoto: liveFacePhoto || "",
+        liveFaceStoragePath: liveFaceStoragePath || "",
         bankName: effectiveBankName || "",
         ifscCode: values.ifscCode || "",
         accountNumber: values.accountNumber || "",
@@ -1569,7 +1763,8 @@ export default function ArtistRegister() {
 
       const servicesList = [
         {
-          event: values.eventType || "Varkari Sampraday",
+          event: values.eventType || primaryEventTypes[0] || "Wedding",
+          eventTypes: primaryEventTypes,
           category: values.mainCategory || "",
           subcategory: values.artCategory || "",
           artForm: values.artCategory || "",
@@ -1577,59 +1772,48 @@ export default function ArtistRegister() {
           duoPrice: artEntries[0]?.duoPerformancePrice || 0,
           teamPrice: artEntries[0]?.teamPerformancePrice || 0,
           showPricingOnProfile: artEntries[0]?.showPricingOnProfile || false,
+          showPriceOnProfile: artEntries[0]?.showPricingOnProfile || false,
           youtubeLinks: primaryCategoryYoutubeLinks,
         },
         ...preparedExtraArts.map((entry) => ({
-          event: entry.eventType || values.eventType || "Varkari Sampraday",
+          event: entry.eventType || entry.eventTypes?.[0] || values.eventType || "Wedding",
+          eventTypes: entry.eventTypes || [entry.eventType || "Wedding"],
           category: entry.mainCategory || "",
           subcategory: entry.category || "",
           artForm: entry.category || "",
-          soloPrice: Number(entry.soloPrice) || 0,
-          duoPrice: Number(entry.duoPrice) || 0,
-          teamPrice: Number(entry.teamPrice) || 0,
-          showPricingOnProfile: entry.showPricingOnProfile || false,
+          soloPrice: entry.soloPrice ? Number(entry.soloPrice) : 0,
+          duoPrice: entry.duoPrice ? Number(entry.duoPrice) : 0,
+          teamPrice: entry.teamPrice ? Number(entry.teamPrice) : 0,
+          showPricingOnProfile: Boolean(entry.showPricingOnProfile),
+          showPriceOnProfile: Boolean(entry.showPricingOnProfile),
+          profilePhoto: extraArtUploadMap.get(entry.id)?.profilePhoto || "",
+          performancePhoto: extraArtUploadMap.get(entry.id)?.performancePhoto || "",
           youtubeLinks: entry.youtubeLinks,
         })),
       ];
 
       const payload = sanitizePayload({
         uid,
-        role: "artist",
+        status: "pending",
+        fullName: values.fullName,
+        name: values.fullName,
         username: normalizedUsername,
         email,
-        privateEmail: email,
-        status: "pending",
-        rejectionReason: "",
-        name: values.fullName,
-        artistName: values.fullName,
-        brandName: values.brandName || "",
-        nickName: values.brandName || "",
+        phone: values.mobileNumber,
         mobileNumber: values.mobileNumber,
-        phoneNumber: values.mobileNumber,
         emergencyNumber: values.emergencyNumber,
         phoneOptional: values.phoneOptional || "",
-        dob: values.dob,
-        dateOfBirth: values.dob,
-        age: Number.parseInt(getAgeLabel(values.dob), 10) || 0,
-        ageDisplay: showAgeOnProfile,
+        dob: values.dob || "",
         showAgeOnProfile,
-        gender: values.gender,
+        gender: values.gender || "",
         travelWillingness: values.travelWillingness,
-        languageSpoken: selectedLanguages,
-        languages: selectedLanguages,
-        languagesSpoken: selectedLanguages,
-        eventType: values.eventType || "Varkari Sampraday",
+        primaryEventType: values.eventType || primaryEventTypes[0] || "Wedding",
+        primaryCategory: values.mainCategory || "",
+        primarySubcategory: values.artCategory || "",
+        eventType: values.eventType || primaryEventTypes[0] || "Wedding",
+        mainCategory: values.mainCategory || "",
         category: values.mainCategory || "",
         subcategory: values.artCategory || "",
-        eventTypeId: (values.eventType || "Varkari Sampraday").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        categoryId: (values.mainCategory || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        subcategoryId: (values.artCategory || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        eventTypeName: values.eventType || "Varkari Sampraday",
-        categoryName: values.mainCategory || "",
-        subcategoryName: values.artCategory || "",
-        mainCategory: values.mainCategory || "",
-        artForm: values.artCategory || "",
-        types: [],
         categories: categoryNames,
         categoriesArray: artEntries,
         artsList: artEntries,
@@ -1656,15 +1840,23 @@ export default function ArtistRegister() {
           coverPhoto,
           coverImageUrl: coverPhoto,
           coverStoragePath,
+          aadharPhoto,
+          aadharStoragePath,
+          liveFacePhoto,
+          liveFaceStoragePath,
           galleryPhotos,
           galleryStoragePaths,
+          reels,
           categoryMedia,
         },
         profilePhoto,
         profileImageUrl: profilePhoto,
         coverPhoto,
         coverImageUrl: coverPhoto,
+        aadharPhoto,
+        liveFacePhoto,
         galleryPhotos,
+        reels,
         socialLinks,
         youtubeLinks,
         portfolioUrl: socialLinks[0]?.url || values.portfolioUrl || "",
@@ -2042,87 +2234,79 @@ export default function ArtistRegister() {
                   <button
                     type="button"
                     onClick={addArtEntry}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 px-5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-orange-200"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 px-5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-orange-200 transition hover:opacity-95 active:scale-95 cursor-pointer"
                   >
                     <Plus className="h-4 w-4" />
-                    + Add Another Service
+                    Add Another Service
                   </button>
                 </div>
 
                 <div className="form-subcard rounded-2xl border border-sky-100 bg-sky-100/70 p-5 shadow-inner">
                   <p className="mb-4 text-sm font-black text-slate-500">Service 1</p>
                   
-                  <div className="grid gap-4 md:grid-cols-3">
-                    {/* Event Type */}
-                    <Controller
-                      name="eventType"
-                      control={artistForm.control}
-                      render={({ field }) => (
-                        <SearchableDropdown
-                          label="Event Type"
-                          value={field.value}
-                          options={getEventTypes()}
-                          placeholder="Select Event Type"
-                          error={artistForm.formState.errors.eventType?.message}
-                          onChange={(value) => {
-                            field.onChange(value);
-                            artistForm.setValue("mainCategory", "");
-                            artistForm.setValue("artCategory", "");
-                          }}
-                        />
-                      )}
-                    />
-
-                    {/* Category */}
-                    <Controller
-                      name="mainCategory"
-                      control={artistForm.control}
-                      render={({ field }) => {
-                        const evtType = artistForm.watch("eventType");
-                        const categoryOptions = evtType
-                          ? getCategoriesForEvent(evtType).map((c) => c.name)
-                          : [];
-                        return (
-                          <SearchableDropdown
-                            label="Category"
-                            value={field.value}
-                            options={categoryOptions}
-                            placeholder={evtType ? "Select Category" : "Select Event Type first"}
-                            error={artistForm.formState.errors.mainCategory?.message}
-                            disabled={!evtType}
-                            onChange={(value) => {
-                              field.onChange(value);
-                              artistForm.setValue("artCategory", "");
-                            }}
-                          />
-                        );
+                  <div className="space-y-4">
+                    {/* 1. What do you offer? */}
+                    <SearchableArtSelector
+                      label="What do you offer?"
+                      value={artistForm.watch("artCategory")}
+                      placeholder="Search or select your art / service (e.g. Singer, Kirtankar, DJ)..."
+                      error={artistForm.formState.errors.artCategory?.message}
+                      onSelect={(opt) => {
+                        artistForm.setValue("artCategory", opt.name, { shouldValidate: true });
+                        artistForm.setValue("mainCategory", opt.primaryCategory, { shouldValidate: true });
+                        artistForm.setValue("eventType", opt.defaultEventTypes[0] || "Wedding", { shouldValidate: true });
+                        setPrimaryEventTypes(opt.defaultEventTypes);
                       }}
                     />
 
-                    {/* Subcategory / Art Form */}
-                    <Controller
-                      name="artCategory"
-                      control={artistForm.control}
-                      render={({ field }) => {
-                        const evtType = artistForm.watch("eventType");
-                        const mainCat = artistForm.watch("mainCategory");
-                        const subcategoryOptions = evtType && mainCat
-                          ? getSubcategoriesForCategory(evtType, mainCat)
-                          : [];
-                        return (
-                          <SearchableDropdown
-                            label="Subcategory / Art Form"
-                            value={field.value}
-                            options={subcategoryOptions}
-                            placeholder={mainCat ? "Select Subcategory" : "Select Category first"}
-                            error={artistForm.formState.errors.artCategory?.message}
-                            disabled={!mainCat}
-                            allowCustom
-                            onChange={field.onChange}
-                          />
-                        );
-                      }}
-                    />
+                    {/* 2. Auto-identified Category & Subcategory */}
+                    {artistForm.watch("artCategory") && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
+                            Category
+                          </label>
+                          {(() => {
+                            const details = getArtOptionDetails(artistForm.watch("artCategory"));
+                            return details.allCategories.length > 1 ? (
+                              <SearchableDropdown
+                                label=""
+                                value={artistForm.watch("mainCategory") || details.primaryCategory}
+                                options={details.allCategories}
+                                placeholder="Select Category"
+                                onChange={(val) => artistForm.setValue("mainCategory", val, { shouldValidate: true })}
+                              />
+                            ) : (
+                              <div className="flex h-11 items-center rounded-xl border border-slate-200 bg-white/90 px-3.5 text-xs font-bold text-slate-800 shadow-sm">
+                                {artistForm.watch("mainCategory") || details.primaryCategory}
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
+                            Subcategory / Art Form
+                          </label>
+                          <div className="flex h-11 items-center rounded-xl border border-slate-200 bg-white/90 px-3.5 text-xs font-bold text-slate-800 shadow-sm">
+                            {artistForm.watch("artCategory")}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. Where do you perform this? */}
+                    {artistForm.watch("artCategory") && (
+                      <EventTypeMultiSelect
+                        selectedEvents={primaryEventTypes}
+                        onChange={(events) => {
+                          setPrimaryEventTypes(events);
+                          if (events.length > 0) {
+                            artistForm.setValue("eventType", events[0]);
+                          }
+                        }}
+                      />
+                    )}
                   </div>
 
                   <div className="my-5 h-px bg-white/80" />
@@ -2197,6 +2381,17 @@ export default function ArtistRegister() {
                     <p className="mt-2 text-xs font-semibold text-slate-500">{t("register.desc.performancePhotosHelper")}</p>
                   </div>
 
+                  {/* Performance Reels & Video Highlights */}
+                  <div className="mt-5">
+                    <ArtistReelsUploader
+                      reels={reelFiles}
+                      onAddReel={handleAddReel}
+                      onRemoveReel={handleRemoveReel}
+                      onUpdateTitle={handleUpdateReelTitle}
+                      maxReels={4}
+                    />
+                  </div>
+
                   <div className="mt-5 space-y-4">
                     <SectionHeading icon={Youtube} title={t("register.section.portfolio")} />
                     <PortfolioLinksEditor
@@ -2229,6 +2424,18 @@ export default function ArtistRegister() {
                     </motion.div>
                   ))}
                 </AnimatePresence>
+
+                {/* Secondary Add Service Button */}
+                <div className="flex justify-center pt-1 pb-3">
+                  <button
+                    type="button"
+                    onClick={addArtEntry}
+                    className="inline-flex h-12 w-full max-w-md items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-orange-400/80 bg-orange-50/80 px-6 text-xs font-black uppercase tracking-wider text-orange-700 transition hover:bg-orange-100 hover:border-orange-500 active:scale-95 shadow-sm cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4 text-orange-600" />
+                    + Add Another Service
+                  </button>
+                </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <Controller
@@ -2288,6 +2495,18 @@ export default function ArtistRegister() {
                 </div>
 
                 <SectionHeading icon={CreditCard} title={t("register.section.identity")} />
+                {/* Live Face Photo / Selfie KYC Capture */}
+                <LiveFaceCapture
+                  file={liveFaceFile}
+                  preview={liveFacePreview}
+                  onChange={(file, previewUrl) => {
+                    setLiveFaceFile(file);
+                    setLiveFacePreview(previewUrl);
+                  }}
+                  label="Live Face Photo (Selfie Verification / सेल्फी व्हेरिफिकेशन)"
+                  description="Live camera capture to verify artist identity against Aadhaar card for instant admin approval."
+                />
+
                 <FileDrop
                   label={t("register.label.aadharPhoto")}
                   description={t("register.desc.aadharPhoto")}

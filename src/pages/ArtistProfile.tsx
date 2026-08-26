@@ -43,6 +43,8 @@ import { SmartImage } from "@/components/SmartImage";
 import { getArtistCategory, getArtistSubCategory, getParentCategoryForSubCategory } from "@/services/filterEngine";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
+import { TrustBreakdownCard } from "@/components/verification/TrustBreakdownCard";
 import { getFallbackImageForArt, getFallbackImagesForArt, getUsableImageUrl } from "@/utils/fallbackImages";
 import { getLocalizedBio } from "@/utils/bioLocalizer";
 
@@ -543,6 +545,7 @@ export default function ArtistProfile() {
   }, [artist, t]); // ADDED FOR i18n
 
   const profileCategories = artist ? getProfileCategories(artist) : [];
+  const artistServices = useMemo(() => (artist ? extractArtistServices(artist) : []), [artist]);
 
   const groupedServices = useMemo(() => {
     if (!artist) return {};
@@ -589,6 +592,35 @@ export default function ArtistProfile() {
       : artist.districtsArray && Array.isArray(artist.districtsArray) && artist.districtsArray.length
         ? artist.districtsArray.join(", ")
         : "Mumbai, Pune, Thane, Navi Mumbai, Nagpur, Nashik";
+  }, [artist]);
+
+  const artistReels: ArtistReelItem[] = useMemo(() => {
+    if (!artist) return [];
+    const rawList = Array.isArray(artist.reels)
+      ? artist.reels
+      : Array.isArray(artist.media?.reels)
+      ? artist.media.reels
+      : Array.isArray(artist.artistProfile?.reels)
+      ? artist.artistProfile.reels
+      : [];
+
+    return rawList
+      .map((item: any, idx: number) => {
+        if (typeof item === "string") {
+          return {
+            id: `reel_${idx}`,
+            url: item,
+            title: `Performance Reel ${idx + 1}`,
+          };
+        }
+        return {
+          id: item.id || `reel_${idx}`,
+          url: item.url || item.videoUrl || "",
+          title: item.title || `Performance Reel ${idx + 1}`,
+          thumbnailUrl: item.thumbnailUrl || "",
+        };
+      })
+      .filter((r: any) => Boolean(r.url));
   }, [artist]);
 
   const handleSaveArtist = async () => {
@@ -775,33 +807,6 @@ export default function ArtistProfile() {
     .filter(Boolean) as Array<{ link: string; index: number; videoId: string; thumbnailUrl: string }>;
   const activeVideo = portfolioVideos[Math.min(activeVideoIndex, Math.max(portfolioVideos.length - 1, 0))];
 
-  const artistReels: ArtistReelItem[] = useMemo(() => {
-    const rawList = Array.isArray(artist.reels)
-      ? artist.reels
-      : Array.isArray(artist.media?.reels)
-      ? artist.media.reels
-      : Array.isArray(artist.artistProfile?.reels)
-      ? artist.artistProfile.reels
-      : [];
-
-    return rawList
-      .map((item: any, idx: number) => {
-        if (typeof item === "string") {
-          return {
-            id: `reel_${idx}`,
-            url: item,
-            title: `Performance Reel ${idx + 1}`,
-          };
-        }
-        return {
-          id: item.id || `reel_${idx}`,
-          url: item.url || item.videoUrl || "",
-          title: item.title || `Performance Reel ${idx + 1}`,
-          thumbnailUrl: item.thumbnailUrl || "",
-        };
-      })
-      .filter((r: any) => Boolean(r.url));
-  }, [artist]);
   const services = Array.from(new Set([
     ...profileCategories.map((entry) => entry.artForm),
     ...(Array.isArray(artist.services) ? artist.services : []),
@@ -857,12 +862,7 @@ export default function ArtistProfile() {
                   <Sparkles className="h-3.5 w-3.5" />
                   {artTypeLabel} {/* ADDED FOR i18n */}
                 </span>
-                {artist.verified ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700">
-                    <BadgeCheck className="h-3.5 w-3.5" />
-                    {t("artist.verified")} {/* ADDED FOR i18n */}
-                  </span>
-                ) : null}
+                <VerificationBadge artist={artist} size="lg" />
               </div>
 
               <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -1004,16 +1004,16 @@ export default function ArtistProfile() {
               <section className="profile-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
                 <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
                   <Sparkles className="h-4 w-4 text-orange-500" />
-                  Services & Expertise
+                  {t("artist.servicesExpertise") || "Services & Expertise"}
                 </h2>
                 <div className="mt-4 space-y-5">
                   {Object.entries(groupedServices).map(([eventName, categoriesMap]) => (
                     <div key={eventName} className="rounded-xl border border-stone-100 bg-stone-50/80 p-4">
-                      <h3 className="text-xs font-black uppercase tracking-wider text-orange-600 mb-3">{eventName}</h3>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-orange-600 mb-3">{getArtLabel(t, eventName)}</h3>
                       <div className="space-y-3 pl-1">
                         {Object.entries(categoriesMap).map(([catName, subcategories]) => (
                           <div key={catName}>
-                            <h4 className="text-sm font-extrabold text-stone-900 mb-1.5">{catName}</h4>
+                            <h4 className="text-sm font-extrabold text-stone-900 mb-1.5">{getArtLabel(t, catName)}</h4>
                             <ul className="space-y-1.5 pl-2">
                               {subcategories.map((sub) => (
                                 <li key={sub} className="text-xs font-bold text-stone-600 flex items-center gap-2">
@@ -1037,14 +1037,14 @@ export default function ArtistProfile() {
                 <div className="flex items-center justify-between">
                   <h2 className="profile-section-title flex items-center gap-2 text-base font-extrabold text-gray-900">
                     <Film className="h-4 w-4 text-orange-500" />
-                    Performance Reels & Videos ({artistReels.length})
+                    {t("artist.performanceReels") || "Performance Reels & Videos"} ({artistReels.length})
                   </h2>
                   <span className="text-[11px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                    <ShieldCheck className="h-3 w-3 text-emerald-600" /> Verified Videos
+                    <ShieldCheck className="h-3 w-3 text-emerald-600" /> {t("artist.verifiedVideos") || "Verified Videos"}
                   </span>
                 </div>
                 <p className="mt-1 text-xs font-semibold text-stone-400">
-                  Tap to watch verified stage performance clips in full screen
+                  {t("artist.tapToWatch") || "Tap to watch verified stage performance clips in full screen"}
                 </p>
 
                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -1064,7 +1064,7 @@ export default function ArtistProfile() {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-between p-3 pointer-events-none">
                         <div className="flex justify-end">
                           <span className="bg-black/60 backdrop-blur-md text-[10px] font-bold text-white px-2 py-0.5 rounded-full border border-white/10 flex items-center gap-1">
-                            <Play className="h-2.5 w-2.5 fill-white" /> Reel
+                            <Play className="h-2.5 w-2.5 fill-white" /> {t("artist.reel") || "Reel"}
                           </span>
                         </div>
                         <div>
@@ -1072,7 +1072,7 @@ export default function ArtistProfile() {
                             {reel.title || `${artistName} Performance`}
                           </p>
                           <span className="text-[10px] text-orange-300 font-bold mt-1 flex items-center gap-1">
-                            <Play className="h-2.5 w-2.5 fill-orange-300" /> Watch Reel
+                            <Play className="h-2.5 w-2.5 fill-orange-300" /> {t("artist.watchReel") || "Watch Reel"}
                           </span>
                         </div>
                       </div>
@@ -1157,6 +1157,9 @@ export default function ArtistProfile() {
           {/* Booking sidebar */}
           <aside className="space-y-4 lg:col-span-1 lg:sticky lg:top-24 lg:self-start">
 
+            {/* MyKalakar Trust & Verification Card */}
+            <TrustBreakdownCard artist={artist} />
+
             {/* Invite card */}
             <div className="booking-card overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md">
               {/* Orange accent bar */}
@@ -1228,17 +1231,34 @@ export default function ArtistProfile() {
             </div>
 
             {/* Services Card */}
-            {services.length > 0 && (
+            {artistServices.length > 0 && (
               <div className="profile-side-panel rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-                <h2 className="profile-section-title text-sm font-extrabold text-gray-900">{t("artist.servicesSpecialities")}</h2> {/* ADDED FOR i18n */}
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {services.map((service) => (
-                    <span
-                      key={String(service)}
-                      className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-[11px] font-extrabold text-stone-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+                <h2 className="profile-section-title text-sm font-extrabold text-gray-900 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-orange-500" />
+                  {t("artist.servicesSpecialities")}
+                </h2>
+                <div className="mt-3 space-y-2">
+                  {artistServices.map((service, sIndex) => (
+                    <div
+                      key={service.id || `${service.category}-${service.subcategory}-${sIndex}`}
+                      className="rounded-xl border border-stone-100 bg-stone-50/80 p-2.5 transition hover:border-orange-200 hover:bg-orange-50/30"
                     >
-                      {getArtLabel(t, service)} {/* ADDED FOR i18n */}
-                    </span>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-black text-stone-900 truncate">
+                          {getArtLabel(t, service.subcategory || service.artForm)}
+                        </p>
+                        {service.event && (
+                          <span className="text-[9px] font-bold text-orange-600 bg-orange-100/70 px-2 py-0.5 rounded-full shrink-0">
+                            {service.event}
+                          </span>
+                        )}
+                      </div>
+                      {service.category && (
+                        <p className="text-[10px] font-semibold text-stone-400 mt-0.5 truncate">
+                          {getArtLabel(t, service.category)}
+                        </p>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1294,6 +1314,7 @@ export default function ArtistProfile() {
         startingPrice={pricingRangeLabel}
         artistAvatar={profileAvatarImage || avatarFallbackImage}
         artistLocation={location}
+        services={artistServices}
       />
       <AdminEditArtistModal
         artist={artist}

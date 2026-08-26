@@ -48,6 +48,7 @@ const ArtistCompletedEvents = lazy(() => import("./pages/artist/ArtistCompletedE
 const ArtistAvailabilityPage = lazy(() => import("./pages/artist/ArtistAvailabilityPage"));
 const ArtistNotifications = lazy(() => import("./pages/artist/ArtistNotifications"));
 const ArtistReviews = lazy(() => import("./pages/artist/ArtistReviews"));
+const ArtistEarnings = lazy(() => import("./pages/artist/ArtistEarnings"));
 const ArtistSettings = lazy(() => import("./pages/artist/ArtistSettings"));
 const PendingReview = lazy(() => import("./pages/PendingReview"));
 const SchoolTemplate = lazy(() => import("./components/SchoolTemplate"));
@@ -61,6 +62,7 @@ const artistDashboardChildren = [
   { path: "profile", element: <ArtistEditProfile /> },
   { path: "bookings", element: <ArtistBookings /> },
   { path: "calendar", element: <ArtistCalendar /> },
+  { path: "earnings", element: <ArtistEarnings /> },
   { path: "upcoming", element: <ArtistUpcomingEvents /> },
   { path: "completed", element: <ArtistCompletedEvents /> },
   { path: "availability", element: <ArtistAvailabilityPage /> },

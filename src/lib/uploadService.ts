@@ -124,7 +124,18 @@ export function uploadFileAssetWithProgress(
           errCode.includes("quota") ||
           errCode.includes("unauthorized")
         ) {
-          console.warn("[Firebase Storage Warning] Resolving with file Data URL fallback due to storage limits or rules:", errCode);
+          console.warn("[Firebase Storage Warning] Storage limits or rules triggered for:", storagePath);
+          // Never produce multi-megabyte data URLs for videos or large files that exceed Firestore limit
+          if (file.type.startsWith("video/") || file.size > 100 * 1024) {
+            finish(() =>
+              resolve({
+                url: "",
+                fullPath: "",
+                thumbnailUrl: null,
+              })
+            );
+            return;
+          }
           const dataUrl = await fileToDataUrl(file);
           finish(() =>
             resolve({

@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Eye, MapPin, Loader2, Phone, Mail, Calendar, Briefcase, ExternalLink, ShieldCheck, Star, User, Play } from "lucide-react";
+import { Check, X, Eye, MapPin, Loader2, Phone, Mail, Calendar, Briefcase, ExternalLink, ShieldCheck, Star, User, Play, Camera, CreditCard, UserCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
@@ -14,6 +14,7 @@ import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe
 import { imageRegistry } from "@/services/ImageRegistryService";
 import { getUsableImageUrl } from "@/utils/fallbackImages";
 import { useAuth } from "@/contexts/AuthContext";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
 
 // ── Lazy YouTube Thumbnail ──────────────────────────────────────────────────
 function YoutubePreview({ url }: { url: string }) {
@@ -92,6 +93,7 @@ function ArtistApplicationCard({ a, onApprove, onReject }: { a: any; onApprove: 
             <div className="flex items-center gap-3 flex-wrap">
               <h3 className="font-display font-bold text-xl">{a.name}</h3>
               <Badge className="bg-primary/10 text-primary border-primary/20">{a.subcategory || a.category}</Badge>
+              <VerificationBadge artist={a} size="sm" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
               <div className="flex items-center gap-2 text-sm text-muted-foreground"><Mail className="h-3.5 w-3.5" />{a.email || "No email"}</div>
@@ -125,13 +127,56 @@ function ArtistApplicationCard({ a, onApprove, onReject }: { a: any; onApprove: 
                 <div className="overflow-y-auto max-h-[60vh] p-6 space-y-6">
                   {/* Identity */}
                   <Card className="bg-secondary/10"><CardContent className="p-4 space-y-1">
-                    <h4 className="font-bold flex items-center gap-2 text-primary mb-3 pb-2 border-b"><ShieldCheck className="h-4 w-4" />Account & Security</h4>
+                    <h4 className="font-bold flex items-center gap-2 text-primary mb-3 pb-2 border-b"><ShieldCheck className="h-4 w-4" />Account & Identity Verification</h4>
                     <InfoRow label="Email" value={a.email} icon={Mail} />
-                    <InfoRow label="Aadhar" value={a.identity?.aadharNumber || a.aadharNumber} />
+                    <InfoRow label="Aadhaar No." value={a.identity?.aadharNumber || a.aadharNumber || "Not provided"} />
                     <InfoRow label="UID" value={a.uid ? "✅ Linked" : "❌ Missing"} />
-                    {(a.media?.aadharPhoto || a.aadharPhoto) && (
-                      <img src={a.media?.aadharPhoto || a.aadharPhoto} className="w-full h-auto rounded-lg border shadow-sm mt-2" alt="Aadhar" />
-                    )}
+
+                    {/* Side-by-side KYC Verification: Live Selfie vs Aadhaar Card */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-border/50">
+                      {/* Live Face Capture */}
+                      <div>
+                        <p className="text-xs font-bold text-stone-700 mb-1.5 flex items-center gap-1.5">
+                          <Camera className="h-3.5 w-3.5 text-orange-600" /> Live Face Capture (Selfie KYC)
+                        </p>
+                        {(a.media?.liveFacePhoto || a.liveFacePhoto) ? (
+                          <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-500 shadow-md aspect-square max-w-[200px] bg-black">
+                            <img
+                              src={a.media?.liveFacePhoto || a.liveFacePhoto}
+                              className="w-full h-full object-cover"
+                              alt="Live Face Capture"
+                            />
+                            <span className="absolute bottom-1.5 right-1.5 bg-emerald-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow">
+                              Live Selfie
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="p-4 rounded-xl border border-dashed text-center text-xs text-stone-400 bg-stone-50">
+                            No live selfie captured
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Aadhaar Photo */}
+                      <div>
+                        <p className="text-xs font-bold text-stone-700 mb-1.5 flex items-center gap-1.5">
+                          <CreditCard className="h-3.5 w-3.5 text-blue-600" /> Aadhaar Card Photo
+                        </p>
+                        {(a.media?.aadharPhoto || a.aadharPhoto) ? (
+                          <div className="rounded-2xl overflow-hidden border border-stone-200 shadow-sm max-w-[240px] bg-white">
+                            <img
+                              src={a.media?.aadharPhoto || a.aadharPhoto}
+                              className="w-full h-auto object-contain"
+                              alt="Aadhaar Card"
+                            />
+                          </div>
+                        ) : (
+                          <div className="p-4 rounded-xl border border-dashed text-center text-xs text-stone-400 bg-stone-50">
+                            No Aadhaar card uploaded
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </CardContent></Card>
 
                   {/* Personal */}
@@ -286,11 +331,16 @@ export default function AdminPending() {
     // Artist applications listener
     const qArtists = query(
       collection(db, "artist_applications"),
-      where("status", "==", "pending"),
-      orderBy("createdAt", "desc")
+      where("status", "==", "pending")
     );
     const unsubArtists = onSnapshot(qArtists, (snap) => {
-      setPendingArtists(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      docs.sort((a: any, b: any) => {
+        const tA = a.createdAt?.toDate?.()?.getTime() || 0;
+        const tB = b.createdAt?.toDate?.()?.getTime() || 0;
+        return tB - tA;
+      });
+      setPendingArtists(docs);
       setLoading(false);
     }, (err) => {
       console.error(err);
@@ -301,11 +351,16 @@ export default function AdminPending() {
     // Admin requests listener
     const qAdmins = query(
       collection(db, "admin_requests"),
-      where("status", "==", "pending"),
-      orderBy("requestedAt", "desc")
+      where("status", "==", "pending")
     );
     const unsubAdmins = onSnapshot(qAdmins, (snap) => {
-      setPendingAdmins(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      docs.sort((a: any, b: any) => {
+        const tA = a.requestedAt?.toDate?.()?.getTime() || a.createdAt?.toDate?.()?.getTime() || 0;
+        const tB = b.requestedAt?.toDate?.()?.getTime() || b.createdAt?.toDate?.()?.getTime() || 0;
+        return tB - tA;
+      });
+      setPendingAdmins(docs);
     }, (err) => {
       console.warn("admin_requests listener:", err);
       toastForFirestoreError(err, "Admin requests", "Could not load admin requests.", toast);
