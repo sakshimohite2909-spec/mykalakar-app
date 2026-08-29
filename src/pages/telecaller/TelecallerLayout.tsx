@@ -130,9 +130,32 @@ export default function TelecallerLayout() {
       )}
 
       {/* Main Workbench View */}
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-7xl">
+      <main className="flex-1 p-3.5 sm:p-4 md:p-8 overflow-y-auto max-w-7xl pb-24 md:pb-8">
         <Outlet />
       </main>
+
+      {/* Mobile Bottom Navigation Bar (Thumb Friendly) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-stone-200 z-40 px-2 py-1.5 flex items-center justify-around shadow-lg">
+        {navItems.map((item) => {
+          const isActive =
+            location.pathname === item.href ||
+            (item.href !== "/telecaller" && location.pathname.startsWith(item.href));
+          return (
+            <Link
+              key={item.href}
+              to={item.href}
+              className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all ${
+                isActive ? "text-orange-600 font-black" : "text-stone-500 font-semibold"
+              }`}
+            >
+              <item.icon className={`h-5 w-5 ${isActive ? "text-orange-600 scale-110" : "text-stone-400"}`} />
+              <span className="text-[10px] mt-0.5 tracking-tight">
+                {item.href === "/telecaller" ? "Workbench" : item.href === "/telecaller/leads" ? "Leads" : "Artists"}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }

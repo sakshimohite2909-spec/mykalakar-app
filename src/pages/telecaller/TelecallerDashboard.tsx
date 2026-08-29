@@ -114,6 +114,36 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
     });
   };
 
+  const handleWhatsAppCustomerPaymentLink = () => {
+    if (!activeLead) return;
+    const phone = (activeLead.customerPhone || "").replace(/[^0-9]/g, "");
+    const cleanPhone = phone.startsWith("91") && phone.length === 12 ? phone : phone.length === 10 ? `91${phone}` : phone;
+
+    const artistName = activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार";
+    const amount = activeLead.budget || 15000;
+
+    const message = `🙏 *नमस्कार ${activeLead.customerName || "ग्राहक"} जी!*
+🎉 *आनंदाची बातमी!* तुमच्या इव्हेंटसाठी कलाकार *${artistName}* यांनी होकार दिला आहे.
+
+📌 *कार्यक्रमाचा तपशील:*
+📅 *तारीख:* ${activeLead.eventDate || "तारीख चर्चाधीन"}
+📍 *ठिकाण:* ${activeLead.eventLocation || "महाराष्ट्र"}
+💰 *ठरलेले बजेट:* ₹${amount.toLocaleString("en-IN")}
+
+👉 *बुकिंग कन्फर्म करण्यासाठी खालील लिंकवरून सुरक्षित पेमेंट करा:*
+🔗 ${window.location.origin}/
+
+*(टीप: तुमचे पैसे MyKalakar Escrow Safe खात्यात कार्यक्रम पूर्ण होईपर्यंत सुरक्षित राहतील.)*
+- MyKalakar टीम 🚩`;
+
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank");
+    toast({
+      title: "Payment Link Sent to Customer! 🟢",
+      description: `Opened WhatsApp with pre-filled payment confirmation for ${activeLead.customerName}.`,
+    });
+  };
+
   const [previewArtistReels, setPreviewArtistReels] = useState<{ artist: any; reels: ArtistReelItem[] } | null>(null);
 
   const handleReleasePayout = async (lead: TelecallerLead) => {
@@ -566,6 +596,94 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
 
               {activeLead ? (
                 <div className="space-y-4">
+                  {/* 4-STEP WORKFLOW VISUALIZER (Mobile Friendly Pipeline) */}
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-orange-600 via-amber-600 to-emerald-600 text-white shadow-md space-y-2.5">
+                    <div className="flex items-center justify-between text-xs font-black">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4" /> 4-Step Booking Flow (सुलभ पायऱ्या)
+                      </span>
+                      <span className="bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[11px] font-extrabold">
+                        {activeLead.status === "new"
+                          ? "पायरी १: ग्राहकाशी बोला"
+                          : activeLead.status === "contacting_artists"
+                          ? "पायरी २: कलाकाराला पाठवा"
+                          : activeLead.status === "artist_confirmed"
+                          ? "पायरी ३: बुकिंग कन्फर्म"
+                          : activeLead.status === "booked"
+                          ? "पायरी ४: पे-आऊट पूर्ण"
+                          : "स्थिती: " + activeLead.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] sm:text-xs">
+                      {/* Step 1: Customer Call */}
+                      <div
+                        onClick={() => handleStatusChange(activeLead.id, "new")}
+                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                          activeLead.status === "new"
+                            ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
+                            : "bg-black/20 text-white/90 hover:bg-black/30"
+                        }`}
+                      >
+                        <div className="font-extrabold flex items-center justify-center gap-0.5">
+                          <Phone className="h-3 w-3" /> १. ग्राहक कॉल
+                        </div>
+                        <div className="text-[9px] mt-0.5 opacity-80">
+                          {activeLead.isVerifiedByTelecaller ? "✓ व्हेरिफाय" : "तपशील तपासा"}
+                        </div>
+                      </div>
+
+                      {/* Step 2: WhatsApp Artist */}
+                      <div
+                        onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
+                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                          activeLead.status === "contacting_artists"
+                            ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
+                            : "bg-black/20 text-white/90 hover:bg-black/30"
+                        }`}
+                      >
+                        <div className="font-extrabold flex items-center justify-center gap-0.5">
+                          <MessageCircle className="h-3 w-3 text-emerald-600" /> २. WhatsApp
+                        </div>
+                        <div className="text-[9px] mt-0.5 opacity-80">कलाकार संपर्क</div>
+                      </div>
+
+                      {/* Step 3: Confirm Booking */}
+                      <div
+                        onClick={() => handleStatusChange(activeLead.id, "artist_confirmed")}
+                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                          activeLead.status === "artist_confirmed"
+                            ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
+                            : "bg-black/20 text-white/90 hover:bg-black/30"
+                        }`}
+                      >
+                        <div className="font-extrabold flex items-center justify-center gap-0.5">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600" /> ३. कन्फर्म
+                        </div>
+                        <div className="text-[9px] mt-0.5 opacity-80">
+                          {activeLead.status === "artist_confirmed" ? "✓ नक्की झाले" : "आर्टिस्ट होकार"}
+                        </div>
+                      </div>
+
+                      {/* Step 4: Release Payout */}
+                      <div
+                        onClick={() => handleStatusChange(activeLead.id, "booked")}
+                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                          activeLead.status === "booked"
+                            ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
+                            : "bg-black/20 text-white/90 hover:bg-black/30"
+                        }`}
+                      >
+                        <div className="font-extrabold flex items-center justify-center gap-0.5">
+                          <Wallet className="h-3 w-3 text-emerald-600" /> ४. पे-आऊट
+                        </div>
+                        <div className="text-[9px] mt-0.5 opacity-80">
+                          {activeLead.status === "booked" ? "✓ पूर्ण" : "एस्क्रो रिलीज"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* SECTION 1: CUSTOMER REQUIREMENT (Clean & Actionable) */}
                   <div className="p-4 sm:p-5 rounded-2xl bg-white border border-stone-200/80 shadow-sm space-y-3.5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-stone-100 pb-3">
@@ -576,16 +694,16 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
                           </h3>
                           {activeLead.isVerifiedByTelecaller ? (
                             <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              <ShieldCheck className="h-3 w-3" /> Verified
+                              <ShieldCheck className="h-3 w-3" /> Verified (तपासले)
                             </span>
                           ) : (
                             <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                              Pending Check
+                              Pending Call Check
                             </span>
                           )}
                         </div>
                         <p className="text-xs font-bold text-stone-600 mt-0.5">
-                          {activeLead.eventType} • <span className="text-orange-600">{activeLead.subCategory}</span>
+                          {activeLead.eventType} • <span className="text-orange-600 font-black">{activeLead.subCategory}</span>
                         </p>
                       </div>
 
@@ -595,7 +713,7 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
                           onClick={() => setEditModalOpen(true)}
                           className="h-8 px-3 text-xs font-extrabold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 flex items-center gap-1"
                         >
-                          <Edit3 className="h-3.5 w-3.5" /> Edit Details
+                          <Edit3 className="h-3.5 w-3.5" /> Edit
                         </Button>
 
                         <Select
@@ -606,9 +724,9 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-white border-stone-200 text-xs">
-                            <SelectItem value="new">1. New Lead</SelectItem>
-                            <SelectItem value="contacting_artists">2. Calling Artists</SelectItem>
-                            <SelectItem value="artist_confirmed">3. Confirmed</SelectItem>
+                            <SelectItem value="new">1. New Lead (नवीन)</SelectItem>
+                            <SelectItem value="contacting_artists">2. Calling (संपर्क)</SelectItem>
+                            <SelectItem value="artist_confirmed">3. Confirmed (नक्की)</SelectItem>
                             <SelectItem value="booked">4. Completed / Paid</SelectItem>
                             <SelectItem value="cancelled">5. Cancelled</SelectItem>
                           </SelectContent>
@@ -618,40 +736,49 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
 
                     {/* Compact Details Strip */}
                     <div className="flex flex-wrap gap-2 text-xs">
-                      <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-bold text-stone-800">
+                      <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-bold text-stone-800 flex items-center gap-1">
                         📅 {activeLead.eventDate || "Date TBD"} {activeLead.eventTime ? `(${activeLead.eventTime})` : ""}
                       </span>
-                      <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-bold text-stone-800">
+                      <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-bold text-stone-800 flex items-center gap-1">
                         📍 {activeLead.eventLocation || "Location"}{activeLead.venueAddress ? ` • ${activeLead.venueAddress}` : ""}
                       </span>
-                      <span className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl font-black text-emerald-800">
-                        💰 Client Budget: ₹{activeLead.budget?.toLocaleString("en-IN") || "N/A"}
+                      <span className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl font-black text-emerald-800 flex items-center gap-1">
+                        💰 बजेट: ₹{activeLead.budget?.toLocaleString("en-IN") || "N/A"}
                       </span>
-                      <span className="bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-xl font-bold text-orange-800">
-                        Offer Payout: ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8)).toLocaleString("en-IN")}
+                      <span className="bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-xl font-bold text-orange-800 flex items-center gap-1">
+                        आर्टिस्ट मानधन: ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8)).toLocaleString("en-IN")}
                       </span>
                       {activeLead.soundRequired !== undefined && (
-                        <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-semibold text-stone-700">
-                          🔊 {activeLead.soundRequired ? "Artist Sound" : "Venue Sound"}
+                        <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-semibold text-stone-700 flex items-center gap-1">
+                          🔊 {activeLead.soundRequired ? "आर्टिस्टचा साऊंड" : "हॉलचा साऊंड"}
                         </span>
                       )}
                     </div>
 
                     {activeLead.telecallerNotes && (
                       <p className="text-xs bg-amber-50/60 border border-amber-200/60 text-amber-900 px-3 py-2 rounded-xl font-medium">
-                        📝 <strong>Notes:</strong> {activeLead.telecallerNotes}
+                        📝 <strong>विशेष सूचना:</strong> {activeLead.telecallerNotes}
                       </p>
                     )}
 
-                    {/* Direct 1-Click Customer Call */}
+                    {/* Action Buttons: Customer Call & Send Payment Link */}
                     {activeLead.customerPhone && (
-                      <a
-                        href={`tel:${activeLead.customerPhone}`}
-                        onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
-                        className="w-full py-2.5 sm:py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
-                      >
-                        <Phone className="h-4 w-4" /> Call Customer ({activeLead.customerPhone})
-                      </a>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <a
+                          href={`tel:${activeLead.customerPhone}`}
+                          onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
+                          className="w-full py-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+                        >
+                          <Phone className="h-4 w-4 text-emerald-400" /> 📞 ग्राहक कॉल
+                        </a>
+                        <button
+                          type="button"
+                          onClick={handleWhatsAppCustomerPaymentLink}
+                          className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+                        >
+                          <MessageCircle className="h-4 w-4" /> 🟢 पेमेंट लिंक पाठवा
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -660,10 +787,10 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
                     <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
                       <h4 className="text-sm font-black text-stone-950 flex items-center gap-2">
                         <Users className="h-4 w-4 text-orange-600 shrink-0" />
-                        <span>Recommended Artists ({matchingArtists.length})</span>
+                        <span>उपलब्ध कलाकार ({matchingArtists.length}) - WhatsApp पाठवा</span>
                       </h4>
-                      <span className="text-[11px] font-semibold text-stone-500">
-                        Customer phone is masked
+                      <span className="text-[10px] font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
+                        🔒 ग्राहक फोन सुरक्षित
                       </span>
                     </div>
 
@@ -675,23 +802,23 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
                         return (
                           <div
                             key={artist.name}
-                            className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all ${
-                              isConfirmed ? "bg-emerald-50/80 border-emerald-300" : "bg-stone-50/60 border-stone-200/80"
+                            className={`p-3 sm:p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                              isConfirmed ? "bg-emerald-50/90 border-emerald-300 shadow-sm ring-1 ring-emerald-200" : "bg-stone-50/70 border-stone-200/80 hover:border-orange-200"
                             }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="h-9 w-9 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-black text-xs shrink-0">
+                              <div className="h-10 w-10 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-black text-sm shrink-0 shadow-sm">
                                 {artist.name.charAt(0)}
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-xs font-black text-stone-900 truncate">{artist.name}</span>
+                                  <span className="text-xs sm:text-sm font-black text-stone-900 truncate">{artist.name}</span>
                                   <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded flex items-center gap-0.5">
                                     ★ {artist.rating || 4.8}
                                   </span>
                                 </div>
                                 <p className="text-[11px] text-stone-500 font-semibold truncate">
-                                  📍 {artist.district || artist.location || "Maharashtra"} • From ₹{artist.startingPrice?.toLocaleString("en-IN") || "15,000"}
+                                  📍 {artist.district || artist.location || "Maharashtra"} • दर: ₹{artist.startingPrice?.toLocaleString("en-IN") || "15,000"}
                                 </p>
                               </div>
                             </div>
@@ -702,7 +829,7 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => openArtistReelsPreview(artist)}
-                                  className="h-8 px-2 text-xs font-bold text-orange-600 hover:bg-orange-100 rounded-lg"
+                                  className="h-8 px-2 text-xs font-bold text-orange-600 hover:bg-orange-100 rounded-xl"
                                 >
                                   <Film className="h-3.5 w-3.5 mr-1" /> Reel
                                 </Button>
@@ -711,28 +838,34 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
                               <Button
                                 size="sm"
                                 onClick={() => handleWhatsAppArtist(artist)}
-                                className="h-8 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1"
+                                className="h-8.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95"
                               >
-                                <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                                <MessageCircle className="h-4 w-4" /> WhatsApp
                               </Button>
 
                               <a
                                 href={`tel:${phoneNum}`}
-                                className="h-8 px-2.5 rounded-lg bg-white border border-stone-200 text-xs font-bold text-stone-800 hover:bg-stone-100 inline-flex items-center gap-1"
+                                className="h-8.5 px-3 rounded-xl bg-white border border-stone-200 text-xs font-bold text-stone-800 hover:bg-stone-100 inline-flex items-center gap-1 shadow-sm active:scale-95"
                               >
                                 <Phone className="h-3.5 w-3.5 text-orange-600" /> Call
                               </a>
 
                               <Button
                                 size="sm"
-                                onClick={() => handleStatusChange(activeLead.id, "artist_confirmed")}
-                                className={`h-8 px-2.5 rounded-lg text-xs font-bold ${
+                                onClick={() => {
+                                  handleStatusChange(activeLead.id, "artist_confirmed");
+                                  toast({
+                                    title: "Artist Confirmed! ✓",
+                                    description: `${artist.name} has been assigned and confirmed for this booking.`,
+                                  });
+                                }}
+                                className={`h-8.5 px-3 rounded-xl text-xs font-black shadow-sm ${
                                   isConfirmed
-                                    ? "bg-emerald-700 text-white"
+                                    ? "bg-emerald-700 text-white ring-2 ring-emerald-300"
                                     : "bg-stone-900 hover:bg-stone-800 text-white"
                                 }`}
                               >
-                                {isConfirmed ? "Confirmed ✓" : "Confirm"}
+                                {isConfirmed ? "✓ Confirmed" : "Confirm"}
                               </Button>
                             </div>
                           </div>
@@ -745,17 +878,17 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
                   <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-4 text-xs font-bold flex-wrap">
                       <div>
-                        <span className="text-stone-400 block text-[10px] uppercase">Client Paid</span>
+                        <span className="text-stone-400 block text-[10px] uppercase font-bold">Client Paid</span>
                         <span className="text-emerald-700 font-black">₹{activeLead.budget?.toLocaleString("en-IN")}</span>
                       </div>
                       <div>
-                        <span className="text-stone-400 block text-[10px] uppercase">Artist Payout</span>
+                        <span className="text-stone-400 block text-[10px] uppercase font-bold">Artist Payout</span>
                         <span className="text-orange-600 font-black">
                           ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8)).toLocaleString("en-IN")}
                         </span>
                       </div>
                       <div>
-                        <span className="text-stone-400 block text-[10px] uppercase">Margin</span>
+                        <span className="text-stone-400 block text-[10px] uppercase font-bold">Margin</span>
                         <span className="text-purple-700 font-black">
                           ₹{Math.max(0, (activeLead.budget || 0) - (activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8))).toLocaleString("en-IN")}
                         </span>
@@ -766,7 +899,7 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
                       <Button
                         size="sm"
                         onClick={() => handleReleasePayout(activeLead)}
-                        className="h-8.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black"
+                        className="h-8.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm"
                       >
                         💸 Release Payout
                       </Button>

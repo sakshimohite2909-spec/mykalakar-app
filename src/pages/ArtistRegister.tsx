@@ -151,13 +151,9 @@ const aadharRule = z.preprocess(
     .string()
     .regex(/^\d{12}$/, "Aadhaar number must be exactly 12 digits.")
 );
-const bankNameRule = z.string().min(1, "Bank name is required.");
-const ifscRule = z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "IFSC code must strictly match Indian IFSC format.");
-const accountRule = z
-  .string()
-  .min(9, "Account number must be at least 9 digits.")
-  .max(18, "Account number must be at most 18 digits.")
-  .regex(/^\d+$/, "Account number must contain digits only.");
+const bankNameRule = z.string().optional();
+const ifscRule = z.string().optional();
+const accountRule = z.string().optional();
 const stateRule = z.string().min(1, "State is required.");
 const districtRule = z.string().min(1, "District is required.");
 
@@ -185,10 +181,12 @@ const artistRegistrationSchema = z
     experience: z.string().min(1, "Experience is required.").regex(/^\d+$/, "Experience must be a number."),
     bio: z.string().optional(),
     aadharNumber: aadharRule,
+    upiId: z.string().optional(),
+    payoutMode: z.enum(["upi", "bank", "later"]).optional(),
     bankName: bankNameRule,
     ifscCode: ifscRule,
     accountNumber: accountRule,
-    confirmAccountNumber: z.string().min(1, "Please confirm your account number."),
+    confirmAccountNumber: z.string().optional(),
     portfolioUrl: z
       .union([
         z.string().regex(
@@ -208,10 +206,16 @@ const artistRegistrationSchema = z
     message: "Passwords do not match.",
     path: ["confirmPassword"],
   })
-  .refine((values) => values.accountNumber === values.confirmAccountNumber, {
-    message: "Account numbers do not match. Please re-enter.",
-    path: ["confirmAccountNumber"],
-  });
+  .refine(
+    (values) => {
+      if (!values.accountNumber) return true;
+      return values.accountNumber === values.confirmAccountNumber;
+    },
+    {
+      message: "Account numbers do not match. Please re-enter.",
+      path: ["confirmAccountNumber"],
+    }
+  );
 
 const userRegistrationSchema = z
   .object({
@@ -252,6 +256,8 @@ const artistDefaults: ArtistRegistrationValues = {
   experience: "",
   bio: "",
   aadharNumber: "",
+  upiId: "",
+  payoutMode: "upi",
   bankName: "",
   ifscCode: "",
   accountNumber: "",
@@ -1131,6 +1137,7 @@ export default function ArtistRegister() {
   const [showPrimaryPricingOnProfile, setShowPrimaryPricingOnProfile] = useState(false);
   // "Other" bank name free-text state
   const [customBankName, setCustomBankName] = useState("");
+  const [payoutMode, setPayoutMode] = useState<"upi" | "bank" | "later">("upi");
   const errorRef = useRef<HTMLDivElement>(null);
   const { register: authRegister } = useAuth();
   const navigate = useNavigate();
@@ -1174,13 +1181,9 @@ export default function ArtistRegister() {
         .string()
         .regex(/^\d{12}$/, t("register.validation.aadharDigits"))
     );
-    const bankNameRule = z.string().min(1, t("register.validation.bankRequired"));
-    const ifscRule = z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, t("register.validation.ifscFormat"));
-    const accountRule = z
-      .string()
-      .min(9, t("register.validation.accountMin"))
-      .max(18, t("register.validation.accountMax"))
-      .regex(/^\d+$/, t("register.validation.accountDigits"));
+    const bankNameRule = z.string().optional();
+    const ifscRule = z.string().optional();
+    const accountRule = z.string().optional();
     const stateRule = z.string().min(1, t("register.validation.stateRequired"));
     const districtRule = z.string().min(1, t("register.validation.districtRequired"));
 
@@ -1208,10 +1211,12 @@ export default function ArtistRegister() {
         experience: z.string().min(1, t("register.validation.experienceRequired")).regex(/^\d+$/, t("register.validation.experienceDigits")),
         bio: z.string().optional(),
         aadharNumber: aadharRule,
-        bankName: bankNameRule,
-        ifscCode: ifscRule,
-        accountNumber: accountRule,
-        confirmAccountNumber: z.string().min(1, t("register.validation.confirmAccountRequired")),
+        upiId: z.string().optional(),
+        payoutMode: z.enum(["upi", "bank", "later"]).optional(),
+        bankName: z.string().optional(),
+        ifscCode: z.string().optional(),
+        accountNumber: z.string().optional(),
+        confirmAccountNumber: z.string().optional(),
         portfolioUrl: z
           .union([
             z.string().regex(
@@ -1231,10 +1236,16 @@ export default function ArtistRegister() {
         message: t("register.validation.passwordMismatch"),
         path: ["confirmPassword"],
       })
-      .refine((values) => values.accountNumber === values.confirmAccountNumber, {
-        message: t("register.validation.accountMismatch"),
-        path: ["confirmAccountNumber"],
-      });
+      .refine(
+        (values) => {
+          if (!values.accountNumber) return true;
+          return values.accountNumber === values.confirmAccountNumber;
+        },
+        {
+          message: t("register.validation.accountMismatch"),
+          path: ["confirmAccountNumber"],
+        }
+      );
   }, [t]);
 
   const userSchema = useMemo(() => {
@@ -1749,10 +1760,13 @@ export default function ArtistRegister() {
         aadharStoragePath: aadharStoragePath || "",
         liveFacePhoto: liveFacePhoto || "",
         liveFaceStoragePath: liveFaceStoragePath || "",
+        upiId: values.upiId || "",
+        payoutMode: values.payoutMode || payoutMode || "upi",
         bankName: effectiveBankName || "",
         ifscCode: values.ifscCode || "",
         accountNumber: values.accountNumber || "",
         bankDetails: {
+          upiId: values.upiId || "",
           bankName: effectiveBankName || "",
           ifscCode: values.ifscCode || "",
           accountNumber: values.accountNumber || "",
@@ -1830,7 +1844,9 @@ export default function ArtistRegister() {
         bio: values.bio || "",
         description: values.bio || "",
         availability: "available",
-        bankName: effectiveBankName,
+        upiId: values.upiId || "",
+        payoutMode: values.payoutMode || payoutMode || "upi",
+        bankName: effectiveBankName || "",
         ifscCode: values.ifscCode ? "XXXX" : "",
         bankAccountMasked: values.accountNumber ? `XXXX XXXX ${values.accountNumber.slice(-4)}` : "",
         media: {
@@ -2536,118 +2552,174 @@ export default function ArtistRegister() {
                   )}
                 />
 
-                <SectionHeading icon={Building2} title={t("register.section.bank")} />
-                <div className="grid gap-4 md:grid-cols-2">
+                <SectionHeading icon={Building2} title="Payout / मानधन जमा करण्यासाठी (Optional)" />
+                <div className="rounded-2xl border border-stone-200/80 bg-white p-4 sm:p-5 shadow-sm space-y-4">
                   <div>
-                    <Controller
-                      name="bankName"
-                      control={artistForm.control}
-                      render={({ field }) => (
-                        <SearchableDropdown
-                          label={t("register.label.bankName")}
-                          value={field.value}
-                          options={INDIAN_BANK_OPTIONS}
-                          placeholder={t("register.placeholder.bankName")}
-                          error={artistForm.formState.errors.bankName?.message}
-                          onChange={(val) => {
-                            field.onChange(val);
-                            // Reset custom name whenever a new option is chosen
-                            if (val !== "Other") setCustomBankName("");
-                          }}
-                        />
-                      )}
-                    />
-                    {/* Conditional free-text input for "Other" bank */}
-                    {artistForm.watch("bankName") === "Other" && (
-                      <div className="mt-3">
-                        <label className="mb-1.5 block text-sm font-bold text-slate-700">
-                          <span className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 text-orange-500" />
-                            {t("register.label.customBankName")}
-                          </span>
-                        </label>
-                        <input
-                          type="text"
-                          value={customBankName}
-                          onChange={(e) => setCustomBankName(e.target.value)}
-                          placeholder={t("register.placeholder.customBankName")}
-                          required
-                          maxLength={80}
-                          className={`${inputClass} ${customBankName.trim().length === 0 || (customBankName.trim().length > 0 && customBankName.trim().length < 2) ? errorInputClass : ""}`}
-                        />
-                        {customBankName.trim().length === 0 ? (
-                          <p className="mt-1.5 text-xs font-semibold text-red-500">{t("register.error.customBankNameRequired")}</p>
-                        ) : customBankName.trim().length < 2 ? (
-                          <p className="mt-1.5 text-xs font-semibold text-red-500">{t("register.error.customBankNameLength")}</p>
-                        ) : null}
-                      </div>
-                    )}
+                    <p className="text-xs font-semibold text-stone-600 mb-3">
+                      इव्हेंट पूर्ण झाल्यानंतर मानधन मिळवण्यासाठी तुमची सोयीची पद्धत निवडा:
+                    </p>
+
+                    {/* 3-Way Mode Switcher */}
+                    <div className="grid grid-cols-3 gap-2 bg-stone-100 p-1.5 rounded-2xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPayoutMode("upi");
+                          artistForm.setValue("payoutMode", "upi");
+                        }}
+                        className={`py-2 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                          payoutMode === "upi"
+                            ? "bg-white text-orange-600 shadow-sm ring-1 ring-orange-200"
+                            : "text-stone-600 hover:text-stone-900"
+                        }`}
+                      >
+                        ⚡ UPI ID (GPay)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPayoutMode("bank");
+                          artistForm.setValue("payoutMode", "bank");
+                        }}
+                        className={`py-2 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                          payoutMode === "bank"
+                            ? "bg-white text-orange-600 shadow-sm ring-1 ring-orange-200"
+                            : "text-stone-600 hover:text-stone-900"
+                        }`}
+                      >
+                        🏦 बँक खाते
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPayoutMode("later");
+                          artistForm.setValue("payoutMode", "later");
+                        }}
+                        className={`py-2 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                          payoutMode === "later"
+                            ? "bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-200"
+                            : "text-stone-600 hover:text-stone-900"
+                        }`}
+                      >
+                        ⏭️ नंतर जोडा
+                      </button>
+                    </div>
                   </div>
-                  <Controller
-                    name="ifscCode"
-                    control={artistForm.control}
-                    render={({ field }) => (
+
+                  {/* MODE 1: FAST UPI ID */}
+                  {payoutMode === "upi" && (
+                    <div className="space-y-2 pt-1 animate-in fade-in duration-200">
+                      <Controller
+                        name="upiId"
+                        control={artistForm.control}
+                        render={({ field }) => (
+                          <div>
+                            <label className="mb-1.5 block text-sm font-bold text-slate-700">
+                              Google Pay / PhonePe / Paytm UPI ID (ऐच्छिक)
+                            </label>
+                            <input
+                              type="text"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              placeholder="उदा. 9822123456@okaxis किंवा name@upi"
+                              className={inputClass}
+                            />
+                            <p className="mt-1.5 text-[11px] text-stone-500 font-medium">
+                              💡 फक्त ५ सेकंद लागतात. या UPI ID वर इव्हेंट संपल्यावर मानधन थेट जमा होईल.
+                            </p>
+                          </div>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {/* MODE 2: FULL BANK DETAILS (OPTIONAL) */}
+                  {payoutMode === "bank" && (
+                    <div className="grid gap-4 md:grid-cols-2 pt-1 animate-in fade-in duration-200">
                       <div>
-                        <label className="mb-1.5 block text-sm font-bold text-slate-700">{t("register.label.ifsc")}</label>
-                        <input
-                          value={field.value}
-                          onBlur={field.onBlur}
-                          onChange={(event) => field.onChange(event.target.value.toUpperCase().slice(0, 11))}
-                          placeholder="SBIN00XXXXX"
-                          maxLength={11}
-                          className={`${inputClass} ${artistForm.formState.errors.ifscCode ? errorInputClass : ""}`}
+                        <Controller
+                          name="bankName"
+                          control={artistForm.control}
+                          render={({ field }) => (
+                            <SearchableDropdown
+                              label={t("register.label.bankName")}
+                              value={field.value || ""}
+                              options={INDIAN_BANK_OPTIONS}
+                              placeholder={t("register.placeholder.bankName")}
+                              error={artistForm.formState.errors.bankName?.message}
+                              onChange={(val) => {
+                                field.onChange(val);
+                                if (val !== "Other") setCustomBankName("");
+                              }}
+                            />
+                          )}
                         />
-                        <FieldError message={artistForm.formState.errors.ifscCode?.message} />
+                        {artistForm.watch("bankName") === "Other" && (
+                          <div className="mt-3">
+                            <label className="mb-1.5 block text-sm font-bold text-slate-700">
+                              <span className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4 text-orange-500" />
+                                {t("register.label.customBankName")}
+                              </span>
+                            </label>
+                            <input
+                              type="text"
+                              value={customBankName}
+                              onChange={(e) => setCustomBankName(e.target.value)}
+                              placeholder={t("register.placeholder.customBankName")}
+                              maxLength={80}
+                              className={inputClass}
+                            />
+                          </div>
+                        )}
                       </div>
-                    )}
-                  />
-                  <Controller
-                    name="accountNumber"
-                    control={artistForm.control}
-                    render={({ field }) => (
-                      <div className="md:col-span-2">
-                        <label className="mb-1.5 block text-sm font-bold text-slate-700">{t("register.label.accountNumber")}</label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={field.value}
-                          onBlur={field.onBlur}
-                          onChange={(event) => field.onChange(event.target.value.replace(/[^\d]/g, "").slice(0, 18))}
-                          onKeyPress={(event) => {
-                            if (!/[0-9]/.test(event.key)) {
-                              event.preventDefault();
-                            }
-                          }}
-                          placeholder={t("register.placeholder.accountNumber")}
-                          maxLength={18}
-                          minLength={9}
-                          className={`${inputClass} ${artistForm.formState.errors.accountNumber ? errorInputClass : ""}`}
-                        />
-                        <FieldError message={artistForm.formState.errors.accountNumber?.message} />
-                      </div>
-                    )}
-                  />
-                  {/* Confirm Account Number — prevents copy-paste errors */}
-                  <Controller
-                    name="confirmAccountNumber"
-                    control={artistForm.control}
-                    render={({ field }) => (
-                      <div className="md:col-span-2">
-                        <label className="mb-1.5 block text-sm font-bold text-slate-700">{t("register.label.confirmAccountNumber")}</label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={field.value}
-                          onBlur={field.onBlur}
-                          onChange={(event) => field.onChange(event.target.value.replace(/[^\d]/g, "").slice(0, 18))}
-                          placeholder={t("register.placeholder.confirmAccountNumber")}
-                          maxLength={18}
-                          className={`${inputClass} ${artistForm.formState.errors.confirmAccountNumber ? errorInputClass : ""}`}
-                        />
-                        <FieldError message={artistForm.formState.errors.confirmAccountNumber?.message} />
-                      </div>
-                    )}
-                  />
+
+                      <Controller
+                        name="ifscCode"
+                        control={artistForm.control}
+                        render={({ field }) => (
+                          <div>
+                            <label className="mb-1.5 block text-sm font-bold text-slate-700">{t("register.label.ifsc")}</label>
+                            <input
+                              value={field.value || ""}
+                              onBlur={field.onBlur}
+                              onChange={(event) => field.onChange(event.target.value.toUpperCase().slice(0, 11))}
+                              placeholder="SBIN00XXXXX"
+                              maxLength={11}
+                              className={inputClass}
+                            />
+                          </div>
+                        )}
+                      />
+
+                      <Controller
+                        name="accountNumber"
+                        control={artistForm.control}
+                        render={({ field }) => (
+                          <div className="md:col-span-2">
+                            <label className="mb-1.5 block text-sm font-bold text-slate-700">{t("register.label.accountNumber")}</label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={field.value || ""}
+                              onBlur={field.onBlur}
+                              onChange={(event) => field.onChange(event.target.value.replace(/[^\d]/g, "").slice(0, 18))}
+                              placeholder={t("register.placeholder.accountNumber")}
+                              maxLength={18}
+                              className={inputClass}
+                            />
+                          </div>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {/* MODE 3: SKIP FOR NOW */}
+                  {payoutMode === "later" && (
+                    <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-900 text-xs leading-relaxed font-medium animate-in fade-in duration-200">
+                      👍 <strong>काही हरकत नाही!</strong> तुम्ही आता ही माहिती वगळू शकता. जेव्हा तुमचे पहिले बुकिंग होईल आणि मानधन पाठवण्याची वेळ येईल, तेव्हा तुम्ही डॅशबोर्डवरून फक्त १ क्लिकमध्ये तुमचा UPI ID किंवा बँक खाते जोडू शकता.
+                    </div>
+                  )}
                 </div>
 
                 <SectionHeading icon={Sparkles} title={t("register.section.additional")} />

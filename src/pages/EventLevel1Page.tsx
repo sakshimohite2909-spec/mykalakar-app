@@ -1,33 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useSearchParams, Link, useNavigate } from "react-router-dom";
 import {
-  Camera,
-  Sparkles,
-  Flower2,
-  Building2,
-  Utensils,
-  Paintbrush,
-  Car,
-  Mail,
-  Gift,
-  ShoppingBag,
   Search,
-  ShieldCheck,
-  UserCheck,
-  Briefcase,
-  Headphones,
-  PlusCircle,
-  Clock,
-  Music2,
   ChevronRight,
-  Mic,
-  Radio,
-  BookOpen,
-  Tv,
   MapPin,
-  BadgeCheck,
-  Star,
   Heart,
+  CheckCircle2,
+  SlidersHorizontal,
+  UserPlus,
+  Clock,
+  Sparkles,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -40,101 +22,77 @@ import { imageRegistry } from "@/services/ImageRegistryService";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
 
-const isServiceCategory = (cat: string) =>
-  /services|venues|decoration|catering|hospitality|transportation|setup|sound|mandap|stage|photo/i.test(cat || "");
-const isOrganizationCategory = (cat: string) =>
-  /organization|sanstha|troupe|academy/i.test(cat || "");
+// Accurate Category Images Map covering all event types and categories
+const CATEGORY_CIRCULAR_IMAGES: Record<string, string> = {
+  // ─── VARKARI & SPIRITUAL ───
+  "spiritual speakers": "/cultural/varkari-vocalist.png",
+  "vocal artists": "/assets/curated/tanpura-singer-1.jpg",
+  "instrumental artists": "/assets/curated/tabla-hands.jpg",
+  "organizations": "/cultural/zanj-temple.png",
+  "warkari sanstha": "/cultural/zanj-temple.png",
+  "event services": "/assets/static/category-event-services.webp",
+  "pooja pandits": "https://images.unsplash.com/photo-1608613304899-ea8098577e38?auto=format&fit=crop&w=400&q=80",
+  "pandit / priest": "https://images.unsplash.com/photo-1608613304899-ea8098577e38?auto=format&fit=crop&w=400&q=80",
 
-const getSectionHeading = (categoryName: string, subName: string, t: (k: string, opt?: any) => string) => {
-  const catLabel = getArtLabel(t, categoryName);
-  const subLabel = subName === "All" ? catLabel : getArtLabel(t, subName);
-  if (isServiceCategory(categoryName) || isServiceCategory(subName)) {
-    return subName === "All" ? t("category.availableServices", { name: catLabel }) : t("category.servicesIn", { name: subLabel });
-  }
-  if (isOrganizationCategory(categoryName) || isOrganizationCategory(subName)) {
-    return subName === "All" ? t("category.availableOrganizations", { name: catLabel }) : t("category.organizationsIn", { name: subLabel });
-  }
-  return t("category.artistsIn", { name: subLabel });
+  // ─── WEDDING & RECEPTION ───
+  "venues": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=400&q=80",
+  "marriage hall": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=400&q=80",
+  "banquet hall": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=400&q=80",
+  "bridal & groom services": "https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=400&q=80",
+  "bridal makeup": "https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=400&q=80",
+  "photography & videography": "https://images.unsplash.com/photo-1537633552985-df8429e8048b?auto=format&fit=crop&w=400&q=80",
+  "photography": "https://images.unsplash.com/photo-1537633552985-df8429e8048b?auto=format&fit=crop&w=400&q=80",
+  "entertainment": "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=400&q=80",
+  "catering": "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=400&q=80",
+  "catering & hospitality": "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=400&q=80",
+  "decoration": "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=400&q=80",
+  "decor & setup": "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=400&q=80",
+  "event setup": "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=400&q=80",
+  "transportation": "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=400&q=80",
+  "wedding essentials": "https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=400&q=80",
+  "shopping": "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=400&q=80",
+  "invitations & gifts": "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=400&q=80",
+
+  // ─── FOLK, CULTURAL & FESTIVALS ───
+  "folk artists": "/assets/curated/dhol-passion.jpg",
+  "traditional dance": "/cultural/dhol-pathak-performer.png",
+  "dhol tasha": "/assets/curated/dhol-passion.jpg",
+  "dhol-tasha pathak": "/assets/curated/dhol-passion.jpg",
+  "anchors & hosts": "https://images.unsplash.com/photo-1560439514-4e9645039924?auto=format&fit=crop&w=400&q=80",
+  "anchors / hosts": "https://images.unsplash.com/photo-1560439514-4e9645039924?auto=format&fit=crop&w=400&q=80",
+  "magicians": "https://images.unsplash.com/photo-1515250499692-7104b2a4c28f?auto=format&fit=crop&w=400&q=80",
+  "djs": "https://images.unsplash.com/photo-1516873240891-4bf014598ab4?auto=format&fit=crop&w=400&q=80",
+  "live bands": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=400&q=80",
+  "balloon decorators": "https://images.unsplash.com/photo-1530103862676-de88924083a2?auto=format&fit=crop&w=400&q=80",
 };
+
+export function getCategoryCircleImage(catName: string, existingImg?: string): string {
+  const norm = catName.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
+  const rawKey = catName.toLowerCase().trim();
+
+  // Direct exact match
+  if (CATEGORY_CIRCULAR_IMAGES[rawKey]) return CATEGORY_CIRCULAR_IMAGES[rawKey];
+  if (CATEGORY_CIRCULAR_IMAGES[norm]) return CATEGORY_CIRCULAR_IMAGES[norm];
+
+  // Fuzzy match in dictionary
+  const match = Object.entries(CATEGORY_CIRCULAR_IMAGES).find(([k]) => {
+    const kNorm = k.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
+    return norm.includes(kNorm) || kNorm.includes(norm);
+  });
+  if (match) return match[1];
+
+  if (existingImg && (existingImg.startsWith("/") || existingImg.startsWith("http"))) return existingImg;
+
+  return "https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=400&q=80";
+}
+
+const isServiceCategory = (cat: string) => /services|venues|decoration|catering|hospitality|transportation|setup|sound|mandap|stage|photo/i.test(cat || "");
+const isOrganizationCategory = (cat: string) => /organization|sanstha|troupe|academy/i.test(cat || "");
 
 const getHeroSubtitle = (categoryName: string, t: (k: string) => string) => {
-  if (isServiceCategory(categoryName)) {
-    return t("category.heroSubtitleService");
-  }
-  if (isOrganizationCategory(categoryName)) {
-    return t("category.heroSubtitleOrg");
-  }
-  return t("category.heroSubtitleArtist");
-};
-
-const getEmptyTitle = (categoryName: string, subName: string, selectedCity?: string, t?: (k: string, opt?: any) => string) => {
-  if (!t) return "";
-  const catLabel = getArtLabel(t, categoryName);
-  const subLabel = subName === "All" ? catLabel : getArtLabel(t, subName);
-  if (selectedCity && selectedCity !== "All Cities") {
-    return isServiceCategory(categoryName)
-      ? t("category.noServicesInCity", { city: selectedCity })
-      : t("category.noArtistsInCity", { city: selectedCity });
-  }
-  if (subName && subName !== "All") {
-    return isServiceCategory(categoryName) || isServiceCategory(subName)
-      ? t("category.noServicesAvailable", { name: subLabel })
-      : t("category.noArtistsAvailable", { name: subLabel });
-  }
-  return isServiceCategory(categoryName)
-    ? t("category.noServicesAvailable", { name: catLabel })
-    : t("category.noArtistsAvailable", { name: catLabel });
-};
-
-const getExploreButtonText = (categoryName: string, t: (k: string, opt?: any) => string) => {
-  const clean = getArtLabel(t, categoryName.replace(/\s*services?$/i, "").replace(/\s*organizations?$/i, "").replace(/\s*artists?$/i, "").trim());
-  if (isServiceCategory(categoryName)) {
-    return t("category.viewAllServices", { name: clean });
-  }
-  if (isOrganizationCategory(categoryName)) {
-    return t("category.viewAllOrgs", { name: clean });
-  }
-  return t("category.viewAllArtists", { name: clean });
-};
-
-const CATEGORY_ICON_MAP: Record<string, any> = {
-  "Spiritual Speakers": Mic,
-  "Vocal Artists": Music2,
-  "Instrumental Artists": Radio,
-  "Organizations": Building2,
-  "Event Services": Sparkles,
-  "Venues": Building2,
-  "Bridal & Groom Services": Paintbrush,
-  "Photography & Videography": Camera,
-  "Entertainment": Sparkles,
-  "Catering": Utensils,
-  "Decoration": Flower2,
-  "Event Setup": Building2,
-  "Transportation": Car,
-  "Guest Hospitality": Building2,
-  "Invitations": Mail,
-  "Wedding Essentials": Gift,
-  "Shopping": ShoppingBag,
-};
-
-const CATEGORY_BANNER_IMAGES: Record<string, string> = {
-  "Spiritual Speakers": "https://images.pexels.com/photos/34193177/pexels-photo-34193177.jpeg?auto=compress&cs=tinysrgb&w=800&fit=crop",
-  "Vocal Artists": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
-  "Instrumental Artists": "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800&auto=format&fit=crop",
-  "Organizations": "https://images.unsplash.com/photo-1544717305-2782549b5136?q=80&w=800&auto=format&fit=crop",
-  "Event Services": "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?q=80&w=800&auto=format&fit=crop",
-  "Venues": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=800&auto=format&fit=crop",
-  "Bridal & Groom Services": "https://images.pexels.com/photos/33986816/pexels-photo-33986816.jpeg?auto=compress&cs=tinysrgb&w=800&fit=crop",
-  "Photography & Videography": "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=800&auto=format&fit=crop",
-  "Entertainment": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
-  "Catering": "https://images.unsplash.com/photo-1555244162-803834f70033?q=80&w=800&auto=format&fit=crop",
-  "Decoration": "https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop",
-  "Event Setup": "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?q=80&w=800&auto=format&fit=crop",
-  "Transportation": "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=800&auto=format&fit=crop",
-  "Guest Hospitality": "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800&auto=format&fit=crop",
-  "Invitations": "https://images.unsplash.com/photo-1513151233558-d860c5398176?q=80&w=800&auto=format&fit=crop",
-  "Wedding Essentials": "https://images.unsplash.com/photo-1520854221256-17451cc331bf?q=80&w=800&auto=format&fit=crop",
-  "Shopping": "https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=800&auto=format&fit=crop",
+  if (isServiceCategory(categoryName)) return t("category.heroSubtitleService") || `Find and book verified professional ${categoryName.toLowerCase()} for your events and programs.`;
+  if (isOrganizationCategory(categoryName)) return t("category.heroSubtitleOrg") || `Explore verified devotional and cultural organizations for your events.`;
+  return `Find and book verified professional ${categoryName.toLowerCase()} for your events and programs.`;
 };
 
 interface ArtistCardData {
@@ -145,6 +103,7 @@ interface ArtistCardData {
   reviewsCount: number;
   location: string;
   experience: string;
+  languages: string;
   startingPrice: string;
   image: string;
   subCategory: string;
@@ -155,143 +114,109 @@ interface ArtistCardData {
 
 export default function EventLevel1Page() {
   const { eventName } = useParams<{ eventName: string }>();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [showRequirementModal, setShowRequirementModal] = useState(false);
   const { t } = useI18n();
 
   const decodedName = eventName ? decodeURIComponent(eventName) : "Wedding";
-  const cardMeta = MAIN_EVENT_CARDS.find((c) => c.name.toLowerCase() === decodedName.toLowerCase());
-  const eventMeta = {
-    title: decodedName,
-    subtitle: cardMeta?.description || `Explore top artists and vendors for ${decodedName}.`,
-    heroImage: cardMeta?.image || "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=1200&auto=format&fit=crop",
-  };
 
-  const dynamicCategories = getCategoriesForEvent(decodedName);
-  const [selectedCategoryName, setSelectedCategoryName] = useState<string>(
-    dynamicCategories[0]?.name || "Spiritual Speakers"
-  );
+  const eventMeta = useMemo(() => {
+    const found = MAIN_EVENT_CARDS.find((c) => c.name.toLowerCase() === decodedName.toLowerCase() || c.id.toLowerCase() === decodedName.toLowerCase());
+    if (found) return { title: found.name, icon: found.icon, heroImage: found.image, description: found.description };
+    return { title: decodedName, icon: "🚩", heroImage: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=1200&auto=format&fit=crop", description: "Find and book verified artists for your event." };
+  }, [decodedName]);
+
+  const dynamicCategories = useMemo(() => getCategoriesForEvent(decodedName), [decodedName]);
+
+  const [selectedCategoryName, setSelectedCategoryName] = useState<string>(dynamicCategories[0]?.name || "Venues");
   const [activeSubcategory, setActiveSubcategory] = useState<string>("All");
-
   const [selectedCity, setSelectedCity] = useState<string>("All Cities");
-  const [selectedSort, setSelectedSort] = useState<string>("Recommended");
-  const [selectedPrice, setSelectedPrice] = useState<string>("All");
+  const [selectedSort, setSelectedSort] = useState("Recommended");
+  const [selectedPrice, setSelectedPrice] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-
+  const [showRequirementModal, setShowRequirementModal] = useState(false);
   const [realArtists, setRealArtists] = useState<ArtistCardData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const locParam = searchParams.get("location") || searchParams.get("city");
-    if (locParam) {
-      setSelectedCity(locParam);
-    } else {
-      setSelectedCity("All Cities");
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
     if (dynamicCategories.length > 0 && !dynamicCategories.some((c) => c.name === selectedCategoryName)) {
       setSelectedCategoryName(dynamicCategories[0].name);
-      setActiveSubcategory("All");
     }
   }, [decodedName, dynamicCategories, selectedCategoryName]);
 
-  const activeCategory = dynamicCategories.find((c) => c.name === selectedCategoryName) || dynamicCategories[0];
+  const activeCategory = useMemo(() => dynamicCategories.find((c) => c.name.toLowerCase() === selectedCategoryName.toLowerCase()) || dynamicCategories[0], [dynamicCategories, selectedCategoryName]);
 
-  // Fetch real artists
   useEffect(() => {
     let isMounted = true;
     clearDataCache();
-    getActiveArtistsPage(50)
-      .then((res) => {
+    getActiveArtistsPage(50).then((res) => {
         if (!isMounted) return;
         if (res.items && res.items.length > 0) {
           const mapped: ArtistCardData[] = res.items.map((item: any) => {
-            const subCat = item.subCategory || item.subcategory || item.artForm || item.category || "Artist";
+            const extracted = extractArtistServices(item);
+            const servicesList = Array.from(new Set(extracted.map((s) => s.subcategory || s.artForm).filter(Boolean)));
+            const subCat = servicesList[0] || item.subCategory || item.subcategory || item.artForm || item.category || "Artist";
             const uploadedImage = resolveArtistProfilePhoto(item);
-            const fallbackImage = imageRegistry.getUniqueImage({
-              category: subCat,
-              type: "artist",
-              key: item.uid || item.id || item.displayName || item.name || "artist-card",
-            });
-            const servicesList = extractArtistServices(item).map((s) => s.subcategory || s.artForm || s.category);
-
+            const fallbackImage = imageRegistry.getUniqueImage({ category: subCat, type: "artist", key: item.uid || item.id || item.displayName || item.name || "artist-card" });
+            const rawExp = item.experience || item.yearsOfExperience || item.exp;
+            const expText = rawExp ? `${rawExp}+ Years Experience` : "5+ Years Experience";
+            const langs = Array.isArray(item.languages) && item.languages.length > 0 ? item.languages.join(", ") : item.language || "Marathi, Hindi, English";
             return {
               id: item.uid || item.id || String(Math.random()),
               name: item.displayName || item.name || item.stageName || item.artistName || "Professional Artist",
-              isVerified: Boolean(item.isVerified || item.verified),
-              rating: item.rating ? Number(item.rating) : 4.8,
-              reviewsCount: item.reviewsCount ? Number(item.reviewsCount) : 24,
-              location: item.city || item.location || "Pune, Maharashtra",
-              experience: item.experience ? `${item.experience} Yrs Exp` : "5+ Yrs Exp",
-              startingPrice: item.startingPrice
-                ? String(item.startingPrice)
-                : item.minPrice
-                ? String(item.minPrice)
-                : "15,000",
+              isVerified: item.isVerified !== false,
+              rating: item.rating ? Number(item.rating) : 4.9,
+              reviewsCount: item.reviewsCount ? Number(item.reviewsCount) : 28,
+              location: item.city || item.location || "Maharashtra",
+              experience: expText,
+              languages: langs,
+              startingPrice: item.startingPrice ? String(item.startingPrice) : item.minPrice ? String(item.minPrice) : item.soloPrice ? String(item.soloPrice) : "15,000",
               image: uploadedImage || fallbackImage,
               subCategory: subCat,
               categoryGroup: item.categoryGroup || item.category || item.group || "",
-              servicesList: servicesList.length > 0 ? servicesList : [subCat],
+              servicesList: servicesList.length ? servicesList : [subCat],
               rawItem: item,
             };
           });
           setRealArtists(mapped);
         }
         setLoading(false);
-      })
-      .catch((err) => {
-        console.warn("Failed to fetch active artists:", err);
-        if (isMounted) setLoading(false);
-      });
+      }).catch((err) => { console.warn(err); if (isMounted) setLoading(false); });
+    return () => { isMounted = false; };
+  }, [decodedName]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Filtered Artists calculation
   const displayedArtists = useMemo(() => {
+    if (!activeCategory) return [];
     let list = [...realArtists];
-
-    if (!activeCategory) return list;
-
-    // Filter by active category group subcategories
     const categorySubSet = new Set((activeCategory.subcategories || []).map((s) => s.toLowerCase()));
-    const catGroupLower = activeCategory.name.toLowerCase();
-
+    const catNameLower = activeCategory.name.toLowerCase();
     list = list.filter((a) => {
-      const subLower = a.subCategory.toLowerCase();
-      const groupLower = (a.categoryGroup || "").toLowerCase();
-      return categorySubSet.has(subLower) || subLower.includes(catGroupLower) || groupLower.includes(catGroupLower);
+      const subs = a.servicesList && a.servicesList.length ? a.servicesList : [a.subCategory];
+      const artistGroup = (a.categoryGroup || "").toLowerCase();
+      return subs.some((s) => categorySubSet.has(s.toLowerCase()) || s.toLowerCase().includes(catNameLower)) || artistGroup.includes(catNameLower);
     });
-
-    // Subcategory Filter tab selection
     if (activeSubcategory && activeSubcategory !== "All") {
       const subLower = activeSubcategory.toLowerCase();
-      list = list.filter((a) => a.subCategory.toLowerCase().includes(subLower));
+      list = list.filter((a) => {
+        const subs = a.servicesList && a.servicesList.length ? a.servicesList : [a.subCategory];
+        return subs.some((s) => s.toLowerCase().includes(subLower));
+      });
     }
-
-    // City Filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((a) => a.name.toLowerCase().includes(q) || a.subCategory.toLowerCase().includes(q) || a.location.toLowerCase().includes(q));
+    }
     if (selectedCity && selectedCity !== "All Cities") {
-      list = list.filter((a) => matchesArtistCity(a.rawItem || a, selectedCity));
+      list = list.filter((a) => matchesArtistCity(a, selectedCity));
     }
-
-    // Price Filter
     if (selectedPrice === "Under20k") {
       list = list.filter((a) => parseInt(a.startingPrice.replace(/\D/g, ""), 10) < 20000);
     } else if (selectedPrice === "20kTo30k") {
-      list = list.filter((a) => {
-        const price = parseInt(a.startingPrice.replace(/\D/g, ""), 10);
-        return price >= 20000 && price <= 30000;
-      });
+      list = list.filter((a) => { const price = parseInt(a.startingPrice.replace(/\D/g, ""), 10); return price >= 20000 && price <= 30000; });
     } else if (selectedPrice === "Above30k") {
       list = list.filter((a) => parseInt(a.startingPrice.replace(/\D/g, ""), 10) > 30000);
     }
-
-    // Sorting Order
     if (selectedSort === "Rating") {
       list.sort((a, b) => b.rating - a.rating);
     } else if (selectedSort === "PriceLow") {
@@ -299,9 +224,8 @@ export default function EventLevel1Page() {
     } else if (selectedSort === "PriceHigh") {
       list.sort((a, b) => parseInt(b.startingPrice.replace(/\D/g, ""), 10) - parseInt(a.startingPrice.replace(/\D/g, ""), 10));
     }
-
     return list;
-  }, [realArtists, activeCategory, activeSubcategory, selectedCity, selectedPrice, selectedSort]);
+  }, [realArtists, activeCategory, activeSubcategory, searchQuery, selectedCity, selectedPrice, selectedSort]);
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => {
@@ -313,416 +237,276 @@ export default function EventLevel1Page() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] flex flex-col font-sans antialiased pt-20">
+    <div className="min-h-screen bg-stone-50/60 flex flex-col font-sans antialiased pt-20">
       <Navbar />
-
-      <main className="flex-1 max-w-[1240px] w-full mx-auto px-4 md:px-6 py-4 md:py-6">
-        {/* Single-Line Breadcrumb Header */}
-        <div className="flex items-center justify-between py-2 border-b border-stone-200/60 mb-5">
-          <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 overflow-x-auto whitespace-nowrap scrollbar-none pr-2">
-            <Link to="/" className="hover:text-stone-900 transition-colors shrink-0">
-              {t("nav.home") || "Home"}
-            </Link>
-            <span className="shrink-0">&gt;</span>
-            <span className="text-stone-600 shrink-0">{eventMeta.title}</span>
+      <main className="flex-1 max-w-[1360px] w-full mx-auto px-4 md:px-6 py-4 md:py-6 space-y-6">
+        {/* ─── 1. Breadcrumb & Global Search ─── */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2 border-b border-stone-200/80">
+          <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 overflow-x-auto whitespace-nowrap scrollbar-none">
+            <Link to="/" className="hover:text-stone-900 transition-colors shrink-0">Home</Link>
+            <span className="shrink-0 text-stone-400">&gt;</span>
+            <Link to={`/events/${encodeURIComponent(decodedName)}`} className="hover:text-stone-900 transition-colors shrink-0">{decodedName}</Link>
             {activeCategory && (
               <>
-                <span className="shrink-0">&gt;</span>
-                <span className="text-stone-900 font-bold shrink-0">{activeCategory.name}</span>
+                <span className="shrink-0 text-stone-400">&gt;</span>
+                <span className="text-orange-600 font-extrabold shrink-0">{activeCategory.name}</span>
               </>
             )}
           </div>
-          <button
-            onClick={() => navigate("/search")}
-            className="p-1.5 rounded-full hover:bg-stone-200/60 text-stone-500 transition shrink-0 ml-2"
-            aria-label="Search"
-          >
-            <Search className="h-4 w-4" />
-          </button>
+          <div className="relative w-full sm:w-72">
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search artists, categories..." className="w-full h-9 pl-4 pr-9 rounded-full bg-white border border-stone-200/90 text-xs font-medium text-stone-800 placeholder-stone-400 shadow-2xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all" />
+            <Search className="absolute right-3 top-2.5 h-4 w-4 text-stone-400 pointer-events-none" />
+          </div>
         </div>
 
-        {/* Mobile Category Navigation Pills */}
+        {/* ─── 2. HORIZONTAL CATEGORIES BAR (Circular Avatar Cards) ─── */}
         {dynamicCategories.length > 0 && (
-          <div className="flex md:hidden items-center gap-2 overflow-x-auto scrollbar-none py-1 mb-4">
-            {dynamicCategories.map((cat) => {
-              const isSelected = activeCategory?.name === cat.name;
-              return (
-                <button
-                  key={cat.name}
-                  onClick={() => {
-                    setSelectedCategoryName(cat.name);
-                    setActiveSubcategory("All");
-                  }}
-                  className={`shrink-0 px-4 py-2 rounded-full text-xs font-extrabold transition-all border ${
-                    isSelected
-                      ? "bg-orange-600 text-white border-orange-600 shadow-2xs"
-                      : "bg-white text-stone-700 border-stone-200/80 hover:border-orange-300"
-                  }`}
-                >
-                  {cat.name}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Main 2-Column Grid Layout */}
-        {dynamicCategories.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-[270px_1fr] gap-6 md:gap-8 mb-10">
-            {/* ─── LEFT SIDEBAR (Desktop) ─── */}
-            <div className="hidden md:flex flex-col gap-6 shrink-0">
-              <div className="bg-white rounded-2xl border border-stone-200/80 p-3 shadow-2xs">
-                <h2 className="text-xs font-extrabold text-stone-900 uppercase tracking-wider px-3 py-2">
-                  {eventMeta.title} Categories
-                </h2>
-
-                <div className="mt-1 space-y-1">
-                  {dynamicCategories.map((cat) => {
-                    const isSelected = activeCategory?.name === cat.name;
-                    const Icon = CATEGORY_ICON_MAP[cat.name] || Sparkles;
-
-                    return (
-                      <button
-                        key={cat.name}
-                        onClick={() => {
-                          setSelectedCategoryName(cat.name);
-                          setActiveSubcategory("All");
-                        }}
-                        className={`w-full text-left px-3.5 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 flex items-center justify-between group cursor-pointer border-l-4 ${
-                          isSelected
-                            ? "bg-orange-50/80 text-orange-600 border-orange-500 font-extrabold shadow-2xs"
-                            : "bg-white text-stone-800 border-transparent hover:bg-stone-50 hover:text-orange-600"
-                        }`}
-                      >
-                        <span className="flex items-center gap-3 truncate">
-                          <Icon
-                            className={`h-4 w-4 shrink-0 stroke-[2] ${
-                              isSelected ? "text-orange-600" : "text-stone-500 group-hover:text-orange-600"
-                            }`}
-                          />
-                          <span className="truncate">{cat.name}</span>
-                        </span>
-                        <ChevronRight
-                          className={`h-4 w-4 shrink-0 transition-transform ${
-                            isSelected
-                              ? "text-orange-600 translate-x-0.5"
-                              : "text-stone-400 group-hover:text-orange-600 group-hover:translate-x-0.5"
-                          }`}
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Sidebar Artist Registration CTA Card */}
-              <div className="rounded-2xl bg-gradient-to-b from-orange-50/90 to-amber-50/60 border border-orange-200/70 p-5 text-center shadow-2xs flex flex-col items-center">
-                <div className="h-12 w-12 rounded-2xl bg-orange-100/80 text-orange-600 flex items-center justify-center mb-3 shadow-2xs">
-                  <UserCheck className="h-6 w-6 stroke-[2]" />
-                </div>
-                <h3 className="text-sm font-extrabold text-stone-900 leading-tight">
-                  {t("artist.cta.title") || "Are you an Artist?"}
-                </h3>
-                <p className="mt-1 text-xs font-medium text-stone-600 leading-relaxed max-w-[200px]">
-                  {t("artist.cta.desc") || "Join MyKalakar and grow your reach."}
-                </p>
-                <button
-                  onClick={() => navigate("/register")}
-                  className="mt-4 w-full py-2.5 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs shadow-xs hover:shadow-md transition-all cursor-pointer active:scale-95"
-                >
-                  {t("nav.joinArtist") || "Join as Artist"}
-                </button>
-              </div>
+          <section className="bg-white rounded-3xl border border-stone-200/80 p-4 sm:p-5 shadow-xs">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h2 className="text-xs font-black text-stone-900 uppercase tracking-wider flex items-center gap-2">
+                <span>{eventMeta.title} Categories</span>
+                <span className="text-stone-400 font-bold">({dynamicCategories.length})</span>
+              </h2>
+              <span className="text-[11px] font-bold text-stone-400 hidden sm:inline">Scroll horizontally &rarr;</span>
             </div>
 
-            {/* ─── RIGHT CONTENT AREA ─── */}
-            <div className="flex flex-col gap-5">
-              {activeCategory ? (
-                <>
-                  {/* Category Hero / Header */}
-                  <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-stone-950 via-stone-900 to-stone-800 text-white p-6 sm:p-7 flex items-center shadow-md min-h-[140px]">
-                    <div className="relative z-10 max-w-lg">
-                      <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                        {getArtLabel(t, activeCategory.name)}
-                      </h1>
-                      <p className="mt-1.5 text-xs sm:text-sm text-stone-300 font-medium leading-relaxed">
-                        {getHeroSubtitle(activeCategory.name, t)}
-                      </p>
-                    </div>
+            <div className="flex items-start gap-4 sm:gap-6 overflow-x-auto pb-2 pt-1 scrollbar-none -mx-2 px-2">
+              {dynamicCategories.map((cat) => {
+                const isActive = activeCategory?.name.toLowerCase() === cat.name.toLowerCase();
+                const circleImage = getCategoryCircleImage(cat.name, (cat as any).image);
 
-                    <div className="absolute right-0 top-0 bottom-0 w-1/2 md:w-5/12 overflow-hidden pointer-events-none">
-                      <div className="absolute inset-0 bg-gradient-to-r from-stone-950 via-stone-950/60 to-transparent z-10" />
+                return (
+                  <button
+                    key={cat.name}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategoryName(cat.name);
+                      setActiveSubcategory("All");
+                    }}
+                    className={`flex flex-col items-center gap-2 shrink-0 group cursor-pointer transition-all duration-200 w-20 sm:w-24 ${
+                      isActive ? "scale-[1.03]" : "hover:scale-[1.02]"
+                    }`}
+                  >
+                    {/* Circular Avatar */}
+                    <div
+                      className={`relative h-16 w-16 sm:h-20 sm:w-20 rounded-full overflow-hidden shrink-0 transition-all duration-300 ${
+                        isActive
+                          ? "ring-4 ring-orange-500 ring-offset-2 border-2 border-white shadow-md"
+                          : "border-2 border-stone-200 group-hover:border-orange-400 group-hover:shadow-sm"
+                      }`}
+                    >
                       <img
-                        src={
-                          CATEGORY_BANNER_IMAGES[activeCategory.name] ||
-                          eventMeta.heroImage
-                        }
-                        alt={activeCategory.name}
-                        className="h-full w-full object-cover object-center"
+                        src={circleImage}
+                        alt=""
+                        className="h-full w-full object-cover object-center group-hover:scale-110 transition-transform duration-500"
+                        loading="eager"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.src = "https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=400&q=80";
+                        }}
                       />
                     </div>
-                  </div>
 
-                  {/* SUBCATEGORY FILTERS (Horizontal Scrollable Chips/Tabs) */}
-                  <div className="my-1">
-                    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
-                      {/* "All" Filter Chip */}
+                    {/* Category Title */}
+                    <span
+                      className={`text-[11px] sm:text-xs font-black text-center leading-tight line-clamp-2 transition-colors ${
+                        isActive
+                          ? "text-orange-600 font-black"
+                          : "text-stone-700 group-hover:text-orange-600"
+                      }`}
+                    >
+                      {getArtLabel(t, cat.name)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ─── 3. FULL WIDTH MAIN CONTENT ─── */}
+        {activeCategory ? (
+          <div className="space-y-4">
+            {/* Subcategory Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+              <button
+                type="button"
+                onClick={() => setActiveSubcategory("All")}
+                className={`h-9 px-5 rounded-full text-xs font-black transition-all duration-200 shrink-0 cursor-pointer flex items-center justify-center ${
+                  activeSubcategory === "All"
+                    ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 scale-[1.02]"
+                    : "bg-white border border-stone-200/90 text-stone-700 hover:bg-stone-100 hover:border-stone-300 shadow-2xs"
+                }`}
+              >
+                All
+              </button>
+              {(activeCategory.subcategories || []).map((subName) => {
+                const isSelected = activeSubcategory.toLowerCase() === subName.toLowerCase();
+                return (
+                  <button
+                    key={subName}
+                    type="button"
+                    onClick={() => setActiveSubcategory(subName)}
+                    className={`h-9 px-4 rounded-full text-xs font-black transition-all duration-200 shrink-0 cursor-pointer flex items-center justify-center ${
+                      isSelected
+                        ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 scale-[1.02]"
+                        : "bg-white border border-stone-200/90 text-stone-700 hover:bg-stone-100 hover:border-stone-300 shadow-2xs"
+                    }`}
+                  >
+                    {getArtLabel(t, subName)}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Filter Controls Row */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <SearchableCityDropdown selectedCity={selectedCity} onSelectCity={setSelectedCity} availableArtists={realArtists} />
+                <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3.5 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
+                  <span className="text-stone-400 font-normal mr-1">Sort by:</span>
+                  <select value={selectedSort} onChange={(e) => setSelectedSort(e.target.value)} className="bg-transparent border-none outline-none cursor-pointer pr-1 font-extrabold text-stone-900">
+                    <option value="Recommended">Recommended</option>
+                    <option value="Rating">Rating: High to Low</option>
+                    <option value="PriceLow">Price: Low to High</option>
+                    <option value="PriceHigh">Price: High to Low</option>
+                  </select>
+                </div>
+                <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3.5 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
+                  <span className="text-stone-400 font-normal mr-1">Price:</span>
+                  <select value={selectedPrice} onChange={(e) => setSelectedPrice(e.target.value)} className="bg-transparent border-none outline-none cursor-pointer pr-1 font-extrabold text-stone-900">
+                    <option value="All">All</option>
+                    <option value="Under20k">Under ₹20,000</option>
+                    <option value="20kTo30k">₹20,000 - ₹30,000</option>
+                    <option value="Above30k">Above ₹30,000</option>
+                  </select>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRequirementModal(true)}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-orange-500/80 bg-white hover:bg-orange-50 text-stone-800 hover:text-orange-600 text-xs font-black shadow-2xs transition-colors cursor-pointer shrink-0"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5 text-orange-600" /> Filters
+              </button>
+            </div>
+
+            {/* Section Heading & Count */}
+            <div className="flex items-center justify-between pt-1">
+              <h2 className="text-base sm:text-lg font-black text-stone-900 tracking-tight">
+                {getArtLabel(t, activeCategory.name)} near you <span className="text-stone-400 font-bold ml-1">({displayedArtists.length})</span>
+              </h2>
+            </div>
+
+            {/* Empty State */}
+            {displayedArtists.length === 0 && !loading && (
+              <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-3xl border border-stone-200 p-6 shadow-xs">
+                <div className="h-14 w-14 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 mb-3">
+                  <MapPin className="h-6 w-6 stroke-[1.75]" />
+                </div>
+                <h3 className="text-base font-extrabold text-stone-900 mb-1">No artists found for selected filters</h3>
+                <p className="text-xs font-medium text-stone-500 max-w-sm mb-4">
+                  {selectedCity !== "All Cities" ? "Try choosing 'All Cities' to view all available verified artists." : "Try selecting 'All' in subcategories or explore other categories."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCity("All Cities");
+                    setActiveSubcategory("All");
+                    setSelectedPrice("All");
+                  }}
+                  className="px-5 py-2.5 rounded-full bg-orange-600 text-white font-black text-xs shadow-md shadow-orange-600/20 hover:bg-orange-700 transition"
+                >
+                  Reset All Filters
+                </button>
+              </div>
+            )}
+
+            {/* Full Width 4-Column Artist Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+              {displayedArtists.map((artist) => {
+                const isFav = favorites.has(artist.id);
+
+                return (
+                  <div
+                    key={artist.id}
+                    onClick={() => navigate(`/artist/${artist.id}`)}
+                    className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-3xl bg-white border border-stone-200/80 shadow-xs hover:shadow-lg hover:border-orange-300 transition-all duration-300 cursor-pointer text-center"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(artist.id);
+                      }}
+                      className="absolute top-3.5 right-3.5 p-1 rounded-full text-stone-400 hover:text-rose-500 transition cursor-pointer z-10"
+                      aria-label="Add to favorites"
+                    >
+                      <Heart className={`h-4 w-4 sm:h-5 sm:w-5 stroke-[1.75] transition-colors ${isFav ? "fill-rose-500 text-rose-500" : "text-stone-400 hover:text-stone-600"}`} />
+                    </button>
+
+                    <div className="flex flex-col items-center">
+                      <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden bg-stone-100 ring-4 ring-stone-50 shadow-xs mb-3 shrink-0 border border-stone-200/60">
+                        <img
+                          src={artist.image}
+                          alt={artist.name}
+                          className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            const fallback = imageRegistry.getUniqueImage({ category: artist.subCategory || "Performers", type: "artist", key: artist.id });
+                            if (target.src !== fallback) target.src = fallback;
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-center gap-1 text-[11px] font-black text-emerald-600 mb-1">
+                        <CheckCircle2 className="h-3.5 w-3.5 fill-emerald-500 text-white" />
+                        <span>Verified</span>
+                      </div>
+                      <h3 className="text-sm sm:text-base font-black text-stone-900 group-hover:text-orange-600 transition-colors line-clamp-1">
+                        {artist.name}
+                      </h3>
+                      <p className="text-xs font-semibold text-stone-500 mt-0.5">{artist.experience}</p>
+                      <p className="text-xs font-medium text-stone-500 mt-0.5 line-clamp-1">{artist.languages}</p>
+                    </div>
+
+                    <div className="mt-3.5 pt-3 border-t border-stone-100 flex flex-col items-center">
+                      <p className="text-xs font-medium text-stone-600">
+                        Starting from <strong className="font-black text-stone-950 text-xs sm:text-sm">₹{artist.startingPrice}</strong>
+                      </p>
                       <button
                         type="button"
-                        onClick={() => setActiveSubcategory("All")}
-                        className={`h-9 px-4 rounded-full text-xs font-extrabold transition-all duration-200 shrink-0 cursor-pointer flex items-center gap-1.5 ${
-                          activeSubcategory === "All"
-                            ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 scale-[1.02]"
-                            : "bg-white border border-stone-200/90 text-stone-700 hover:bg-stone-100 hover:border-stone-300"
-                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/artist/${artist.id}`);
+                        }}
+                        className="w-full mt-3 py-2 px-4 rounded-xl border border-orange-500/80 bg-white hover:bg-orange-500 text-orange-600 hover:text-white font-black text-xs transition-all duration-200 shadow-2xs cursor-pointer"
                       >
-                        <span>{t("common.all") || "All"}</span>
+                        View Profile
                       </button>
-
-                      {/* Dynamic Subcategory Chips */}
-                      {activeCategory.subcategories.map((subName) => {
-                        const isSelected = activeSubcategory.toLowerCase() === subName.toLowerCase();
-
-                        return (
-                          <button
-                            key={subName}
-                            type="button"
-                            onClick={() => setActiveSubcategory(subName)}
-                            className={`h-9 px-4 rounded-full text-xs font-extrabold transition-all duration-200 shrink-0 cursor-pointer flex items-center gap-1.5 ${
-                              isSelected
-                                ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 scale-[1.02]"
-                                : "bg-white border border-stone-200/90 text-stone-700 hover:bg-stone-100 hover:border-stone-300"
-                            }`}
-                          >
-                            <span>{getArtLabel(t, subName)}</span>
-                          </button>
-                        );
-                      })}
                     </div>
                   </div>
+                );
+              })}
+            </div>
 
-                  {/* Filter Controls Row (Location, Price, Sort) */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Location Selector */}
-                    <SearchableCityDropdown
-                      selectedCity={selectedCity}
-                      onSelectCity={setSelectedCity}
-                      availableArtists={realArtists.map((a) => a.rawItem || a)}
-                    />
-
-                    {/* Sort Selector */}
-                    <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
-                      <span className="text-stone-400 font-normal mr-1">{t("search.sortBy") || "Sort:"}</span>
-                      <select
-                        value={selectedSort}
-                        onChange={(e) => setSelectedSort(e.target.value)}
-                        className="bg-transparent border-none outline-none cursor-pointer pr-2 font-bold text-stone-800"
-                      >
-                        <option value="Recommended">{t("sort.recommended") || "Recommended"}</option>
-                        <option value="Rating">{t("search.ratingHighToLow") || "Rating: High to Low"}</option>
-                        <option value="PriceLow">{t("search.priceLowToHigh") || "Price: Low to High"}</option>
-                        <option value="PriceHigh">{t("search.priceHighToLow") || "Price: High to Low"}</option>
-                      </select>
-                    </div>
-
-                    {/* Price Selector */}
-                    <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
-                      <span className="text-stone-400 font-normal mr-1">{t("filter.price") || "Budget:"}</span>
-                      <select
-                        value={selectedPrice}
-                        onChange={(e) => setSelectedPrice(e.target.value)}
-                        className="bg-transparent border-none outline-none cursor-pointer pr-2 font-bold text-stone-800"
-                      >
-                        <option value="All">{t("price.all") || "All Prices"}</option>
-                        <option value="Under20k">{t("price.under20k") || "Under ₹20,000"}</option>
-                        <option value="20kTo30k">₹20,000 - ₹30,000</option>
-                        <option value="Above30k">{t("price.above30k") || "Above ₹30,000"}</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Subheading Count */}
-                  <h2 className="text-sm font-extrabold text-stone-900 tracking-tight">
-                    {getSectionHeading(activeCategory.name, activeSubcategory, t)}
-                    <span className="text-stone-400 font-semibold ml-2">({displayedArtists.length})</span>
-                  </h2>
-
-                  {/* Empty State */}
-                  {displayedArtists.length === 0 && !loading && (
-                    <div className="flex flex-col items-center justify-center py-10 text-center bg-white rounded-3xl border border-stone-200 p-6 shadow-xs my-2">
-                      <div className="h-12 w-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 mb-3">
-                        <MapPin className="h-6 w-6 stroke-[1.75]" />
-                      </div>
-                      <h3 className="text-base font-extrabold text-stone-900 mb-1">
-                        {getEmptyTitle(activeCategory.name, activeSubcategory, selectedCity, t)}
-                      </h3>
-                      <p className="text-xs font-medium text-stone-500 max-w-sm mb-4">
-                        {selectedCity && selectedCity !== "All Cities"
-                          ? "Try another city or select All Cities to browse available options."
-                          : activeSubcategory && activeSubcategory !== "All"
-                          ? `Try exploring other styles or ${getExploreButtonText(activeCategory.name, t).toLowerCase()}.`
-                          : "We're continuously onboarding new providers. Please check back soon or explore other categories."}
-                      </p>
-                      {selectedCity && selectedCity !== "All Cities" ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCity("All Cities")}
-                          className="px-4 py-2 rounded-full bg-orange-600 text-white font-extrabold text-xs shadow-xs hover:bg-orange-700 transition"
-                        >
-                          {t("search.allCities") || "Show All Cities"}
-                        </button>
-                      ) : activeSubcategory && activeSubcategory !== "All" ? (
-                        <button
-                          type="button"
-                          onClick={() => setActiveSubcategory("All")}
-                          className="px-4 py-2 rounded-full bg-stone-900 text-white font-extrabold text-xs shadow-xs hover:bg-orange-600 transition"
-                        >
-                          {getExploreButtonText(activeCategory.name, t)}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => navigate("/categories")}
-                          className="px-4 py-2 rounded-full bg-stone-900 text-white font-extrabold text-xs shadow-xs hover:bg-orange-600 transition"
-                        >
-                          {t("common.explore") || "Explore Categories"}
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Artists Responsive Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                    {displayedArtists.map((artist) => {
-                      const isFav = favorites.has(artist.id);
-
-                      return (
-                        <div
-                          key={artist.id}
-                          onClick={() => navigate(`/artist/${artist.id}`)}
-                          className="group relative flex flex-col justify-between p-2.5 sm:p-3 rounded-2xl bg-white border border-stone-200/80 shadow-xs hover:border-orange-500 hover:shadow-md transition-all duration-300 cursor-pointer select-none"
-                        >
-                          {/* Image Thumbnail */}
-                          <div className="relative h-28 sm:h-32 w-full overflow-hidden rounded-xl bg-stone-100 mb-2 shrink-0">
-                            <img
-                              src={artist.image}
-                              alt={artist.name}
-                              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                              loading="lazy"
-                              onError={(e) => {
-                                const target = e.currentTarget;
-                                const fallback = imageRegistry.getUniqueImage({
-                                  category: artist.subCategory || "Performers",
-                                  type: "artist",
-                                  key: artist.id,
-                                });
-                                if (target.src !== fallback) {
-                                  target.src = fallback;
-                                }
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleFavorite(artist.id);
-                              }}
-                              className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition cursor-pointer"
-                            >
-                              <Heart
-                                className={`h-3 w-3 ${
-                                  isFav ? "fill-rose-500 text-rose-500" : ""
-                                }`}
-                              />
-                            </button>
-                          </div>
-
-                          {/* Details Content */}
-                          <div className="flex-1 flex flex-col justify-between">
-                            <div>
-                              <div className="flex items-center justify-between gap-1 mb-0.5">
-                                <h3 className="text-xs font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors truncate">
-                                  {artist.name}
-                                </h3>
-                                {artist.isVerified && (
-                                  <BadgeCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                )}
-                              </div>
-
-                              {/* Service Badges */}
-                              <div className="flex flex-wrap gap-1 mb-1.5 min-h-[20px]">
-                                {(artist.servicesList && artist.servicesList.length > 0 ? artist.servicesList : [artist.subCategory]).slice(0, 2).map((srv) => (
-                                  <span key={srv} className="inline-block rounded-md bg-orange-50 text-orange-700 border border-orange-100/60 px-1.5 py-0.5 text-[8.5px] font-extrabold truncate max-w-[95px]">
-                                    {getArtLabel(t, srv)}
-                                  </span>
-                                ))}
-                                {(artist.servicesList?.length || 1) > 2 && (
-                                  <span className="inline-block rounded-md bg-stone-100 text-stone-600 px-1.5 py-0.5 text-[8.5px] font-extrabold">
-                                    +{(artist.servicesList?.length || 1) - 2}
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Rating & Location */}
-                              <div className="flex items-center justify-between text-[10.5px] font-semibold text-stone-600 pt-1 border-t border-stone-100">
-                                <div className="flex items-center gap-0.5 text-amber-500">
-                                  <Star className="h-3 w-3 fill-current" />
-                                  <span className="font-extrabold text-stone-900">{artist.rating}</span>
-                                </div>
-                                <div className="flex items-center gap-0.5 text-stone-500 truncate max-w-[75px]">
-                                  <MapPin className="h-2.5 w-2.5 text-stone-400 shrink-0" />
-                                  <span className="truncate">{artist.location}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Footer Price & View Action */}
-                            <div className="mt-1.5 pt-1.5 border-t border-stone-100 flex items-center justify-between">
-                              <div>
-                                <span className="text-[8px] text-stone-400 block font-medium leading-none">{t("category.startingFrom") || "Starts from"}</span>
-                                <span className="font-extrabold text-stone-900 text-xs mt-0.5 block">
-                                  ₹{artist.startingPrice}
-                                </span>
-                              </div>
-                              <span className="inline-flex items-center gap-0.5 text-[10.5px] font-extrabold text-orange-600 group-hover:translate-x-0.5 transition-transform">
-                                {t("category.viewProfile") || "Profile"} <ChevronRight className="h-2.5 w-2.5" />
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Bottom Requirement CTA Banner */}
-                  <div className="rounded-2xl bg-gradient-to-r from-orange-50/90 via-amber-50/80 to-orange-50/90 border border-orange-200/70 p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4 mt-2">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-2xs">
-                        <Clock className="h-5 w-5 stroke-[2]" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs sm:text-sm font-extrabold text-stone-900 leading-tight">
-                          Can't find what you're looking for?
-                        </h4>
-                        <p className="text-xs font-medium text-stone-600 mt-0.5">
-                          Post your requirement and we'll help you find the perfect match.
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => setShowRequirementModal(true)}
-                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white border-2 border-orange-500 text-orange-600 font-extrabold text-xs shadow-2xs hover:bg-orange-600 hover:text-white transition-all duration-300 cursor-pointer active:scale-95 shrink-0"
-                    >
-                      Post Requirement
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="rounded-3xl border border-stone-200 bg-white p-8 text-center shadow-2xs">
-                  <p className="text-sm text-stone-500 font-medium">No categories available for this event.</p>
+            {/* Bottom Artist Registration CTA */}
+            <div className="rounded-3xl bg-gradient-to-r from-orange-500 to-amber-500 text-white p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-white/20 backdrop-blur-md text-white flex items-center justify-center shrink-0">
+                  <UserPlus className="h-6 w-6" />
                 </div>
-              )}
+                <div>
+                  <h4 className="text-base sm:text-lg font-black leading-tight">Are you an artist or service provider?</h4>
+                  <p className="text-xs sm:text-sm text-orange-100 font-medium mt-0.5">Join MyKalakar today and get booked for weddings, events, and programs.</p>
+                </div>
+              </div>
+              <Link
+                to="/artist-register"
+                className="px-6 py-3 rounded-2xl bg-white text-orange-600 font-black text-xs sm:text-sm hover:bg-stone-50 transition shadow-sm shrink-0"
+              >
+                Register as Artist
+              </Link>
             </div>
           </div>
         ) : (
@@ -733,11 +517,8 @@ export default function EventLevel1Page() {
       </main>
 
       <Footer />
-
-      <NewRequirementModal
-        open={showRequirementModal}
-        onClose={() => setShowRequirementModal(false)}
-      />
+      <NewRequirementModal open={showRequirementModal} onClose={() => setShowRequirementModal(false)} />
     </div>
   );
 }
+

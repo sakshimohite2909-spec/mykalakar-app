@@ -4,10 +4,12 @@ import {
   Search,
   MapPin,
   ChevronRight,
-  BadgeCheck,
-  Star,
   Heart,
-  Clock,
+  CheckCircle2,
+  SlidersHorizontal,
+  UserPlus,
+  ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -26,61 +28,83 @@ import { imageRegistry } from "@/services/ImageRegistryService";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
 
+// Accurate Category Images Map covering all event types and categories
+const CATEGORY_CIRCULAR_IMAGES: Record<string, string> = {
+  // ─── VARKARI & SPIRITUAL ───
+  "spiritual speakers": "/cultural/varkari-vocalist.png",
+  "vocal artists": "/assets/curated/tanpura-singer-1.jpg",
+  "instrumental artists": "/assets/curated/tabla-hands.jpg",
+  "organizations": "/cultural/zanj-temple.png",
+  "warkari sanstha": "/cultural/zanj-temple.png",
+  "event services": "/assets/static/category-event-services.webp",
+  "pooja pandits": "https://images.unsplash.com/photo-1608613304899-ea8098577e38?auto=format&fit=crop&w=400&q=80",
+  "pandit / priest": "https://images.unsplash.com/photo-1608613304899-ea8098577e38?auto=format&fit=crop&w=400&q=80",
+
+  // ─── WEDDING & RECEPTION ───
+  "venues": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=400&q=80",
+  "marriage hall": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=400&q=80",
+  "banquet hall": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=400&q=80",
+  "bridal & groom services": "https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=400&q=80",
+  "bridal makeup": "https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=400&q=80",
+  "photography & videography": "https://images.unsplash.com/photo-1537633552985-df8429e8048b?auto=format&fit=crop&w=400&q=80",
+  "photography": "https://images.unsplash.com/photo-1537633552985-df8429e8048b?auto=format&fit=crop&w=400&q=80",
+  "entertainment": "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=400&q=80",
+  "catering": "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=400&q=80",
+  "catering & hospitality": "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=400&q=80",
+  "decoration": "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=400&q=80",
+  "decor & setup": "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=400&q=80",
+  "event setup": "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=400&q=80",
+  "transportation": "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=400&q=80",
+  "wedding essentials": "https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=400&q=80",
+  "shopping": "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=400&q=80",
+  "invitations & gifts": "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=400&q=80",
+
+  // ─── FOLK, CULTURAL & FESTIVALS ───
+  "folk artists": "/assets/curated/dhol-passion.jpg",
+  "traditional dance": "/cultural/dhol-pathak-performer.png",
+  "dhol tasha": "/assets/curated/dhol-passion.jpg",
+  "dhol-tasha pathak": "/assets/curated/dhol-passion.jpg",
+  "anchors & hosts": "https://images.unsplash.com/photo-1560439514-4e9645039924?auto=format&fit=crop&w=400&q=80",
+  "anchors / hosts": "https://images.unsplash.com/photo-1560439514-4e9645039924?auto=format&fit=crop&w=400&q=80",
+  "magicians": "https://images.unsplash.com/photo-1515250499692-7104b2a4c28f?auto=format&fit=crop&w=400&q=80",
+  "djs": "https://images.unsplash.com/photo-1516873240891-4bf014598ab4?auto=format&fit=crop&w=400&q=80",
+  "live bands": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=400&q=80",
+  "balloon decorators": "https://images.unsplash.com/photo-1530103862676-de88924083a2?auto=format&fit=crop&w=400&q=80",
+};
+
+export function getCategoryCircleImage(catName: string, existingImg?: string): string {
+  const norm = catName.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
+  const rawKey = catName.toLowerCase().trim();
+
+  // Direct exact match
+  if (CATEGORY_CIRCULAR_IMAGES[rawKey]) return CATEGORY_CIRCULAR_IMAGES[rawKey];
+  if (CATEGORY_CIRCULAR_IMAGES[norm]) return CATEGORY_CIRCULAR_IMAGES[norm];
+
+  // Fuzzy match in dictionary
+  const match = Object.entries(CATEGORY_CIRCULAR_IMAGES).find(([k]) => {
+    const kNorm = k.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
+    return norm.includes(kNorm) || kNorm.includes(norm);
+  });
+  if (match) return match[1];
+
+  if (existingImg && (existingImg.startsWith("/") || existingImg.startsWith("http"))) return existingImg;
+
+  return "https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=400&q=80";
+}
+
 const isServiceCategory = (cat: string) =>
   /services|venues|decoration|catering|hospitality|transportation|setup|sound|mandap|stage|photo/i.test(cat || "");
 const isOrganizationCategory = (cat: string) =>
   /organization|sanstha|troupe|academy/i.test(cat || "");
 
-const getSectionHeading = (categoryName: string, subName: string, t: (k: string, opt?: any) => string) => {
-  const catLabel = getArtLabel(t, categoryName);
-  const subLabel = subName === "All" ? catLabel : getArtLabel(t, subName);
-  if (isServiceCategory(categoryName) || isServiceCategory(subName)) {
-    return subName === "All" ? t("category.availableServices", { name: catLabel }) : t("category.servicesIn", { name: subLabel });
-  }
-  if (isOrganizationCategory(categoryName) || isOrganizationCategory(subName)) {
-    return subName === "All" ? t("category.availableOrganizations", { name: catLabel }) : t("category.organizationsIn", { name: subLabel });
-  }
-  return t("category.artistsIn", { name: subLabel });
-};
-
 const getHeroSubtitle = (categoryName: string, t: (k: string) => string) => {
   if (isServiceCategory(categoryName)) {
-    return t("category.heroSubtitleService");
+    return t("category.heroSubtitleService") || `Find and book verified professional ${categoryName.toLowerCase()} for your events and programs.`;
   }
   if (isOrganizationCategory(categoryName)) {
-    return t("category.heroSubtitleOrg");
+    return t("category.heroSubtitleOrg") || `Explore verified devotional and cultural organizations for your events.`;
   }
-  return t("category.heroSubtitleArtist");
-};
-
-const getEmptyTitle = (categoryName: string, subName: string, selectedCity?: string, t?: (k: string, opt?: any) => string) => {
-  if (!t) return "";
-  const catLabel = getArtLabel(t, categoryName);
-  const subLabel = subName === "All" ? catLabel : getArtLabel(t, subName);
-  if (selectedCity && selectedCity !== "All Cities") {
-    return isServiceCategory(categoryName)
-      ? t("category.noServicesInCity", { city: selectedCity })
-      : t("category.noArtistsInCity", { city: selectedCity });
-  }
-  if (subName && subName !== "All") {
-    return isServiceCategory(categoryName) || isServiceCategory(subName)
-      ? t("category.noServicesAvailable", { name: subLabel })
-      : t("category.noArtistsAvailable", { name: subLabel });
-  }
-  return isServiceCategory(categoryName)
-    ? t("category.noServicesAvailable", { name: catLabel })
-    : t("category.noArtistsAvailable", { name: catLabel });
-};
-
-const getExploreButtonText = (categoryName: string, t: (k: string, opt?: any) => string) => {
-  const clean = getArtLabel(t, categoryName.replace(/\s*services?$/i, "").replace(/\s*organizations?$/i, "").replace(/\s*artists?$/i, "").trim());
-  if (isServiceCategory(categoryName)) {
-    return t("category.viewAllServices", { name: clean });
-  }
-  if (isOrganizationCategory(categoryName)) {
-    return t("category.viewAllOrgs", { name: clean });
-  }
-  return t("category.viewAllArtists", { name: clean });
+  return `Find and book verified professional ${categoryName.toLowerCase()} for your events and programs.`;
 };
 
 interface ArtistCardData {
@@ -91,6 +115,7 @@ interface ArtistCardData {
   reviewsCount: number;
   location: string;
   experience: string;
+  languages: string;
   startingPrice: string;
   image: string;
   subCategory: string;
@@ -104,8 +129,8 @@ export default function CategoryLevel2Page() {
   const navigate = useNavigate();
   const { t } = useI18n();
 
-  const decodedEvent = eventName ? decodeURIComponent(eventName) : "Wedding";
-  const decodedCategory = categoryName ? decodeURIComponent(categoryName) : "Photography";
+  const decodedEvent = eventName ? decodeURIComponent(eventName) : "Varkari Sampraday";
+  const decodedCategory = categoryName ? decodeURIComponent(categoryName) : "Spiritual Speakers";
 
   // URL state synchronization
   const initialSubcategory = searchParams.get("subcategory") || searchParams.get("subCategory") || "All";
@@ -115,6 +140,7 @@ export default function CategoryLevel2Page() {
   const [selectedCity, setSelectedCity] = useState<string>(initialCity);
   const [selectedSort, setSelectedSort] = useState("Recommended");
   const [selectedPrice, setSelectedPrice] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [briefModalOpen, setBriefModalOpen] = useState(false);
 
@@ -167,18 +193,27 @@ export default function CategoryLevel2Page() {
               key: item.uid || item.id || item.displayName || item.name || "artist-card",
             });
 
+            const rawExp = item.experience || item.yearsOfExperience || item.exp;
+            const expText = rawExp ? `${rawExp}+ Years Experience` : "10+ Years Experience";
+            const langs = Array.isArray(item.languages) && item.languages.length > 0
+              ? item.languages.join(", ")
+              : item.language || (decodedEvent === "Varkari Sampraday" ? "Marathi, Hindi" : "Marathi, Hindi, English");
+
             return {
               id: item.uid || item.id || String(Math.random()),
               name: item.displayName || item.name || item.stageName || item.artistName || "Professional Artist",
-              isVerified: Boolean(item.isVerified || item.verified),
-              rating: item.rating ? Number(item.rating) : 4.8,
-              reviewsCount: item.reviewsCount ? Number(item.reviewsCount) : 24,
-              location: item.city || item.location || "Pune, Maharashtra",
-              experience: item.experience ? `${item.experience} Yrs Exp` : "5+ Yrs Exp",
+              isVerified: item.isVerified !== false,
+              rating: item.rating ? Number(item.rating) : 4.9,
+              reviewsCount: item.reviewsCount ? Number(item.reviewsCount) : 28,
+              location: item.city || item.location || "Maharashtra",
+              experience: expText,
+              languages: langs,
               startingPrice: item.startingPrice
                 ? String(item.startingPrice)
                 : item.minPrice
                 ? String(item.minPrice)
+                : item.soloPrice
+                ? String(item.soloPrice)
                 : "15,000",
               image: uploadedImage || fallbackImage,
               subCategory: subCat,
@@ -198,7 +233,7 @@ export default function CategoryLevel2Page() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [decodedEvent]);
 
   // Sync state when URL search params change
   useEffect(() => {
@@ -212,7 +247,7 @@ export default function CategoryLevel2Page() {
     }
   }, [searchParams]);
 
-  // Subcategory Chip Click Handler (Updates state + URL parameter without page navigation)
+  // Subcategory Chip Click Handler
   const handleSubcategorySelect = (subName: string) => {
     setActiveSubcategory(subName);
     const newParams = new URLSearchParams(searchParams);
@@ -247,6 +282,17 @@ export default function CategoryLevel2Page() {
       });
     }
 
+    // Filter by Search Query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (a) =>
+          a.name.toLowerCase().includes(q) ||
+          a.subCategory.toLowerCase().includes(q) ||
+          a.location.toLowerCase().includes(q)
+      );
+    }
+
     // Filter by City/Location
     if (selectedCity && selectedCity !== "All Cities") {
       list = list.filter((a) => matchesArtistCity(a, selectedCity));
@@ -279,6 +325,7 @@ export default function CategoryLevel2Page() {
     activeSubcategory,
     masterSubcategories,
     decodedCategory,
+    searchQuery,
     selectedCity,
     selectedPrice,
     selectedSort,
@@ -294,225 +341,262 @@ export default function CategoryLevel2Page() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50/50 flex flex-col font-sans antialiased pt-20">
+    <div className="min-h-screen bg-stone-50/60 flex flex-col font-sans antialiased pt-20">
       <Navbar />
 
-      <main className="flex-1 max-w-[1240px] w-full mx-auto px-4 md:px-6 py-4 md:py-6">
-        {/* ─── 1. Single-Line Breadcrumb ─── */}
-        <div className="flex items-center justify-between py-2 border-b border-stone-200/60 mb-5">
-          <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 overflow-x-auto whitespace-nowrap scrollbar-none pr-2">
+      <main className="flex-1 max-w-[1280px] w-full mx-auto px-4 md:px-6 py-4 md:py-6">
+        {/* ─── 1. Single-Line Breadcrumb & Global Search ─── */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2 border-b border-stone-200/80 mb-6">
+          <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 overflow-x-auto whitespace-nowrap scrollbar-none">
             <Link to="/" className="hover:text-stone-900 transition-colors shrink-0">
-              {t("nav.home") || "Home"}
+              Home
             </Link>
-            <span className="shrink-0">&gt;</span>
-            <Link to={`/events/${encodeURIComponent(decodedEvent)}`} className="hover:text-stone-900 transition-colors shrink-0">
+            <span className="shrink-0 text-stone-400">&gt;</span>
+            <Link
+              to={`/events/${encodeURIComponent(decodedEvent)}`}
+              className="hover:text-stone-900 transition-colors shrink-0"
+            >
               {decodedEvent}
             </Link>
-            <span className="shrink-0">&gt;</span>
-            <span className="text-stone-900 font-bold shrink-0">{decodedCategory}</span>
-          </div>
-          <button
-            onClick={() => navigate("/search")}
-            className="p-1.5 rounded-full hover:bg-stone-200/60 text-stone-500 transition shrink-0 ml-2"
-            aria-label="Search"
-          >
-            <Search className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* ─── 2. Category Hero / Header ─── */}
-        <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-stone-950 via-stone-900 to-stone-800 text-white p-6 sm:p-8 mb-6 min-h-[160px] sm:min-h-[180px] flex items-center shadow-lg">
-          <div className="relative z-10 max-w-xl">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
-              {getArtLabel(t, decodedCategory)}
-            </h1>
-            <p className="mt-2 text-xs sm:text-sm text-stone-300 font-medium leading-relaxed">
-              {getHeroSubtitle(decodedCategory, t)}
-            </p>
+            <span className="shrink-0 text-stone-400">&gt;</span>
+            <span className="text-orange-600 font-extrabold shrink-0">{decodedCategory}</span>
           </div>
 
-          <div className="absolute right-0 top-0 bottom-0 w-1/2 md:w-5/12 overflow-hidden pointer-events-none">
-            <div className="absolute inset-0 bg-gradient-to-r from-stone-950 via-stone-950/60 to-transparent z-10" />
-            <img
-              src="https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=1200&auto=format&fit=crop"
-              alt={decodedCategory}
-              className="h-full w-full object-cover object-center"
+          {/* Quick Search Input */}
+          <div className="relative w-full sm:w-72">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search artists, categories..."
+              className="w-full h-9 pl-4 pr-9 rounded-full bg-white border border-stone-200/90 text-xs font-medium text-stone-800 placeholder-stone-400 shadow-2xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
             />
+            <Search className="absolute right-3 top-2.5 h-4 w-4 text-stone-400 pointer-events-none" />
           </div>
         </div>
 
-        {/* ─── 3. SUBCATEGORY FILTERS (Horizontal Scrollable Chips/Tabs) ─── */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
-            {/* "All" Filter Chip */}
-            <button
-              type="button"
-              onClick={() => handleSubcategorySelect("All")}
-              className={`h-9 px-4 rounded-full text-xs font-extrabold transition-all duration-200 shrink-0 cursor-pointer flex items-center gap-1.5 ${
-                activeSubcategory === "All"
-                  ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 scale-[1.02]"
-                  : "bg-white border border-stone-200/90 text-stone-700 hover:bg-stone-100 hover:border-stone-300"
-              }`}
-            >
-              <span>{t("common.all") || "All"}</span>
-            </button>
-
-            {/* Dynamic Subcategory Chips from Database / Master System */}
-            {masterSubcategories.map((subName) => {
-              const isSelected = activeSubcategory.toLowerCase() === subName.toLowerCase();
-              return (
-                <button
-                  key={subName}
-                  type="button"
-                  onClick={() => handleSubcategorySelect(subName)}
-                  className={`h-9 px-4 rounded-full text-xs font-extrabold transition-all duration-200 shrink-0 cursor-pointer flex items-center gap-1.5 ${
-                    isSelected
-                      ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 scale-[1.02]"
-                      : "bg-white border border-stone-200/90 text-stone-700 hover:bg-stone-100 hover:border-stone-300"
-                  }`}
-                >
-                  <span>{getArtLabel(t, subName)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ─── Main Content Section ─── */}
-        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6 md:gap-8 mb-8">
-          {/* Left Column: Event Categories Sidebar (Desktop Only) */}
-          <div className="hidden md:block bg-white rounded-2xl border border-stone-200/80 p-4 shadow-xs h-fit">
-            <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-stone-100">
-              <h2 className="text-xs font-extrabold text-stone-900 uppercase tracking-wider">
-                {getArtLabel(t, decodedEvent)} {t("nav.categories") || "Categories"}
+        {/* ─── 2. MAIN LAYOUT: Sidebar (Circular Image Cards) + Main Content ─── */}
+        <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[300px_1fr] gap-6 lg:gap-8 items-start">
+          {/* ─── LEFT COLUMN: CATEGORY SIDEBAR ─── */}
+          <aside className="w-full space-y-4">
+            {/* Sidebar Card */}
+            <div className="bg-white rounded-3xl border border-stone-200/80 p-4 sm:p-5 shadow-sm">
+              <h2 className="text-xs font-black text-stone-800 uppercase tracking-wider mb-4 px-1">
+                Explore Categories
               </h2>
-            </div>
 
-            <ul className="space-y-1">
-              {siblingCategories.map((cat: any) => {
-                const catName = typeof cat === "string" ? cat : cat.name;
-                const catIcon = cat.icon || "✨";
-                const isActive = catName.toLowerCase() === decodedCategory.toLowerCase();
+              {/* Category Circular Cards List */}
+              <div className="space-y-2.5">
+                {siblingCategories.map((cat: any) => {
+                  const catName = typeof cat === "string" ? cat : cat.name;
+                  const isActive = catName.toLowerCase() === decodedCategory.toLowerCase();
+                  const circleImage = getCategoryCircleImage(catName, cat.image);
 
-                return (
-                  <li key={catName}>
+                  return (
                     <button
+                      key={catName}
+                      type="button"
                       onClick={() =>
                         navigate(
                           `/events/${encodeURIComponent(decodedEvent)}/${encodeURIComponent(catName)}`
                         )
                       }
-                      className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-all duration-200 flex items-center justify-between group cursor-pointer ${
+                      className={`w-full text-left p-2.5 sm:p-3 rounded-2xl transition-all duration-200 flex items-center gap-3.5 group cursor-pointer ${
                         isActive
-                          ? "bg-orange-50 text-orange-600 font-extrabold border-l-3 border-orange-500 shadow-2xs"
-                          : "text-stone-700 hover:text-orange-600 hover:bg-stone-50 font-semibold"
+                          ? "bg-orange-50/90 text-orange-600 font-extrabold shadow-xs ring-1 ring-orange-200/80"
+                          : "bg-white hover:bg-stone-50 text-stone-800 font-bold hover:text-orange-600"
                       }`}
                     >
-                      <span className="flex items-center gap-2 truncate">
-                        <span className="text-sm shrink-0">{catIcon}</span>
-                        <span className="truncate">{getArtLabel(t, catName)}</span>
-                      </span>
+                      {/* Circular Image with Orange Ring */}
+                      <div
+                        className={`relative h-14 w-14 sm:h-16 sm:w-16 rounded-full overflow-hidden shrink-0 transition-all duration-300 ${
+                          isActive
+                            ? "ring-2 ring-orange-500 border-2 border-white shadow-sm"
+                            : "border border-orange-200/70 group-hover:ring-2 group-hover:ring-orange-300"
+                        }`}
+                      >
+                        <img
+                          src={circleImage}
+                          alt=""
+                          className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                          loading="eager"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            target.src = "/assets/static/category-spiritual-varkari-sampraday.webp";
+                          }}
+                        />
+                      </div>
+
+                      {/* Category Label & Chevron */}
+                      <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
+                        <span
+                          className={`text-xs sm:text-sm font-extrabold leading-tight truncate ${
+                            isActive
+                              ? "text-orange-600"
+                              : "text-stone-900 group-hover:text-orange-600"
+                          }`}
+                        >
+                          {getArtLabel(t, catName)}
+                        </span>
+                        <ChevronRight
+                          className={`h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5 ${
+                            isActive ? "text-orange-600" : "text-stone-400"
+                          }`}
+                        />
+                      </div>
                     </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          {/* Right Column: Artist Results Grid on the SAME Page */}
-          <div>
-            {/* Filter Controls Row (Location, Price, Sort) */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              {/* Location Selector */}
-              <SearchableCityDropdown
-                selectedCity={selectedCity}
-                onSelectCity={setSelectedCity}
-                availableArtists={realArtists}
-              />
-
-              {/* Sort Selector */}
-              <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
-                <span className="text-stone-400 font-normal mr-1">{t("search.sortBy") || "Sort:"}</span>
-                <select
-                  value={selectedSort}
-                  onChange={(e) => setSelectedSort(e.target.value)}
-                  className="bg-transparent border-none outline-none cursor-pointer pr-2 font-bold text-stone-800"
-                >
-                  <option value="Recommended">{t("sort.recommended") || "Recommended"}</option>
-                  <option value="Rating">{t("search.ratingHighToLow") || "Rating: High to Low"}</option>
-                  <option value="PriceLow">{t("search.priceLowToHigh") || "Price: Low to High"}</option>
-                  <option value="PriceHigh">{t("search.priceHighToLow") || "Price: High to Low"}</option>
-                </select>
-              </div>
-
-              {/* Price Selector */}
-              <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
-                <span className="text-stone-400 font-normal mr-1">{t("filter.price") || "Budget:"}</span>
-                <select
-                  value={selectedPrice}
-                  onChange={(e) => setSelectedPrice(e.target.value)}
-                  className="bg-transparent border-none outline-none cursor-pointer pr-2 font-bold text-stone-800"
-                >
-                  <option value="All">{t("price.all") || "All Prices"}</option>
-                  <option value="Under20k">{t("price.under20k") || "Under ₹20,000"}</option>
-                  <option value="20kTo30k">₹20,000 - ₹30,000</option>
-                  <option value="Above30k">{t("price.above30k") || "Above ₹30,000"}</option>
-                </select>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Subheading Count */}
-            <h2 className="text-sm sm:text-base font-extrabold text-stone-900 mb-4 tracking-tight">
-              {getSectionHeading(decodedCategory, activeSubcategory, t)}
-              <span className="text-stone-400 font-semibold ml-2">({displayedArtists.length})</span>
-            </h2>
+            {/* Promo Box: "Are you an artist?" */}
+            <div className="p-5 rounded-3xl bg-gradient-to-b from-orange-50/90 to-amber-50/60 border border-orange-200/70 text-center space-y-3 shadow-xs">
+              <div className="h-11 w-11 mx-auto rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center shadow-2xs font-bold">
+                <UserPlus className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-stone-900">Are you an artist?</h4>
+                <p className="text-xs text-stone-600 font-medium mt-1 leading-relaxed">
+                  Join MyKalakar and get more opportunities.
+                </p>
+              </div>
+              <Link
+                to="/artist-register"
+                className="inline-flex w-full items-center justify-center py-2.5 px-4 rounded-2xl bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white font-black text-xs shadow-md shadow-orange-600/20 transition-all duration-200"
+              >
+                Register Now
+              </Link>
+            </div>
+          </aside>
 
-            {/* Empty State */}
+          {/* ─── RIGHT COLUMN: SUBCATEGORY PILLS, FILTERS & ARTIST CARDS ─── */}
+          <section className="min-w-0 space-y-4">
+
+            {/* ─── 2. Subcategory Filter Chips (Horizontal Pill Buttons) ─── */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+              {/* "All" Filter Chip */}
+              <button
+                type="button"
+                onClick={() => handleSubcategorySelect("All")}
+                className={`h-9 px-5 rounded-full text-xs font-black transition-all duration-200 shrink-0 cursor-pointer flex items-center justify-center ${
+                  activeSubcategory === "All"
+                    ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 scale-[1.02]"
+                    : "bg-white border border-stone-200/90 text-stone-700 hover:bg-stone-100 hover:border-stone-300 shadow-2xs"
+                }`}
+              >
+                All
+              </button>
+
+              {/* Dynamic Subcategory Chips */}
+              {masterSubcategories.map((subName) => {
+                const isSelected = activeSubcategory.toLowerCase() === subName.toLowerCase();
+                return (
+                  <button
+                    key={subName}
+                    type="button"
+                    onClick={() => handleSubcategorySelect(subName)}
+                    className={`h-9 px-4 rounded-full text-xs font-black transition-all duration-200 shrink-0 cursor-pointer flex items-center justify-center ${
+                      isSelected
+                        ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 scale-[1.02]"
+                        : "bg-white border border-stone-200/90 text-stone-700 hover:bg-stone-100 hover:border-stone-300 shadow-2xs"
+                    }`}
+                  >
+                    {getArtLabel(t, subName)}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ─── 3. Filter Controls Row ─── */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Location Dropdown */}
+                <SearchableCityDropdown
+                  selectedCity={selectedCity}
+                  onSelectCity={setSelectedCity}
+                  availableArtists={realArtists}
+                />
+
+                {/* Sort Selector */}
+                <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3.5 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
+                  <span className="text-stone-400 font-normal mr-1">Sort by:</span>
+                  <select
+                    value={selectedSort}
+                    onChange={(e) => setSelectedSort(e.target.value)}
+                    className="bg-transparent border-none outline-none cursor-pointer pr-1 font-extrabold text-stone-900"
+                  >
+                    <option value="Recommended">Recommended</option>
+                    <option value="Rating">Rating: High to Low</option>
+                    <option value="PriceLow">Price: Low to High</option>
+                    <option value="PriceHigh">Price: High to Low</option>
+                  </select>
+                </div>
+
+                {/* Price Filter Selector */}
+                <div className="relative inline-flex items-center rounded-full bg-white border border-stone-200 px-3.5 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
+                  <span className="text-stone-400 font-normal mr-1">Price:</span>
+                  <select
+                    value={selectedPrice}
+                    onChange={(e) => setSelectedPrice(e.target.value)}
+                    className="bg-transparent border-none outline-none cursor-pointer pr-1 font-extrabold text-stone-900"
+                  >
+                    <option value="All">All</option>
+                    <option value="Under20k">Under ₹20,000</option>
+                    <option value="20kTo30k">₹20,000 - ₹30,000</option>
+                    <option value="Above30k">Above ₹30,000</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Filters Button */}
+              <button
+                type="button"
+                onClick={() => setBriefModalOpen(true)}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-orange-500/80 bg-white hover:bg-orange-50 text-stone-800 hover:text-orange-600 text-xs font-black shadow-2xs transition-colors cursor-pointer shrink-0"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5 text-orange-600" /> Filters
+              </button>
+            </div>
+
+            {/* ─── 4. Section Heading Count ─── */}
+            <div className="flex items-center justify-between pt-1">
+              <h2 className="text-base sm:text-lg font-black text-stone-900 tracking-tight">
+                {getArtLabel(t, decodedCategory)} near you{" "}
+                <span className="text-stone-400 font-bold ml-1">({displayedArtists.length})</span>
+              </h2>
+            </div>
+
+            {/* ─── 5. Empty State ─── */}
             {displayedArtists.length === 0 && !loading && (
-              <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-3xl border border-stone-200 p-6 shadow-xs my-4">
+              <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-3xl border border-stone-200 p-6 shadow-xs">
                 <div className="h-14 w-14 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 mb-3">
                   <MapPin className="h-6 w-6 stroke-[1.75]" />
                 </div>
                 <h3 className="text-base font-extrabold text-stone-900 mb-1">
-                  {getEmptyTitle(decodedCategory, activeSubcategory, selectedCity, t)}
+                  No artists found for selected filters
                 </h3>
                 <p className="text-xs font-medium text-stone-500 max-w-sm mb-4">
-                  {selectedCity && selectedCity !== "All Cities"
-                    ? "Try another city or select All Cities to browse available options."
-                    : activeSubcategory && activeSubcategory !== "All"
-                    ? `Try exploring other styles or ${getExploreButtonText(decodedCategory, t).toLowerCase()}.`
-                    : "We're continuously onboarding new talent. Please check back soon or explore other categories."}
+                  {selectedCity !== "All Cities"
+                    ? "Try choosing 'All Cities' to view all available verified artists."
+                    : "Try selecting 'All' in subcategories or explore other categories."}
                 </p>
-                {selectedCity && selectedCity !== "All Cities" ? (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCity("All Cities")}
-                    className="px-4 py-2 rounded-full bg-orange-600 text-white font-extrabold text-xs shadow-xs hover:bg-orange-700 transition"
-                  >
-                    {t("search.allCities") || "Show All Cities"}
-                  </button>
-                ) : activeSubcategory && activeSubcategory !== "All" ? (
-                  <button
-                    type="button"
-                    onClick={() => handleSubcategorySelect("All")}
-                    className="px-4 py-2 rounded-full bg-stone-900 text-white font-extrabold text-xs shadow-xs hover:bg-orange-600 transition"
-                  >
-                    {getExploreButtonText(decodedCategory, t)}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => navigate("/categories")}
-                    className="px-4 py-2 rounded-full bg-stone-900 text-white font-extrabold text-xs shadow-xs hover:bg-orange-600 transition"
-                  >
-                    {t("common.explore") || "Explore Categories"}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCity("All Cities");
+                    setActiveSubcategory("All");
+                    setSelectedPrice("All");
+                  }}
+                  className="px-5 py-2.5 rounded-full bg-orange-600 text-white font-black text-xs shadow-md shadow-orange-600/20 hover:bg-orange-700 transition"
+                >
+                  Reset All Filters
+                </button>
               </div>
             )}
 
-            {/* Artists Responsive Grid (Compact Responsive Grid) */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            {/* ─── 6. ARTIST CARDS GRID (Exact 4-Column Card Design from Reference) ─── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {displayedArtists.map((artist) => {
                 const isFav = favorites.has(artist.id);
 
@@ -520,124 +604,94 @@ export default function CategoryLevel2Page() {
                   <div
                     key={artist.id}
                     onClick={() => navigate(`/artist/${artist.id}`)}
-                    className="group relative flex flex-col justify-between p-3 rounded-2xl bg-white border border-stone-200/80 shadow-xs hover:border-orange-500 hover:shadow-md transition-all duration-300 cursor-pointer"
+                    className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-3xl bg-white border border-stone-200/80 shadow-xs hover:shadow-lg hover:border-orange-300 transition-all duration-300 cursor-pointer text-center"
                   >
-                    {/* Top Image & Favorite */}
-                    <div className="relative h-32 sm:h-36 w-full overflow-hidden rounded-xl bg-stone-100 mb-2.5 shrink-0">
-                      <img
-                        src={artist.image}
-                        alt={artist.name}
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        loading="lazy"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          const fallback = imageRegistry.getUniqueImage({
-                            category: artist.subCategory || "Performers",
-                            type: "artist",
-                            key: artist.id,
-                          });
-                          if (target.src !== fallback) {
-                            target.src = fallback;
-                          }
-                        }}
+                    {/* Favorite Heart Button (Top Right) */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(artist.id);
+                      }}
+                      className="absolute top-3.5 right-3.5 p-1 rounded-full text-stone-400 hover:text-rose-500 transition cursor-pointer z-10"
+                      aria-label="Add to favorites"
+                    >
+                      <Heart
+                        className={`h-4 w-4 sm:h-5 sm:w-5 stroke-[1.75] transition-colors ${
+                          isFav ? "fill-rose-500 text-rose-500" : "text-stone-400 hover:text-stone-600"
+                        }`}
                       />
+                    </button>
+
+                    {/* Circular Artist Avatar (Center Top) */}
+                    <div className="flex flex-col items-center">
+                      <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden bg-stone-100 ring-4 ring-stone-50 shadow-xs mb-3 shrink-0 border border-stone-200/60">
+                        <img
+                          src={artist.image}
+                          alt={artist.name}
+                          className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            const fallback = imageRegistry.getUniqueImage({
+                              category: artist.subCategory || "Performers",
+                              type: "artist",
+                              key: artist.id,
+                            });
+                            if (target.src !== fallback) {
+                              target.src = fallback;
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {/* Verified Badge */}
+                      <div className="flex items-center justify-center gap-1 text-[11px] font-black text-emerald-600 mb-1">
+                        <CheckCircle2 className="h-3.5 w-3.5 fill-emerald-500 text-white" />
+                        <span>Verified</span>
+                      </div>
+
+                      {/* Artist Name */}
+                      <h3 className="text-sm sm:text-base font-black text-stone-900 group-hover:text-orange-600 transition-colors line-clamp-1">
+                        {artist.name}
+                      </h3>
+
+                      {/* Experience */}
+                      <p className="text-xs font-semibold text-stone-500 mt-0.5">
+                        {artist.experience}
+                      </p>
+
+                      {/* Languages */}
+                      <p className="text-xs font-medium text-stone-500 mt-0.5 line-clamp-1">
+                        {artist.languages}
+                      </p>
+                    </div>
+
+                    {/* Pricing & View Profile Action */}
+                    <div className="mt-3.5 pt-3 border-t border-stone-100 flex flex-col items-center">
+                      <p className="text-xs font-medium text-stone-600">
+                        Starting from{" "}
+                        <strong className="font-black text-stone-950 text-xs sm:text-sm">
+                          ₹{artist.startingPrice}
+                        </strong>
+                      </p>
+
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleFavorite(artist.id);
+                          navigate(`/artist/${artist.id}`);
                         }}
-                        className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition cursor-pointer"
+                        className="w-full mt-3 py-2 px-4 rounded-xl border border-orange-500/80 bg-white hover:bg-orange-500 text-orange-600 hover:text-white font-black text-xs transition-all duration-200 shadow-2xs cursor-pointer"
                       >
-                        <Heart
-                          className={`h-3.5 w-3.5 ${
-                            isFav ? "fill-rose-500 text-rose-500" : ""
-                          }`}
-                        />
+                        View Profile
                       </button>
-                    </div>
-
-                    {/* Content Details */}
-                    <div className="flex-1 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 group-hover:text-orange-600 transition-colors truncate">
-                            {artist.name}
-                          </h3>
-                          {artist.isVerified && (
-                            <BadgeCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                          )}
-                        </div>
-
-                        {/* Service Badges */}
-                        <div className="flex flex-wrap gap-1 mb-1.5 min-h-[22px]">
-                          {(artist.servicesList && artist.servicesList.length > 0 ? artist.servicesList : [artist.subCategory]).slice(0, 2).map((srv) => (
-                            <span key={srv} className="inline-block rounded-md bg-orange-50 text-orange-700 border border-orange-100/60 px-1.5 py-0.5 text-[9px] font-extrabold truncate max-w-[110px]">
-                              {getArtLabel(t, srv)}
-                            </span>
-                          ))}
-                          {(artist.servicesList?.length || 1) > 2 && (
-                            <span className="inline-block rounded-md bg-stone-100 text-stone-600 px-1.5 py-0.5 text-[9px] font-extrabold">
-                              +{(artist.servicesList?.length || 1) - 2} more
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Rating & Location */}
-                        <div className="flex items-center justify-between text-[11px] font-semibold text-stone-600 pt-1.5 border-t border-stone-100">
-                          <div className="flex items-center gap-0.5 text-amber-500">
-                            <Star className="h-3 w-3 fill-current" />
-                            <span className="font-extrabold text-stone-900">{artist.rating}</span>
-                          </div>
-                          <div className="flex items-center gap-0.5 text-stone-500 truncate max-w-[90px]">
-                            <MapPin className="h-3 w-3 text-stone-400 shrink-0" />
-                            <span className="truncate">{artist.location}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Footer Price & View Action */}
-                      <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between">
-                        <div>
-                          <span className="text-[9px] text-stone-400 block font-medium leading-none">Starts from</span>
-                          <span className="font-extrabold text-stone-900 text-xs mt-0.5 block">
-                            ₹{artist.startingPrice}
-                          </span>
-                        </div>
-                        <span className="inline-flex items-center gap-0.5 text-[11px] font-extrabold text-orange-600 group-hover:translate-x-0.5 transition-transform">
-                          Profile <ChevronRight className="h-3 w-3" />
-                        </span>
-                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
-        </div>
-
-        {/* ─── Bottom Callout Banner ─── */}
-        <div className="rounded-2xl bg-gradient-to-r from-orange-50/90 via-amber-50/80 to-orange-50/90 border border-orange-200/70 p-4 sm:p-6 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-2xs">
-              <Clock className="h-5 w-5" />
-            </div>
-            <div>
-              <h4 className="text-xs sm:text-sm font-extrabold text-stone-900 leading-tight">
-                {t("home.cantFindService") || "Can't find what you're looking for?"}
-              </h4>
-              <p className="text-xs font-semibold text-stone-600 mt-0.5">
-                {t("home.tellUsNeed") || "Tell us what you need."}
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setBriefModalOpen(true)}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-white border border-stone-200 text-xs font-extrabold text-stone-800 shadow-2xs hover:bg-stone-950 hover:text-white hover:border-stone-950 transition-all duration-300 cursor-pointer"
-          >
-            {t("home.requestService") || "Request Service"}
-          </button>
+          </section>
         </div>
       </main>
 
@@ -650,3 +704,4 @@ export default function CategoryLevel2Page() {
     </div>
   );
 }
+

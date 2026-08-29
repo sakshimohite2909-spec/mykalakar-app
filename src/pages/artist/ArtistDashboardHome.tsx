@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { imageRegistry } from "@/services/ImageRegistryService";
@@ -54,6 +54,20 @@ function formatDate(dateString?: string) {
   }
 }
 
+function getArtEmoji(artName: string) {
+  const lower = (artName || "").toLowerCase();
+  if (lower.includes("comed") || lower.includes("हास्य")) return "🎭";
+  if (lower.includes("sing") || lower.includes("गायक") || lower.includes("vocal") || lower.includes("music") || lower.includes("संगीत")) return "🎤";
+  if (lower.includes("danc") || lower.includes("नृत्य")) return "💃";
+  if (lower.includes("dj")) return "🎧";
+  if (lower.includes("anchor") || lower.includes("सूत्रसंचालक") || lower.includes("host")) return "🎙️";
+  if (lower.includes("mag") || lower.includes("जादू")) return "🪄";
+  if (lower.includes("flute") || lower.includes("बासरी")) return "🪈";
+  if (lower.includes("tabla") || lower.includes("तबल") || lower.includes("ढोलक")) return "🪘";
+  if (lower.includes("kirtan") || lower.includes("कीर्तन") || lower.includes("bhajan") || lower.includes("भजन")) return "🪕";
+  return "✨";
+}
+
 export default function ArtistDashboard() {
   const { artistData } = useAuth();
   const {
@@ -64,6 +78,35 @@ export default function ArtistDashboard() {
     updateStatus,
   } = useArtistBookings();
   const [selectedBooking, setSelectedBooking] = useState<BookingEvent | null>(null);
+  const [selectedArtFilter, setSelectedArtFilter] = useState<string>("ALL");
+
+  const distinctArtForms = useMemo(() => {
+    const map = new Map<string, { label: string; count: number }>();
+    bookings.forEach((b) => {
+      const art = String(b.performanceType || (b as any).artForm || (b as any).subcategory || (b as any).category || "General").trim();
+      const key = art.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { label: art, count: 1 });
+      } else {
+        map.get(key)!.count += 1;
+      }
+    });
+    return Array.from(map.entries()).map(([key, data]) => ({
+      key,
+      label: data.label,
+      count: data.count,
+      emoji: getArtEmoji(data.label),
+    }));
+  }, [bookings]);
+
+  const recentBookings = useMemo(() => {
+    const sorted = [...bookings].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    if (selectedArtFilter === "ALL") return sorted.slice(0, 5);
+    return sorted.filter((b) => {
+      const art = String(b.performanceType || (b as any).artForm || (b as any).subcategory || (b as any).category || "General").trim().toLowerCase();
+      return art === selectedArtFilter || art.includes(selectedArtFilter) || selectedArtFilter.includes(art);
+    }).slice(0, 5);
+  }, [bookings, selectedArtFilter]);
 
   if (!artistData) return null;
 
@@ -122,9 +165,6 @@ export default function ArtistDashboard() {
       link: "/artist/dashboard/earnings",
     },
   ];
-
-  // Recent 5 booking requests
-  const recentBookings = bookings.slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -212,7 +252,7 @@ export default function ArtistDashboard() {
       {/* ── Section: Booking Requests Table ── */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
         <Card className="rounded-3xl border-stone-200 shadow-sm overflow-hidden bg-white">
-          <CardHeader className="p-6 border-b border-stone-100 flex flex-row items-center justify-between bg-stone-50/50">
+          <CardHeader className="p-6 border-b border-stone-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-stone-50/50">
             <div>
               <CardTitle className="text-lg font-black text-stone-900 flex items-center gap-2">
                 <CalendarCheck className="h-5 w-5 text-orange-600" />
@@ -222,20 +262,55 @@ export default function ArtistDashboard() {
                 Inquiries and performance bookings from clients
               </p>
             </div>
-            <Link to="/artist/dashboard/bookings">
-              <Button variant="ghost" className="font-black text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-xl">
-                View All Requests <ArrowRight className="h-3.5 w-3.5 ml-1" />
-              </Button>
-            </Link>
+            
+            <div className="flex flex-wrap items-center gap-2">
+              {distinctArtForms.length > 1 && (
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-stone-200/60 border border-stone-200">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedArtFilter("ALL")}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                      selectedArtFilter === "ALL"
+                        ? "bg-white text-stone-950 shadow-xs"
+                        : "text-stone-600 hover:text-stone-900"
+                    }`}
+                  >
+                    All ({bookings.length})
+                  </button>
+                  {distinctArtForms.map((art) => (
+                    <button
+                      key={art.key}
+                      type="button"
+                      onClick={() => setSelectedArtFilter(art.key)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                        selectedArtFilter === art.key
+                          ? "bg-orange-500 text-white shadow-xs"
+                          : "text-stone-600 hover:text-stone-900"
+                      }`}
+                    >
+                      <span>{art.emoji}</span>
+                      <span>{art.label}</span>
+                      <span className="opacity-80 text-[10px]">({art.count})</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <Link to="/artist/dashboard/bookings">
+                <Button variant="ghost" className="font-black text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-xl">
+                  View All Requests <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                </Button>
+              </Link>
+            </div>
           </CardHeader>
 
           <CardContent className="p-0">
             {recentBookings.length === 0 ? (
               <div className="text-center py-12 px-4">
                 <CalendarClock className="h-10 w-10 text-stone-300 mx-auto mb-2" />
-                <p className="text-sm font-black text-stone-700">No booking requests yet</p>
+                <p className="text-sm font-black text-stone-700">No booking requests found</p>
                 <p className="text-xs text-stone-400 font-semibold mt-0.5">
-                  When organizers and clients send inquiries, they will appear here.
+                  {selectedArtFilter !== "ALL" ? "No requests found for this art form." : "When organizers and clients send inquiries, they will appear here."}
                 </p>
               </div>
             ) : (
@@ -244,6 +319,7 @@ export default function ArtistDashboard() {
                   <thead className="bg-stone-50/70 text-stone-400 uppercase tracking-widest font-black text-[10px]">
                     <tr>
                       <th className="px-6 py-3.5">Customer</th>
+                      <th className="px-6 py-3.5">Art Form</th>
                       <th className="px-6 py-3.5">Date</th>
                       <th className="px-6 py-3.5">Location</th>
                       <th className="px-6 py-3.5">Status</th>
@@ -251,37 +327,48 @@ export default function ArtistDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100 font-medium text-stone-800">
-                    {recentBookings.map((b) => (
-                      <tr key={b.id} className="hover:bg-stone-50/50 transition">
-                        <td className="px-6 py-4">
-                          <div className="font-extrabold text-stone-900 text-sm">
-                            {b.clientName || "Event Client"}
-                          </div>
-                          <div className="text-stone-400 text-xs font-semibold">
-                            {b.performanceType || "Performance"}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-stone-700 font-bold">
-                          {formatDate(b.eventDate)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-stone-600 font-semibold max-w-[180px] truncate">
-                          {b.venueLocation || "Location TBD"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <BookingStatusBadge status={b.status} />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSelectedBooking(b)}
-                            className="h-8 px-3 rounded-lg font-bold text-xs border-stone-200 hover:bg-orange-50 hover:text-orange-600"
-                          >
-                            Review
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                    {recentBookings.map((b) => {
+                      const artType = String(b.performanceType || (b as any).artForm || (b as any).subcategory || "Performance").trim();
+                      const emoji = getArtEmoji(artType);
+
+                      return (
+                        <tr key={b.id} className="hover:bg-stone-50/50 transition">
+                          <td className="px-6 py-4">
+                            <div className="font-extrabold text-stone-900 text-sm">
+                              {b.clientName || "Event Client"}
+                            </div>
+                            <div className="text-stone-400 text-xs font-semibold">
+                              {b.clientPhone || "Phone not shared"}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-orange-50 text-orange-800 border border-orange-200/80">
+                              <span>{emoji}</span>
+                              <span>{artType}</span>
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-stone-700 font-bold">
+                            {formatDate(b.eventDate)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-stone-600 font-semibold max-w-[180px] truncate">
+                            {b.venueLocation || "Location TBD"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <BookingStatusBadge status={b.status} />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedBooking(b)}
+                              className="h-8 px-3 rounded-lg font-bold text-xs border-stone-200 hover:bg-orange-50 hover:text-orange-600 cursor-pointer"
+                            >
+                              Review
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

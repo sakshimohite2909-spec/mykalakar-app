@@ -1,10 +1,14 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useArtistBookings } from "@/hooks/useArtistBookings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { toast } from "@/hooks/use-toast";
 import {
   IndianRupee,
   Clock,
@@ -44,10 +48,55 @@ function formatDate(dateString?: string) {
 }
 
 export default function ArtistEarnings() {
-  const { artistData } = useAuth();
+  const { artistData, currentUser } = useAuth();
   const { bookings, earningsSummary, loadingBookings, updateStatus } = useArtistBookings();
   const [selectedBooking, setSelectedBooking] = useState<BookingEvent | null>(null);
   const [filter, setFilter] = useState<"ALL" | "PAID" | "PENDING">("ALL");
+
+  const [payoutUpi, setPayoutUpi] = useState<string>(artistData?.upiId || (artistData as any)?.bankDetails?.upiId || "");
+  const [tempUpi, setTempUpi] = useState<string>("");
+  const [isEditingPayout, setIsEditingPayout] = useState(false);
+  const [savingUpi, setSavingUpi] = useState(false);
+
+  useEffect(() => {
+    if (artistData?.upiId || (artistData as any)?.bankDetails?.upiId) {
+      setPayoutUpi(artistData?.upiId || (artistData as any)?.bankDetails?.upiId || "");
+    }
+  }, [artistData]);
+
+  const handleSavePayoutUpi = async () => {
+    if (!currentUser?.uid) return;
+    if (!tempUpi.trim()) {
+      toast({ variant: "destructive", title: "Invalid UPI ID", description: "Please enter a valid UPI ID (e.g. 9822123456@okaxis)" });
+      return;
+    }
+
+    setSavingUpi(true);
+    try {
+      const cleanUpi = tempUpi.trim();
+      const artistRef = doc(db, "artists", currentUser.uid);
+      await setDoc(
+        artistRef,
+        {
+          upiId: cleanUpi,
+          payoutMode: "upi",
+          "bankDetails.upiId": cleanUpi,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      setPayoutUpi(cleanUpi);
+      setIsEditingPayout(false);
+      toast({
+        title: "Payout UPI ID Saved! ⚡",
+        description: `Your earnings will be sent directly to ${cleanUpi} upon event completion.`,
+      });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Save Failed", description: "Could not update payout UPI ID." });
+    } finally {
+      setSavingUpi(false);
+    }
+  };
 
   const transactions = useMemo(() => {
     return bookings
@@ -158,6 +207,84 @@ export default function ArtistEarnings() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Payout Account Setup (Just-In-Time Payout) */}
+      <Card className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="h-10 w-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-sm font-black">
+              ⚡
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black text-stone-900">Payout Account (मानधन खाते / UPI ID)</h3>
+                {payoutUpi || artistData?.bankName ? (
+                  <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] font-bold">
+                    ✓ Active
+                  </Badge>
+                ) : (
+                  <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px] font-bold">
+                    Pending Setup
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-stone-500 font-medium mt-0.5">
+                {payoutUpi ? (
+                  <span>
+                    Direct Payout UPI ID: <strong className="text-stone-900 font-black">{payoutUpi}</strong>
+                  </span>
+                ) : artistData?.bankName ? (
+                  <span>
+                    Bank: <strong className="text-stone-900">{artistData.bankName}</strong> ({artistData.bankAccountMasked || "XXXX"})
+                  </span>
+                ) : (
+                  "इव्हेंट पूर्ण झाल्यावर मानधन थेट खात्यात मिळवण्यासाठी तुमचा Google Pay / PhonePe UPI ID जोडा."
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {isEditingPayout ? (
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Input
+                  placeholder="उदा. 9822123456@okaxis"
+                  value={tempUpi}
+                  onChange={(e) => setTempUpi(e.target.value)}
+                  className="h-9 text-xs rounded-xl bg-stone-50 border-stone-200 w-52"
+                />
+                <Button
+                  size="sm"
+                  onClick={handleSavePayoutUpi}
+                  disabled={savingUpi}
+                  className="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black"
+                >
+                  {savingUpi ? "Saving..." : "Save ✓"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsEditingPayout(false)}
+                  className="h-9 px-2 text-xs text-stone-500 font-bold"
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setTempUpi(payoutUpi);
+                  setIsEditingPayout(true);
+                }}
+                className="h-9 px-3.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-black shadow-sm"
+              >
+                {payoutUpi || artistData?.bankName ? "Edit UPI ID" : "＋ Add UPI ID (GPay)"}
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {/* Escrow Guarantee Banner */}
       <Card className="rounded-2xl border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50/50 p-5">
