@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Save, Edit3, Image as ImageIcon, ShieldCheck, CheckCircle2, Star, Award, Smartphone, UserCheck, MapPin, Video, Sparkles, Building2, UserPlus } from "lucide-react";
+import { X, Save, Edit3, Image as ImageIcon, ShieldCheck, CheckCircle2, Star, Award, Smartphone, UserCheck, MapPin, Video, Sparkles, Building2, UserPlus, Camera, CreditCard, Eye, ExternalLink } from "lucide-react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toast } from "@/hooks/use-toast";
@@ -38,6 +38,7 @@ export function AdminEditArtistModal({ artist, isOpen, onClose, onSaveSuccess }:
   });
   const [affiliationName, setAffiliationName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [previewImageModal, setPreviewImageModal] = useState<{ url: string; title: string } | null>(null);
 
   useEffect(() => {
     if (isOpen && artist) {
@@ -101,6 +102,11 @@ export function AdminEditArtistModal({ artist, isOpen, onClose, onSaveSuccess }:
         identityVerified: true,
         locationVerified: true,
       }));
+    } else {
+      setChecklist((prev) => ({
+        ...prev,
+        mobileVerified: true,
+      }));
     }
   };
 
@@ -111,42 +117,44 @@ export function AdminEditArtistModal({ artist, isOpen, onClose, onSaveSuccess }:
     try {
       const categoriesArray = typeof formData.categoriesArray === "string"
         ? formData.categoriesArray.split(",").map((c: string) => c.trim()).filter(Boolean)
-        : formData.categoriesArray;
+        : [];
 
-      const isVerified = verificationTier !== "basic";
-
-      const updatedPayload = {
+      const updatedPayload: Record<string, any> = {
         name: formData.name,
+        professionalName: formData.name,
         bio: formData.bio,
-        categoriesArray,
         phone: formData.phone,
+        mobileNumber: formData.phone,
         email: formData.email,
-        media: {
-          ...(artist.media || {}),
-          profilePhoto: formData.profilePhoto,
-          coverPhoto: formData.coverPhoto,
-        },
-        profilePhoto: formData.profilePhoto,
-        coverPhoto: formData.coverPhoto,
-        // ── MyKalakar Verification USP ──
-        verified: isVerified,
-        verificationTier,
+        categories: categoriesArray,
+        categoriesArray: categoriesArray,
+        artsList: categoriesArray,
+        verified: verificationTier !== "basic",
+        verificationTier: verificationTier,
         verification: {
           tier: verificationTier,
-          verified: isVerified,
-          checklist,
-          affiliationName: affiliationName.trim(),
+          verified: verificationTier !== "basic",
+          checklist: checklist,
+          affiliationName: affiliationName.trim() || undefined,
           verifiedAt: new Date().toISOString(),
           verifiedBy: "admin",
         },
-        updatedAt: new Date().toISOString(),
       };
+
+      if (formData.profilePhoto) {
+        updatedPayload["profilePhoto"] = formData.profilePhoto;
+        updatedPayload["media.profilePhoto"] = formData.profilePhoto;
+      }
+      if (formData.coverPhoto) {
+        updatedPayload["coverPhoto"] = formData.coverPhoto;
+        updatedPayload["media.coverPhoto"] = formData.coverPhoto;
+      }
 
       await updateDoc(doc(db, "artists", artist.id), updatedPayload);
       clearDataCache();
 
       toast({
-        title: "Artist Credentials & Profile Saved! ✅",
+        title: "Artist Profile Updated ✅",
         description: `Verification Tier set to "${VERIFICATION_TIERS_CONFIG[verificationTier].name}".`,
       });
 
@@ -165,6 +173,10 @@ export function AdminEditArtistModal({ artist, isOpen, onClose, onSaveSuccess }:
   };
 
   if (!isOpen) return null;
+
+  const liveSelfie = artist.media?.liveFacePhoto || artist.liveFacePhoto || artist.selfiePhoto || "";
+  const aadharPhoto = artist.media?.aadharPhoto || artist.aadharPhoto || artist.idProofPhoto || "";
+  const profilePhoto = formData.profilePhoto || artist.profilePhoto || artist.media?.profilePhoto || "";
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -187,6 +199,101 @@ export function AdminEditArtistModal({ artist, isOpen, onClose, onSaveSuccess }:
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {/* ── SECTION 0: LIVE FACE SELFIE & KYC DOCUMENTS VERIFICATION ── */}
+          <div className="rounded-2xl border-2 border-emerald-200/80 bg-emerald-50/30 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-stone-900 font-extrabold text-sm">
+                <Camera className="h-4 w-4 text-emerald-600" />
+                <span>KYC Identity & Live Face Capture Inspection</span>
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                Verification Proofs
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+              {/* 1. Live Face Capture (Selfie) */}
+              <div className="space-y-1.5">
+                <p className="text-xs font-black text-stone-800 flex items-center gap-1.5">
+                  <Camera className="h-3.5 w-3.5 text-emerald-600" /> Live Face Selfie
+                </p>
+                {liveSelfie ? (
+                  <div
+                    onClick={() => setPreviewImageModal({ url: liveSelfie, title: `${artist.name} - Live Selfie Capture` })}
+                    className="relative rounded-2xl overflow-hidden border-2 border-emerald-500 shadow-md aspect-square bg-black group cursor-pointer"
+                  >
+                    <img src={liveSelfie} alt="Live Selfie" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <span className="absolute bottom-1.5 left-1.5 bg-emerald-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow">
+                      Live Selfie ✅
+                    </span>
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1">
+                      <Eye className="h-4 w-4" /> Click to Enlarge
+                    </div>
+                  </div>
+                ) : (
+                  <div className="aspect-square rounded-2xl border-2 border-dashed border-stone-200 bg-white/70 flex flex-col items-center justify-center p-3 text-center text-stone-400">
+                    <Camera className="h-6 w-6 text-stone-300 mb-1" />
+                    <span className="text-[11px] font-bold text-stone-500">No live selfie</span>
+                    <span className="text-[9px] text-stone-400">Legacy / Direct profile</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Aadhaar / Govt ID */}
+              <div className="space-y-1.5">
+                <p className="text-xs font-black text-stone-800 flex items-center gap-1.5">
+                  <CreditCard className="h-3.5 w-3.5 text-blue-600" /> Aadhaar / Govt ID
+                </p>
+                {aadharPhoto ? (
+                  <div
+                    onClick={() => setPreviewImageModal({ url: aadharPhoto, title: `${artist.name} - Aadhaar ID Document` })}
+                    className="relative rounded-2xl overflow-hidden border-2 border-blue-400 shadow-md aspect-square bg-white group cursor-pointer"
+                  >
+                    <img src={aadharPhoto} alt="Aadhaar ID" className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-300" />
+                    <span className="absolute bottom-1.5 left-1.5 bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow">
+                      Aadhaar Card 🪪
+                    </span>
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1">
+                      <Eye className="h-4 w-4" /> Click to Enlarge
+                    </div>
+                  </div>
+                ) : (
+                  <div className="aspect-square rounded-2xl border-2 border-dashed border-stone-200 bg-white/70 flex flex-col items-center justify-center p-3 text-center text-stone-400">
+                    <CreditCard className="h-6 w-6 text-stone-300 mb-1" />
+                    <span className="text-[11px] font-bold text-stone-500">No ID uploaded</span>
+                    <span className="text-[9px] text-stone-400">Aadhaar pending</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Stage / Profile Photo */}
+              <div className="space-y-1.5">
+                <p className="text-xs font-black text-stone-800 flex items-center gap-1.5">
+                  <ImageIcon className="h-3.5 w-3.5 text-orange-600" /> Stage / Profile Photo
+                </p>
+                {profilePhoto ? (
+                  <div
+                    onClick={() => setPreviewImageModal({ url: profilePhoto, title: `${artist.name} - Stage Profile Photo` })}
+                    className="relative rounded-2xl overflow-hidden border-2 border-orange-400 shadow-md aspect-square bg-stone-100 group cursor-pointer"
+                  >
+                    <img src={profilePhoto} alt="Stage Profile" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <span className="absolute bottom-1.5 left-1.5 bg-orange-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow">
+                      Profile Photo 🎭
+                    </span>
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1">
+                      <Eye className="h-4 w-4" /> Click to Enlarge
+                    </div>
+                  </div>
+                ) : (
+                  <div className="aspect-square rounded-2xl border-2 border-dashed border-stone-200 bg-white/70 flex flex-col items-center justify-center p-3 text-center text-stone-400">
+                    <ImageIcon className="h-6 w-6 text-stone-300 mb-1" />
+                    <span className="text-[11px] font-bold text-stone-500">No profile photo</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* ── SECTION 1: VERIFICATION USP CONTROLS ── */}
           <div className="rounded-2xl border-2 border-orange-200/70 bg-orange-50/20 p-5 space-y-4">
             <div className="flex items-center justify-between">
@@ -385,6 +492,29 @@ export function AdminEditArtistModal({ artist, isOpen, onClose, onSaveSuccess }:
           </Button>
         </div>
       </div>
+
+      {/* Enlarged Photo Preview Modal */}
+      {previewImageModal && (
+        <div
+          onClick={() => setPreviewImageModal(null)}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 cursor-zoom-out"
+        >
+          <div className="relative max-w-xl max-h-[85vh] bg-white rounded-3xl overflow-hidden shadow-2xl p-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-2 border-b border-stone-100">
+              <span className="text-xs font-black text-stone-900">{previewImageModal.title}</span>
+              <button
+                onClick={() => setPreviewImageModal(null)}
+                className="p-1 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-2 flex items-center justify-center bg-stone-950/5 rounded-2xl overflow-hidden max-h-[70vh]">
+              <img src={previewImageModal.url} alt={previewImageModal.title} className="max-h-[65vh] w-auto object-contain rounded-xl shadow" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

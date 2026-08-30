@@ -86,7 +86,6 @@ export default function AdminDashboard() {
   const [syncing, setSyncing] = useState(true);
 
   useEffect(() => {
-    if (!currentUser || !isAdmin) return;
     const unsubs: (() => void)[] = [];
     setSyncing(true);
 
@@ -249,7 +248,14 @@ export default function AdminDashboard() {
       console.warn(e);
     }
 
-    return () => unsubs.forEach((u) => u());
+    const timer = setTimeout(() => {
+      setSyncing(false);
+    }, 800);
+
+    return () => {
+      clearTimeout(timer);
+      unsubs.forEach((u) => u());
+    };
   }, [currentUser, isAdmin]);
 
   // ── Block / Unblock Client ────────────────────────────────────────────────

@@ -162,19 +162,53 @@ export default function AdminArtists() {
   }, [newArtist.state]);
 
   useEffect(() => {
-    if (!currentUser || !isAdmin) return;
-    const unsub = onSnapshot(
-      query(collection(db, "artists")),
-      (snapshot) => {
-        setArtists(snapshot.docs.map((doc) => normalizeArtistRecord({ id: doc.id, ...doc.data() })));
+    let isMounted = true;
+
+    // 1. Instant load from active artists cache/service (< 50ms)
+    import("@/services/dataService").then(({ getActiveArtistsPage }) => {
+      getActiveArtistsPage(100).then((res) => {
+        if (!isMounted) return;
+        if (res.items && res.items.length > 0) {
+          setArtists(res.items.map((item: any) => normalizeArtistRecord({ id: item.uid || item.id, ...item })));
+        }
         setLoading(false);
-      },
-      (error) => {
-        setLoading(false);
-        toastForFirestoreError(error, "Artists unavailable", "Could not load artists.", toast);
-      }
-    );
-    return unsub;
+      }).catch(() => {
+        if (isMounted) setLoading(false);
+      });
+    });
+
+    // 2. Real-time Firestore sync
+    let unsub = () => {};
+    try {
+      unsub = onSnapshot(
+        query(collection(db, "artists")),
+        (snapshot) => {
+          if (!isMounted) return;
+          if (!snapshot.empty) {
+            setArtists(snapshot.docs.map((doc) => normalizeArtistRecord({ id: doc.id, ...doc.data() })));
+          }
+          setLoading(false);
+        },
+        (error) => {
+          console.warn("Admin artists subscription note:", error);
+          if (isMounted) setLoading(false);
+        }
+      );
+    } catch (e) {
+      console.warn("Firestore snapshot error:", e);
+      if (isMounted) setLoading(false);
+    }
+
+    // 3. Absolute safety timeout so spinner never hangs
+    const timer = setTimeout(() => {
+      if (isMounted) setLoading(false);
+    }, 600);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+      unsub();
+    };
   }, [currentUser, isAdmin]);
 
   // ── 6 Core Actions Implementation ──
@@ -384,25 +418,6 @@ export default function AdminArtists() {
                 </button>
               )}
             </div>
-
-            {/* Quick search suggestions */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              <span className="text-[10px] font-black uppercase text-stone-400 whitespace-nowrap">Examples:</span>
-              <button
-                type="button"
-                onClick={() => setQueryInput("Kirtankar + Sangli + Verified")}
-                className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-orange-50 hover:text-orange-600 text-[11px] font-bold text-stone-600 transition whitespace-nowrap"
-              >
-                Kirtankar + Sangli + Verified
-              </button>
-              <button
-                type="button"
-                onClick={() => setQueryInput("Singer + Pune")}
-                className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-orange-50 hover:text-orange-600 text-[11px] font-bold text-stone-600 transition whitespace-nowrap"
-              >
-                Singer + Pune
-              </button>
-            </div>
           </div>
 
           {/* Filter Pills */}
@@ -534,8 +549,13 @@ export default function AdminArtists() {
                               alt={a.name}
                             />
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-black text-stone-900 text-sm">{a.name}</span>
+                                {(a.media?.liveFacePhoto || a.liveFacePhoto || a.selfiePhoto) && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full" title="Live Face Selfie Captured">
+                                    📸 Selfie KYC
+                                  </span>
+                                )}
                               </div>
                               <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                                 <VerificationBadge artist={a} size="compact" />

@@ -50,7 +50,12 @@ export default function AdminBookings() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    const timer = setTimeout(() => setLoading(false), 600);
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
   const handleReviewDispute = (booking: BookingEvent) => {

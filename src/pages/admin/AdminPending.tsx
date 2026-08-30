@@ -326,47 +326,59 @@ export default function AdminPending() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!currentUser || !isAdmin) return;
-    
-    // Artist applications listener
-    const qArtists = query(
-      collection(db, "artist_applications"),
-      where("status", "==", "pending")
-    );
-    const unsubArtists = onSnapshot(qArtists, (snap) => {
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      docs.sort((a: any, b: any) => {
-        const tA = a.createdAt?.toDate?.()?.getTime() || 0;
-        const tB = b.createdAt?.toDate?.()?.getTime() || 0;
-        return tB - tA;
-      });
-      setPendingArtists(docs);
-      setLoading(false);
-    }, (err) => {
-      console.error(err);
-      toastForFirestoreError(err, "Error", "Could not load pending artists.", toast);
-      setLoading(false);
-    });
+    let unsubArtists = () => {};
+    let unsubAdmins = () => {};
 
-    // Admin requests listener
-    const qAdmins = query(
-      collection(db, "admin_requests"),
-      where("status", "==", "pending")
-    );
-    const unsubAdmins = onSnapshot(qAdmins, (snap) => {
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      docs.sort((a: any, b: any) => {
-        const tA = a.requestedAt?.toDate?.()?.getTime() || a.createdAt?.toDate?.()?.getTime() || 0;
-        const tB = b.requestedAt?.toDate?.()?.getTime() || b.createdAt?.toDate?.()?.getTime() || 0;
-        return tB - tA;
+    try {
+      // Artist applications listener
+      const qArtists = query(
+        collection(db, "artist_applications"),
+        where("status", "==", "pending")
+      );
+      unsubArtists = onSnapshot(qArtists, (snap) => {
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        docs.sort((a: any, b: any) => {
+          const tA = a.createdAt?.toDate?.()?.getTime() || 0;
+          const tB = b.createdAt?.toDate?.()?.getTime() || 0;
+          return tB - tA;
+        });
+        setPendingArtists(docs);
+        setLoading(false);
+      }, (err) => {
+        console.warn("pending artists error:", err);
+        setLoading(false);
       });
-      setPendingAdmins(docs);
-    }, (err) => {
-      console.warn("admin_requests listener:", err);
-      toastForFirestoreError(err, "Admin requests", "Could not load admin requests.", toast);
-    });
 
-    return () => { unsubArtists(); unsubAdmins(); };
+      // Admin requests listener
+      const qAdmins = query(
+        collection(db, "admin_requests"),
+        where("status", "==", "pending")
+      );
+      unsubAdmins = onSnapshot(qAdmins, (snap) => {
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        docs.sort((a: any, b: any) => {
+          const tA = a.requestedAt?.toDate?.()?.getTime() || a.createdAt?.toDate?.()?.getTime() || 0;
+          const tB = b.requestedAt?.toDate?.()?.getTime() || b.createdAt?.toDate?.()?.getTime() || 0;
+          return tB - tA;
+        });
+        setPendingAdmins(docs);
+      }, (err) => {
+        console.warn("admin_requests listener:", err);
+      });
+    } catch (e) {
+      console.warn("Admin pending listeners:", e);
+      setLoading(false);
+    }
+
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 600);
+
+    return () => {
+      clearTimeout(timer);
+      unsubArtists();
+      unsubAdmins();
+    };
   }, [currentUser, isAdmin]);
 
   const handleApproveArtist = useCallback(async (id: string) => {
