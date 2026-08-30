@@ -144,28 +144,63 @@ export default function BookingModal({
     }
   }, [open, services]);
 
-  // Reset wizard on open/close
+  // Reset wizard & prefill customer details on open/close
   useEffect(() => {
     if (open) {
       setStep(1);
       setBookingCode("");
-      setSameAsMobile(false);
+
+      const authName = String(
+        userProfile?.fullName ||
+        userProfile?.name ||
+        userProfile?.displayName ||
+        currentUser?.displayName ||
+        ""
+      ).trim();
+
+      const authEmail = String(
+        currentUser?.email ||
+        userProfile?.email ||
+        ""
+      ).trim();
+
+      const rawPhone = String(
+        userProfile?.phone ||
+        userProfile?.mobileNumber ||
+        userProfile?.phoneNumber ||
+        userProfile?.contactNumber ||
+        ""
+      ).trim();
+      const authPhone = rawPhone ? sanitizePhoneNumber(rawPhone) : "";
+
+      const rawWhatsapp = String(
+        userProfile?.clientWhatsapp ||
+        userProfile?.whatsapp ||
+        userProfile?.whatsappNumber ||
+        authPhone ||
+        ""
+      ).trim();
+      const authWhatsapp = rawWhatsapp ? sanitizePhoneNumber(rawWhatsapp) : authPhone;
+
+      const isSame = Boolean(authPhone && (!userProfile?.clientWhatsapp || authWhatsapp === authPhone));
+      setSameAsMobile(isSame);
+
       if (services && services.length > 0) {
         setSelectedService(services[0].subcategory || services[0].artForm || services[0].category || "");
       }
       setPaymentDetails({
-        cardholderName: "",
+        cardholderName: authName || "",
         cardNumber: "",
         expiryDate: "",
         cvv: "",
       });
       setFormData({
-        customerName: "",
-        customerEmail: "",
-        customerPhone: "",
-        clientWhatsapp: "",
-        customerAddress: "",
-        eventLocation: "",
+        customerName: authName || "",
+        customerEmail: authEmail || "",
+        customerPhone: authPhone || "",
+        clientWhatsapp: authWhatsapp || authPhone || "",
+        customerAddress: String(userProfile?.address || userProfile?.location || ""),
+        eventLocation: String(userProfile?.city || userProfile?.district || ""),
         eventDate: preselectedDate || "",
         eventStartTime: "",
         eventEndTime: "",
@@ -175,7 +210,7 @@ export default function BookingModal({
         authorizedAmount: "" as any,
       });
     }
-  }, [open, preselectedDate, services]);
+  }, [open, preselectedDate, services, currentUser, userProfile]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -334,6 +369,9 @@ export default function BookingModal({
 
       // 3. Automatically sync inquiry to Telecaller Workbench
       saveCustomerInquiryLead({
+        id: `booking_${booking.id}`,
+        bookingId: booking.id,
+        customerId: uid,
         customerName: formData.customerName,
         customerPhone: formData.customerPhone,
         customerEmail: formData.customerEmail || currentUser?.email || "",

@@ -68,10 +68,15 @@ export type TelecallerLead = {
   assignedTelecallerId?: string;
   assignedTelecallerName?: string;
   status: LeadStatus;
+  telecallerStatus?: LeadStatus;
   matchedArtists: MatchedArtistCall[];
   confirmedArtistId?: string;
   confirmedArtistName?: string;
   requestedArtistName?: string;
+  bookingId?: string;
+  customerId?: string;
+  artistPhone?: string;
+  artistContactNumber?: string;
   leadType: LeadType;
   confirmedPrice?: number;
   source: "website_inquiry" | "manual_phone_call";
@@ -343,6 +348,9 @@ export function subscribeTelecallerLeads(callback: (leads: TelecallerLead[]) => 
 }
 
 export async function saveCustomerInquiryLead(inquiry: {
+  id?: string;
+  bookingId?: string;
+  customerId?: string;
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
@@ -360,13 +368,15 @@ export async function saveCustomerInquiryLead(inquiry: {
   artistName?: string;
 }): Promise<void> {
   const createdAtIso = new Date().toISOString();
-  const leadId = `lead_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const leadId = inquiry.id || (inquiry.bookingId ? `booking_${inquiry.bookingId}` : `lead_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
 
   const effectiveCategory = inquiry.serviceCategory || inquiry.category || inquiry.eventType || "General Event";
   const effectiveSubCategory = inquiry.selectedService || inquiry.subCategory || (inquiry.artistName ? `Artist Booking (${inquiry.artistName})` : "General Inquiry");
 
   const newLead: TelecallerLead = {
     id: leadId,
+    bookingId: inquiry.bookingId,
+    customerId: inquiry.customerId,
     customerName: inquiry.customerName || "Customer",
     customerPhone: inquiry.customerPhone || "",
     customerEmail: inquiry.customerEmail || "",
@@ -467,32 +477,35 @@ export async function createManualLead(leadData: Omit<TelecallerLead, "id" | "cr
 export async function updateLeadStatus(
   leadId: string,
   status: LeadStatus,
-  confirmedArtist?: { artistId: string; artistName: string; price: number }
+  confirmedArtist?: {
+    artistId: string;
+    artistName: string;
+    price: number;
+  }
 ): Promise<void> {
-  const cid = cleanId(leadId);
-
-  // 1. Immediately update local storage cache with normalized ID matching
   const localList = getLocalLeads();
-  let found = false;
-  localList.forEach((l) => {
-    if (cleanId(l.id) === cid || l.id === leadId) {
-      l.status = status;
-      (l as any).telecallerStatus = status;
+  let targetLead: TelecallerLead | undefined;
+
+  localList.forEach((lead) => {
+    if (lead.id === leadId || cleanId(lead.id) === cleanId(leadId)) {
+      lead.status = status;
+      lead.telecallerStatus = status;
+      targetLead = lead;
       if (confirmedArtist) {
-        l.confirmedArtistId = confirmedArtist.artistId;
-        l.confirmedArtistName = confirmedArtist.artistName;
-        l.confirmedPrice = confirmedArtist.price;
+        lead.confirmedArtistId = confirmedArtist.artistId;
+        lead.confirmedArtistName = confirmedArtist.artistName;
+        lead.confirmedPrice = confirmedArtist.price;
       }
-      found = true;
     }
   });
 
-  if (!found) {
-    localList.push({
+  if (!targetLead) {
+    targetLead = {
       id: leadId,
       status,
       telecallerStatus: status,
-    } as any);
+    } as any;
+    localList.push(targetLead!);
   }
 
   try {
@@ -532,25 +545,51 @@ export async function updateLeadStatus(
     // Ignore permissions or network fallback
   }
 
-  const bookingDocPayload = {
+  const bookingDocPayload: Record<string, any> = {
     ...updatePayload,
     status: bookingStatusToSet,
   };
+  if (confirmedArtist) {
+    bookingDocPayload.confirmedPrice = confirmedArtist.price;
+    bookingDocPayload.confirmedArtistName = confirmedArtist.artistName;
+  }
 
   try {
-    if (leadId.startsWith("booking_")) {
-      await setDoc(doc(db, "bookings", realDocId), bookingDocPayload, { merge: true });
-    } else if (leadId.startsWith("brief_")) {
-      await updateDoc(doc(db, "eventBriefs", realDocId), updatePayload);
+    // 1. Direct doc write by ID
+    await setDoc(doc(db, "bookings", realDocId), bookingDocPayload, { merge: true });
+
+    if (leadId.startsWith("brief_")) {
+      await updateDoc(doc(db, "eventBriefs", realDocId), updatePayload).catch(() => {});
     } else {
-      try {
-        await setDoc(doc(db, LEADS_COLLECTION, leadId), updatePayload, { merge: true });
-        // Also update any matching booking in bookings collection
-        await setDoc(doc(db, "bookings", realDocId), bookingDocPayload, { merge: true });
-      } catch {
-        await setDoc(doc(db, "inquiries", realDocId), updatePayload, { merge: true });
-      }
+      await setDoc(doc(db, "inquiries", realDocId), updatePayload, { merge: true }).catch(() => {});
     }
+
+    // 2. Query and sync matching bookings by customer phone or customerId
+    const customerPhone = targetLead?.customerPhone;
+    const customerId = targetLead?.customerId;
+
+    const queriesToRun = [];
+    if (customerPhone) {
+      queriesToRun.push(query(collection(db, "bookings"), where("clientPhone", "==", customerPhone)));
+      queriesToRun.push(query(collection(db, "bookings"), where("customerPhone", "==", customerPhone)));
+    }
+    if (customerId) {
+      queriesToRun.push(query(collection(db, "bookings"), where("customerId", "==", customerId)));
+    }
+
+    if (queriesToRun.length > 0) {
+      const results = await Promise.allSettled(queriesToRun.map((q) => getDocs(q)));
+      results.forEach((res) => {
+        if (res.status === "fulfilled") {
+          res.value.forEach((d) => {
+            setDoc(d.ref, bookingDocPayload, { merge: true }).catch(() => {});
+          });
+        }
+      });
+    }
+
+    // Trigger local broadcast so client profile refreshes immediately
+    window.dispatchEvent(new CustomEvent("mykalakar_lead_status_changed", { detail: { leadId, status: bookingStatusToSet } }));
   } catch (error: any) {
     if (error?.code !== "permission-denied") {
       console.warn(`Firestore status update warning for ${leadId} -> ${status}:`, error?.message || error);

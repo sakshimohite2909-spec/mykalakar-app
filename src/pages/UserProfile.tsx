@@ -22,6 +22,8 @@ import {
   Compass,
   Search,
   BookmarkX,
+  QrCode,
+  Copy,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -46,6 +48,11 @@ import { ArtistCard } from "@/components/FeaturedArtists";
 import { buildArtistCards, type ArtistCardViewModel } from "@/services/marketplaceCards";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/i18n/I18nProvider";
+import {
+  subscribePaymentConfig,
+  getLocalPaymentConfig,
+  type PaymentConfig,
+} from "@/services/paymentSettingsService";
 
 // ─── Tab type ──────────────────────────────────────────────────────────────
 type DashboardTab = "profile" | "bookings" | "saved";
@@ -318,6 +325,8 @@ export default function UserProfile() {
   const [checkoutBooking, setCheckoutBooking] = useState<BookingEvent | null>(null);
   const [checkoutGateway, setCheckoutGateway] = useState<"stripe" | "razorpay" | "paypal" | "adyen">("stripe");
   const [checkoutDetails, setCheckoutDetails] = useState({ cardholderName: "", cardNumber: "", expiryDate: "", cvv: "" });
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getLocalPaymentConfig());
+  const [copiedUpi, setCopiedUpi] = useState(false);
   const [completingCheckout, setCompletingCheckout] = useState(false);
 
   // Agreement modal state
@@ -368,15 +377,40 @@ export default function UserProfile() {
   useEffect(() => {
     if (!currentUser) return;
     setLoadingBookings(true);
-    const unsub = subscribeCustomerBookings(currentUser.uid, (data) => {
-      setBookings(data);
-      setLoadingBookings(false);
-    }, (err) => {
-      console.error(err);
-      setLoadingBookings(false);
-    });
-    return unsub;
+
+    const loadBookings = () => {
+      return subscribeCustomerBookings(currentUser.uid, (data) => {
+        setBookings(data);
+        setLoadingBookings(false);
+      }, (err) => {
+        console.error(err);
+        setLoadingBookings(false);
+      });
+    };
+
+    let unsub = loadBookings();
+
+    const handleLeadChange = () => {
+      if (unsub) unsub();
+      unsub = loadBookings();
+    };
+
+    window.addEventListener("mykalakar_lead_status_changed", handleLeadChange);
+
+    return () => {
+      if (unsub) unsub();
+      window.removeEventListener("mykalakar_lead_status_changed", handleLeadChange);
+    };
   }, [currentUser]);
+
+  useEffect(() => {
+    const unsubPayment = subscribePaymentConfig((cfg) => {
+      setPaymentConfig(cfg);
+    });
+    return () => {
+      unsubPayment();
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -918,7 +952,9 @@ export default function UserProfile() {
                             <div key={booking.id} className="border border-slate-200/80 rounded-2xl bg-white p-5 shadow-sm space-y-4 hover:shadow-md transition duration-200">
                               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-slate-100 pb-3">
                                 <div>
-                                  <h3 className="font-display text-lg font-black text-slate-900">{booking.performanceType} {t("profile.bookings.with", { defaultValue: "with" })} {booking.artistName || t("common.artist")}</h3>
+                                  <h3 className="font-display text-lg font-black text-slate-900">
+                                    {booking.performanceType} with {booking.artistName || "Artist"}
+                                  </h3>
                                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-stone-500">
                                     <span className="flex items-center gap-1">
                                       <Clock className="h-3.5 w-3.5 text-stone-400" />
@@ -1186,64 +1222,171 @@ export default function UserProfile() {
 
       {/* Counter Offer & Deferred Razorpay Payment Checkout popup */}
       <Dialog open={Boolean(checkoutBooking)} onOpenChange={(open) => !open && setCheckoutBooking(null)}>
-        <DialogContent className="max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl font-black text-stone-900 flex items-center gap-1.5">
-              <CreditCard className="h-5 w-5 text-[#FF6B00]" />
-              {checkoutBooking?.status === "PAYMENT_PENDING" ? "Complete Razorpay Booking Payment" : t("profile.checkoutDialog.title")}
+        <DialogContent className="w-[95vw] max-w-lg rounded-2xl p-5 sm:p-6 max-h-[90vh] overflow-y-auto bg-white border border-stone-200 shadow-2xl">
+          <DialogHeader className="border-b border-stone-100 pb-3">
+            <DialogTitle className="font-display text-lg sm:text-xl font-black text-stone-900 flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-orange-600 shrink-0" />
+              <span>
+                {checkoutBooking?.status === "PAYMENT_PENDING"
+                  ? "सुरक्षित पेमेंट (Razorpay Checkout)"
+                  : t("profile.checkoutDialog.title", { defaultValue: "बुकिंग पेमेंट" })}
+              </span>
             </DialogTitle>
           </DialogHeader>
+
           {checkoutBooking && (
-            <div className="space-y-4 py-2 text-sm text-stone-600 font-semibold">
+            <div className="space-y-4 py-2 text-sm text-stone-700 font-semibold">
               {checkoutBooking.status === "PAYMENT_PENDING" ? (
-                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1 font-bold text-emerald-950">
-                  <p className="text-xs font-black uppercase text-emerald-700 tracking-wider">Telecaller Confirmed Deal</p>
-                  <p className="flex justify-between text-sm pt-1">
-                    <span>Artist:</span> <strong>{checkoutBooking.artistName || "Artist"}</strong>
-                  </p>
-                  <p className="flex justify-between text-sm">
-                    <span>Event Date:</span> <strong>{formatDate(checkoutBooking.eventDate)}</strong>
-                  </p>
-                  <p className="flex justify-between text-emerald-800 text-base border-t border-emerald-200/70 pt-1.5 mt-1.5 font-black">
-                    <span>Agreed Amount:</span>
-                    <span>₹{(checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000).toLocaleString("en-IN")}</span>
-                  </p>
+                <div className="p-4 bg-emerald-50/90 border border-emerald-200 rounded-2xl space-y-2 font-bold text-emerald-950 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1">
+                      <ShieldCheck className="h-4 w-4 text-emerald-600" /> टेलिकॉलर कन्फर्म डील ✓
+                    </span>
+                    <span className="text-[10px] bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-full font-extrabold">
+                      Escrow Safe
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 pt-1 text-xs sm:text-sm">
+                    <div className="flex items-center justify-between text-stone-700">
+                      <span className="text-stone-500 font-medium">कलाकार (Artist):</span>
+                      <strong className="text-stone-950 font-black">{checkoutBooking.artistName || "Artist"}</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-stone-700">
+                      <span className="text-stone-500 font-medium">तारीख (Event Date):</span>
+                      <strong className="text-stone-950 font-black">{formatDate(checkoutBooking.eventDate)}</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-emerald-950 border-t border-emerald-200 pt-2 mt-1.5 font-black text-base">
+                      <span>अंतिम मानधन (Total Amount):</span>
+                      <span className="text-emerald-700 text-lg">
+                        ₹{(checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="p-3 bg-amber-50 rounded-xl space-y-1 font-bold">
-                  <p className="flex justify-between">{t("profile.checkoutDialog.originalHold")} <span>Rs {checkoutBooking.authorizedAmount?.toLocaleString("en-IN")}</span></p>
-                  <p className="flex justify-between">{t("profile.checkoutDialog.newCounterPrice")} <span>Rs {checkoutBooking.counterOfferAmount?.toLocaleString("en-IN")}</span></p>
-                  <p className="flex justify-between text-amber-700 text-md border-t border-amber-200/50 pt-1.5 mt-1.5">
-                    {t("profile.checkoutDialog.extraHoldToAuthorize")}
-                    <span>Rs {((checkoutBooking.counterOfferAmount || 0) - (checkoutBooking.authorizedAmount || 0)).toLocaleString("en-IN")}</span>
+                <div className="p-4 bg-amber-50/90 border border-amber-200 rounded-2xl space-y-2 font-bold text-amber-950">
+                  <p className="flex justify-between text-xs sm:text-sm">
+                    <span className="text-amber-800 font-medium">{t("profile.checkoutDialog.originalHold", { defaultValue: "मूळ रक्कम" })}:</span>
+                    <span>Rs {checkoutBooking.authorizedAmount?.toLocaleString("en-IN")}</span>
+                  </p>
+                  <p className="flex justify-between text-xs sm:text-sm">
+                    <span className="text-amber-800 font-medium">{t("profile.checkoutDialog.newCounterPrice", { defaultValue: "नवीन ऑफर" })}:</span>
+                    <span>Rs {checkoutBooking.counterOfferAmount?.toLocaleString("en-IN")}</span>
+                  </p>
+                  <p className="flex justify-between text-amber-950 text-base border-t border-amber-200 pt-2 mt-1 font-black">
+                    <span>{t("profile.checkoutDialog.extraHoldToAuthorize", { defaultValue: "फरक रक्कम" })}:</span>
+                    <span className="text-amber-800">
+                      Rs {((checkoutBooking.counterOfferAmount || 0) - (checkoutBooking.authorizedAmount || 0)).toLocaleString("en-IN")}
+                    </span>
                   </p>
                 </div>
               )}
 
-              <div className="border border-slate-200 rounded-xl bg-slate-50 p-3.5 space-y-3">
-                <h4 className="text-xs font-black uppercase text-orange-600 tracking-wider">
-                  Simulated Razorpay Secure Gateway
-                </h4>
-                <div className="space-y-1">
-                  <Label>Cardholder Name</Label>
-                  <Input placeholder="Johnathan Doe" value={checkoutDetails.cardholderName} onChange={(e) => setCheckoutDetails(prev => ({ ...prev, cardholderName: e.target.value }))} />
+              {/* Direct UPI & QR Code Box */}
+              <div className="border border-stone-200/90 rounded-2xl bg-stone-50/90 p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase text-stone-800 tracking-wider flex items-center gap-1.5">
+                    <QrCode className="h-3.5 w-3.5 text-orange-600" /> थेट UPI QR कोडने भरा (Scan & Pay)
+                  </h4>
+                  <span className="text-[10px] bg-stone-200 text-stone-700 px-2 py-0.5 rounded-full font-bold">Instant</span>
                 </div>
-                <div className="space-y-1">
-                  <Label>Credit / Debit Card Number</Label>
-                  <Input placeholder="4111 2222 3333 4444" value={checkoutDetails.cardNumber} onChange={(e) => setCheckoutDetails(prev => ({ ...prev, cardNumber: e.target.value }))} />
+
+                <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-3 rounded-xl border border-stone-200">
+                  <div className="h-28 w-28 shrink-0 bg-stone-50 p-1.5 rounded-lg border border-stone-200 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={
+                        paymentConfig.qrImageUrl ||
+                        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
+                          `upi://pay?pa=${paymentConfig.upiId || "mykalakar@icici"}&pn=MyKalakar&am=${
+                            checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000
+                          }&cu=INR`
+                        )}`
+                      }
+                      alt="Payment QR"
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <div className="space-y-1.5 text-center sm:text-left min-w-0 flex-1">
+                    <p className="text-xs font-bold text-stone-800">PhonePe / GPay / Paytm ने स्कॅन करा</p>
+                    <div className="flex items-center justify-center sm:justify-start gap-1 bg-stone-50 border border-stone-200 px-2.5 py-1 rounded-lg w-fit">
+                      <span className="text-xs font-mono font-bold text-stone-900 truncate select-all">
+                        {paymentConfig.upiId || "mykalakar@icici"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(paymentConfig.upiId || "mykalakar@icici");
+                          setCopiedUpi(true);
+                          toast({ title: "UPI ID Copied! 📋", description: "Copied to clipboard." });
+                          setTimeout(() => setCopiedUpi(false), 2000);
+                        }}
+                        className="text-stone-400 hover:text-stone-700 ml-1"
+                        title="Copy UPI ID"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-stone-500 font-semibold">
+                      {paymentConfig.notes || "पेमेंट झाल्यावर कृपया स्क्रीनशॉट सेव्ह ठेवा."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Gateway Box */}
+              <div className="border border-stone-200/90 rounded-2xl bg-stone-50/80 p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase text-orange-600 tracking-wider flex items-center gap-1.5">
+                    <CreditCard className="h-3.5 w-3.5" /> किंवा कार्ड / नेटबँकिंगने भरा (Razorpay Gateway)
+                  </h4>
+                  <span className="text-[10px] text-stone-400 font-bold">256-Bit SSL Encrypted</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-stone-700">कार्डधारकाचे नाव (Cardholder Name)</Label>
+                  <Input
+                    placeholder="उदा. Sakshi Patil"
+                    value={checkoutDetails.cardholderName}
+                    onChange={(e) => setCheckoutDetails((prev) => ({ ...prev, cardholderName: e.target.value }))}
+                    className="h-10 text-xs bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-stone-700">कार्ड नंबर / UPI ID (Card / UPI)</Label>
+                  <Input
+                    placeholder="4111 2222 3333 4444 किंवा sakshi@upi"
+                    value={checkoutDetails.cardNumber}
+                    onChange={(e) => setCheckoutDetails((prev) => ({ ...prev, cardNumber: e.target.value }))}
+                    className="h-10 text-xs bg-white font-mono"
+                  />
                 </div>
               </div>
             </div>
           )}
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setCheckoutBooking(null)}>{t("profile.checkoutDialog.btnCancel")}</Button>
-            <Button className="bg-[#FF6B00] hover:bg-[#e86100] text-white font-bold" onClick={submitCheckoutDelta} disabled={completingCheckout}>
+
+          <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-2 pt-2 border-t border-stone-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCheckoutBooking(null)}
+              className="w-full sm:w-auto rounded-xl font-bold text-xs h-10 text-stone-600 hover:bg-stone-100"
+            >
+              रद्द करा (Cancel)
+            </Button>
+            <Button
+              type="button"
+              className="w-full sm:w-auto bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-black text-xs h-10 px-5 rounded-xl shadow-md flex items-center justify-center gap-1.5"
+              onClick={submitCheckoutDelta}
+              disabled={completingCheckout}
+            >
               {completingCheckout ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : checkoutBooking?.status === "PAYMENT_PENDING" ? (
-                `Pay ₹${(checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000).toLocaleString("en-IN")} via Razorpay`
+                `₹${(checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000).toLocaleString("en-IN")} भरा (Pay via Razorpay)`
               ) : (
-                t("profile.checkoutDialog.btnAuthorizeExtra")
+                "पेमेंट कन्फर्म करा (Authorize Payment)"
               )}
             </Button>
           </DialogFooter>

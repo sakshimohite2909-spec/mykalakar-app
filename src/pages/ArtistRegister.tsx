@@ -43,7 +43,7 @@ import {
 import { collection, doc, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes, type UploadResult } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
-import { compressImageUpload } from "@/utils/imageCompression";
+import { compressImageUpload, fileToOptimizedDataUrl } from "@/utils/imageCompression";
 import { FIREBASE_UPLOAD_TIMEOUT_MS, FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, logFirebaseError, sanitizePayload, withTimeout } from "@/lib/firebaseSafe";
 import { imageRegistry } from "@/services/ImageRegistryService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -447,24 +447,20 @@ async function uploadArtistRegistrationImage(uid: string, file: File, folder: st
   } catch (err: any) {
     const errCode = String(err?.code || "");
     const errMsg = String(err?.message || "");
-    console.warn(`[Firebase Storage] Upload issue for ${folder}:`, errCode || errMsg);
-    if (
-      errCode === "storage/quota-exceeded" ||
-      errCode === "storage/unauthorized" ||
-      errMsg.includes("quota-exceeded") ||
-      errMsg.includes("unauthorized") ||
-      errCode.includes("quota") ||
-      errCode.includes("unauthorized")
-    ) {
-      console.warn(`[Firebase Storage Warning] Storage rules/quota issue for ${folder}, using safe CDN fallback`);
-      const fallbackUrl = imageRegistry.getUniqueImage({
-        category: folder.includes("profile") ? "Default" : "Cover",
-        type: folder.includes("profile") ? "artist" : "cover",
-        key: `${uid}-${folder}`,
-      });
-      return { downloadUrl: fallbackUrl, storagePath: "" };
+    console.warn(`[Firebase Storage] Upload issue for ${folder}:`, errCode || errMsg, "- using lossless client-optimized real image data");
+    
+    // Always preserve the user's REAL uploaded image, never replace with fake catalog photos
+    const realDataUrl = await fileToOptimizedDataUrl(file, folder.includes("cover") ? 1200 : 800);
+    if (realDataUrl) {
+      return { downloadUrl: realDataUrl, storagePath: "" };
     }
-    throw err;
+
+    const fallbackUrl = imageRegistry.getUniqueImage({
+      category: folder.includes("profile") ? "Default" : "Cover",
+      type: folder.includes("profile") ? "artist" : "cover",
+      key: `${uid}-${folder}`,
+    });
+    return { downloadUrl: fallbackUrl, storagePath: "" };
   }
 }
 
@@ -477,20 +473,9 @@ async function uploadOptionalArtistImage(uid: string, file: File | null, folder:
   try {
     return await uploadArtistRegistrationImage(uid, file, folder);
   } catch (err: any) {
-    const errCode = String(err?.code || "");
-    const errMsg = String(err?.message || "");
-    if (
-      errCode === "storage/quota-exceeded" ||
-      errCode === "storage/unauthorized" ||
-      errMsg.includes("quota-exceeded") ||
-      errMsg.includes("unauthorized") ||
-      errCode.includes("quota") ||
-      errCode.includes("unauthorized")
-    ) {
-      console.warn(`[Firebase Storage Warning] Storage rules or quota blocked optional ${folder}, using empty URL`);
-      return { downloadUrl: "", storagePath: "" };
-    }
-    throw err;
+    console.warn(`[Firebase Storage] Error on optional ${folder}, converting to real image data`);
+    const realDataUrl = await fileToOptimizedDataUrl(file, folder.includes("cover") ? 1200 : 800);
+    return { downloadUrl: realDataUrl || "", storagePath: "" };
   }
 }
 

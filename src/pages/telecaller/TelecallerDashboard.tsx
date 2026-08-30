@@ -31,6 +31,7 @@ import {
   Play,
   RotateCcw,
   Wallet,
+  QrCode,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,12 @@ import {
 } from "@/services/telecallerService";
 import ManualLeadModal from "./ManualLeadModal";
 import EditLeadModal from "./EditLeadModal";
+import TelecallerQRModal from "./TelecallerQRModal";
+import {
+  subscribePaymentConfig,
+  getLocalPaymentConfig,
+  type PaymentConfig,
+} from "@/services/paymentSettingsService";
 import ArtistReelViewerModal, { type ArtistReelItem } from "@/components/artist/ArtistReelViewerModal";
 import { MAIN_EVENT_CARDS } from "@/constants/artistSystem";
 import { subscribeActiveArtists } from "@/services/dataService";
@@ -67,6 +74,8 @@ export default function TelecallerDashboard() {
   const [activeLead, setActiveLead] = useState<TelecallerLead | null>(null);
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getLocalPaymentConfig());
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [artistCategoryFilter, setArtistCategoryFilter] = useState<string>("all");
@@ -122,18 +131,39 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
     const artistName = activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार";
     const amount = activeLead.budget || 15000;
 
+    const upiIdToSend = paymentConfig.upiId || "mykalakar@icici";
+    const upiNameToSend = paymentConfig.upiName || "MyKalakar";
+    
+    // In WhatsApp, 'localhost' has no TLD so WhatsApp makes it plain black text.
+    // By using 'lvh.me' (which points to 127.0.0.1 / localhost) or production domain,
+    // WhatsApp recognizes the TLD and turns it into a clickable BLUE link!
+    const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    let baseDomain = window.location.origin;
+    if (paymentConfig.websiteUrl && paymentConfig.websiteUrl !== "https://mykalakar.com") {
+      baseDomain = paymentConfig.websiteUrl;
+    } else if (isLocalhost) {
+      baseDomain = `http://lvh.me:${window.location.port || "8080"}`;
+    }
+    const cleanProfileLink = `${baseDomain.replace(/\/$/, "")}/profile`;
+
     const message = `🙏 *नमस्कार ${activeLead.customerName || "ग्राहक"} जी!*
 🎉 *आनंदाची बातमी!* तुमच्या इव्हेंटसाठी कलाकार *${artistName}* यांनी होकार दिला आहे.
 
 📌 *कार्यक्रमाचा तपशील:*
 📅 *तारीख:* ${activeLead.eventDate || "तारीख चर्चाधीन"}
 📍 *ठिकाण:* ${activeLead.eventLocation || "महाराष्ट्र"}
-💰 *ठरलेले बजेट:* ₹${amount.toLocaleString("en-IN")}
+💰 *अंतिम मानधन:* ₹${amount.toLocaleString("en-IN")}
 
-👉 *बुकिंग कन्फर्म करण्यासाठी खालील लिंकवरून सुरक्षित पेमेंट करा:*
-🔗 ${window.location.origin}/
+👉 *तुम्ही खालील कोणत्याही सोप्या पद्धतीने सुरक्षित पेमेंट करू शकता:*
 
-*(टीप: तुमचे पैसे MyKalakar Escrow Safe खात्यात कार्यक्रम पूर्ण होईपर्यंत सुरक्षित राहतील.)*
+*१. थेट PhonePe / GPay / UPI द्वारे:*
+• *कंपनी UPI ID:* \`${upiIdToSend}\` (${upiNameToSend})
+• *पेमेंट झाल्यावर कृपया स्क्रीनशॉट / UTR नंबर याच चॅटवर पाठवा.*
+
+*२. वेबसाइटवरून १-क्लिक ऑनलाइन पेमेंट:*
+${cleanProfileLink}
+
+*(टीप: तुमचे पैसे MyKalakar Escrow खात्यात कार्यक्रम पूर्ण होईपर्यंत सुरक्षित राहतील.)*
 - MyKalakar टीम 🚩`;
 
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
@@ -213,9 +243,14 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
       setActiveArtists(data as any[]);
     });
 
+    const unsubPayment = subscribePaymentConfig((cfg) => {
+      setPaymentConfig(cfg);
+    });
+
     return () => {
       unsubLeads();
       unsubArtists();
+      unsubPayment();
     };
   }, []);
 
@@ -383,13 +418,24 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
           </p>
         </div>
 
-        <Button
-          onClick={() => setManualModalOpen(true)}
-          className="rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-xs shadow-md px-5 py-2.5 flex items-center gap-2 self-start sm:self-auto"
-        >
-          <PlusCircle className="h-4 w-4" />
-          ＋ Log Incoming Call
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <Button
+            variant="outline"
+            onClick={() => setQrModalOpen(true)}
+            className="rounded-full border-stone-300 bg-white hover:bg-stone-50 text-stone-800 font-extrabold text-xs shadow-xs px-4 py-2.5 flex items-center gap-2"
+          >
+            <QrCode className="h-4 w-4 text-orange-600" />
+            ⚙️ UPI व QR सेट करा
+          </Button>
+
+          <Button
+            onClick={() => setManualModalOpen(true)}
+            className="rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-xs shadow-md px-5 py-2.5 flex items-center gap-2"
+          >
+            <PlusCircle className="h-4 w-4" />
+            ＋ Log Incoming Call
+          </Button>
+        </div>
       </div>
 
       {/* VIEW 1: DASHBOARD WORKBENCH */}
@@ -761,25 +807,84 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
                       </p>
                     )}
 
-                    {/* Action Buttons: Customer Call & Send Payment Link */}
-                    {activeLead.customerPhone && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                        <a
-                          href={`tel:${activeLead.customerPhone}`}
-                          onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
-                          className="w-full py-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
-                        >
-                          <Phone className="h-4 w-4 text-emerald-400" /> 📞 ग्राहक कॉल
-                        </a>
-                        <button
-                          type="button"
-                          onClick={handleWhatsAppCustomerPaymentLink}
-                          className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
-                        >
-                          <MessageCircle className="h-4 w-4" /> 🟢 पेमेंट लिंक पाठवा
-                        </button>
-                      </div>
-                    )}
+                    {/* Action Buttons: Artist WhatsApp/Call & Customer Call/Payment */}
+                    <div className="space-y-2 pt-1">
+                      {/* Artist Communication Row */}
+                      {(activeLead.requestedArtistName || activeLead.confirmedArtistName || activeLead.artistPhone) && (
+                        <div className="p-3 rounded-xl bg-orange-50/80 border border-orange-200/90 space-y-2">
+                          <div className="flex items-center justify-between text-xs font-black text-orange-950">
+                            <span className="flex items-center gap-1.5">
+                              <Sparkles className="h-3.5 w-3.5 text-orange-600" />
+                              कलाकार संपर्क: <strong className="text-orange-700 font-black">{activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार"}</strong>
+                            </span>
+                            <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold">
+                              मानधन: ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 20000) * 0.8)).toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const artistObj = activeArtists.find(
+                                  (a) =>
+                                    (activeLead.requestedArtistName && (a.name?.toLowerCase() === activeLead.requestedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.requestedArtistName.toLowerCase())) ||
+                                    (activeLead.confirmedArtistName && (a.name?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase()))
+                                ) || {
+                                  name: activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार",
+                                  phone: activeLead.artistPhone || activeLead.artistContactNumber || "9876543210",
+                                };
+                                handleWhatsAppArtist(artistObj);
+                              }}
+                              className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+                            >
+                              <MessageCircle className="h-4 w-4" /> 💬 कलाकार WhatsApp ({activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार"})
+                            </button>
+
+                            {(() => {
+                              const artistObj = activeArtists.find(
+                                (a) =>
+                                  (activeLead.requestedArtistName && (a.name?.toLowerCase() === activeLead.requestedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.requestedArtistName.toLowerCase())) ||
+                                  (activeLead.confirmedArtistName && (a.name?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase()))
+                              );
+                              const artistPhoneNum = activeLead.artistPhone || artistObj?.phone || artistObj?.contactNumber;
+                              return (
+                                <a
+                                  href={artistPhoneNum ? `tel:${artistPhoneNum}` : "#"}
+                                  onClick={() => {
+                                    if (!artistPhoneNum) {
+                                      toast({ title: "Phone number", description: "Artist phone number is not available." });
+                                    }
+                                  }}
+                                  className="w-full py-2.5 px-3 rounded-xl bg-white border border-stone-300 hover:bg-stone-50 text-stone-800 font-black text-xs shadow-2xs transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+                                >
+                                  <Phone className="h-3.5 w-3.5 text-orange-600" /> 📞 कलाकार कॉल
+                                </a>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Customer Communication Row */}
+                      {activeLead.customerPhone && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <a
+                            href={`tel:${activeLead.customerPhone}`}
+                            onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
+                            className="w-full py-2.5 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+                          >
+                            <Phone className="h-3.5 w-3.5 text-emerald-400" /> 📞 ग्राहक कॉल ({activeLead.customerName || "ग्राहक"})
+                          </a>
+                          <button
+                            type="button"
+                            onClick={handleWhatsAppCustomerPaymentLink}
+                            className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" /> 🟢 ग्राहक पेमेंट लिंक
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* SECTION 2: MATCHING ARTISTS (Fast WhatsApp & Call) */}
@@ -1132,6 +1237,13 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
           );
           setActiveLead(updatedLead);
         }}
+      />
+
+      {/* Telecaller QR Code & UPI Settings Modal */}
+      <TelecallerQRModal
+        open={qrModalOpen}
+        onOpenChange={setQrModalOpen}
+        onSaved={(newCfg) => setPaymentConfig(newCfg)}
       />
 
       {/* Artist Reels Preview Modal */}

@@ -28,69 +28,7 @@ import { imageRegistry } from "@/services/ImageRegistryService";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getArtLabel } from "@/lib/artLabels";
 
-// Accurate Category Images Map covering all event types and categories
-const CATEGORY_CIRCULAR_IMAGES: Record<string, string> = {
-  // ─── VARKARI & SPIRITUAL ───
-  "spiritual speakers": "/cultural/varkari-vocalist.png",
-  "vocal artists": "/assets/curated/tanpura-singer-1.jpg",
-  "instrumental artists": "/assets/curated/tabla-hands.jpg",
-  "organizations": "/cultural/zanj-temple.png",
-  "warkari sanstha": "/cultural/zanj-temple.png",
-  "event services": "/assets/static/category-event-services.webp",
-  "pooja pandits": "https://images.unsplash.com/photo-1608613304899-ea8098577e38?auto=format&fit=crop&w=400&q=80",
-  "pandit / priest": "https://images.unsplash.com/photo-1608613304899-ea8098577e38?auto=format&fit=crop&w=400&q=80",
-
-  // ─── WEDDING & RECEPTION ───
-  "venues": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=400&q=80",
-  "marriage hall": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=400&q=80",
-  "banquet hall": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=400&q=80",
-  "bridal & groom services": "https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=400&q=80",
-  "bridal makeup": "https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=400&q=80",
-  "photography & videography": "https://images.unsplash.com/photo-1537633552985-df8429e8048b?auto=format&fit=crop&w=400&q=80",
-  "photography": "https://images.unsplash.com/photo-1537633552985-df8429e8048b?auto=format&fit=crop&w=400&q=80",
-  "entertainment": "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=400&q=80",
-  "catering": "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=400&q=80",
-  "catering & hospitality": "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=400&q=80",
-  "decoration": "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=400&q=80",
-  "decor & setup": "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=400&q=80",
-  "event setup": "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=400&q=80",
-  "transportation": "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=400&q=80",
-  "wedding essentials": "https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=400&q=80",
-  "shopping": "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=400&q=80",
-  "invitations & gifts": "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=400&q=80",
-
-  // ─── FOLK, CULTURAL & FESTIVALS ───
-  "folk artists": "/assets/curated/dhol-passion.jpg",
-  "traditional dance": "/cultural/dhol-pathak-performer.png",
-  "dhol tasha": "/assets/curated/dhol-passion.jpg",
-  "dhol-tasha pathak": "/assets/curated/dhol-passion.jpg",
-  "anchors & hosts": "https://images.unsplash.com/photo-1560439514-4e9645039924?auto=format&fit=crop&w=400&q=80",
-  "anchors / hosts": "https://images.unsplash.com/photo-1560439514-4e9645039924?auto=format&fit=crop&w=400&q=80",
-  "magicians": "https://images.unsplash.com/photo-1515250499692-7104b2a4c28f?auto=format&fit=crop&w=400&q=80",
-  "djs": "https://images.unsplash.com/photo-1516873240891-4bf014598ab4?auto=format&fit=crop&w=400&q=80",
-  "live bands": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=400&q=80",
-  "balloon decorators": "https://images.unsplash.com/photo-1530103862676-de88924083a2?auto=format&fit=crop&w=400&q=80",
-};
-
-export function getCategoryCircleImage(catName: string, existingImg?: string): string {
-  const norm = catName.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
-  const rawKey = catName.toLowerCase().trim();
-
-  // Direct exact match
-  if (CATEGORY_CIRCULAR_IMAGES[rawKey]) return CATEGORY_CIRCULAR_IMAGES[rawKey];
-  if (CATEGORY_CIRCULAR_IMAGES[norm]) return CATEGORY_CIRCULAR_IMAGES[norm];
-
-  // Fuzzy match in dictionary
-  const match = Object.entries(CATEGORY_CIRCULAR_IMAGES).find(([k]) => {
-    const kNorm = k.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
-    return norm.includes(kNorm) || kNorm.includes(norm);
-  });
-  if (match) return match[1];
-
-  if (existingImg && (existingImg.startsWith("/") || existingImg.startsWith("http"))) return existingImg;
-
-  return "https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=400&q=80";
-}
+import { getCategoryCircleImage } from "@/services/categoryImageService";
 
 const isServiceCategory = (cat: string) =>
   /services|venues|decoration|catering|hospitality|transportation|setup|sound|mandap|stage|photo/i.test(cat || "");

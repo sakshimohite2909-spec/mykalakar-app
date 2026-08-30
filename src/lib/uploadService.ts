@@ -122,11 +122,11 @@ export function uploadFileAssetWithProgress(
           errMsg.includes("quota-exceeded") ||
           errMsg.includes("unauthorized") ||
           errCode.includes("quota") ||
-          errCode.includes("unauthorized")
+          errCode.includes("unauthorized") ||
+          errCode.includes("unknown")
         ) {
-          console.warn("[Firebase Storage Warning] Storage limits or rules triggered for:", storagePath);
-          // Never produce multi-megabyte data URLs for videos or large files that exceed Firestore limit
-          if (file.type.startsWith("video/") || file.size > 100 * 1024) {
+          console.warn("[Firebase Storage Warning] Storage unavailable for:", storagePath, "- generating optimized client image");
+          if (file.type.startsWith("video/")) {
             finish(() =>
               resolve({
                 url: "",
@@ -136,7 +136,8 @@ export function uploadFileAssetWithProgress(
             );
             return;
           }
-          const dataUrl = await fileToDataUrl(file);
+          const { fileToOptimizedDataUrl } = await import("@/utils/imageCompression");
+          const dataUrl = await fileToOptimizedDataUrl(file, storagePath.includes("cover") ? 1200 : 800);
           finish(() =>
             resolve({
               url: dataUrl,
