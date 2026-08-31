@@ -20,6 +20,8 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
   const [loading, setLoading] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [requestedArtistName, setRequestedArtistName] = useState("");
+  const [confirmedArtistName, setConfirmedArtistName] = useState("");
   const [eventType, setEventType] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [eventDate, setEventDate] = useState("");
@@ -36,6 +38,8 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
     if (lead) {
       setCustomerName(lead.customerName || "");
       setCustomerPhone(lead.customerPhone || "");
+      setRequestedArtistName(lead.requestedArtistName || (lead.matchedArtists && lead.matchedArtists[0]?.artistName) || "");
+      setConfirmedArtistName(lead.confirmedArtistName || "");
       setEventType(lead.eventType || "");
       setSubCategory(lead.subCategory || "");
       setEventDate(lead.eventDate || "");
@@ -64,6 +68,8 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
       const updatedPayload: Partial<TelecallerLead> = {
         customerName,
         customerPhone,
+        requestedArtistName: requestedArtistName || undefined,
+        confirmedArtistName: confirmedArtistName || undefined,
         eventType,
         subCategory,
         eventDate,
@@ -150,6 +156,15 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
                   required
                 />
               </div>
+            </div>
+            <div className="pt-1">
+              <Label className="text-[11px] font-bold text-stone-700">Requested / Booked Artist Name (कलाकार नाव)</Label>
+              <Input
+                value={requestedArtistName}
+                onChange={(e) => setRequestedArtistName(e.target.value)}
+                placeholder="e.g. Artist name if booked by customer"
+                className="h-8.5 text-xs bg-white mt-1 border-stone-200 rounded-xl font-bold text-orange-950"
+              />
             </div>
           </div>
 

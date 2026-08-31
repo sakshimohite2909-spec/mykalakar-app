@@ -1994,7 +1994,7 @@ export default function ArtistRegister() {
   };
 
   return (
-    <div className="register-page auth-page relative z-10 flex min-h-screen w-full flex-col justify-center overflow-visible px-4">
+    <div className="register-page auth-page relative z-10 flex min-h-screen w-full flex-col justify-center overflow-x-hidden px-3 sm:px-4">
       <div className="registration-shell mx-auto grid w-full max-w-6xl gap-6 pb-16 lg:grid-cols-[360px_1fr]">
         <aside className="registration-visual-panel hidden min-h-[720px] overflow-hidden rounded-lg border border-white/10 bg-white/[0.055] p-8 shadow-2xl backdrop-blur-2xl lg:flex lg:flex-col lg:justify-between">
           <div>
@@ -2013,11 +2013,11 @@ export default function ArtistRegister() {
             ))}
           </div>
         </aside>
-        <div className="registration-panel glass-panel min-h-[720px] overflow-visible rounded-[2rem] border border-white/60 bg-white/70 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-3xl sm:p-10 md:p-12">
-          <div className="mb-8 flex items-center justify-between gap-3"> {/* ADDED FOR i18n */}
+        <div className="registration-panel glass-panel min-h-[720px] w-full max-w-full overflow-hidden rounded-2xl sm:rounded-[2rem] border border-white/60 bg-white/70 p-4 sm:p-8 md:p-12 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-3xl">
+          <div className="mb-6 sm:mb-8 flex items-center justify-between gap-3"> {/* ADDED FOR i18n */}
             <Link
               to="/"
-              className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-white/70 px-4 py-2 text-sm font-bold text-slate-500 shadow-sm transition hover:text-orange-600"
+              className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-white/70 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-slate-500 shadow-sm transition hover:text-orange-600"
             >
               <ArrowLeft className="h-4 w-4" />
               {t("auth.backHome")} {/* ADDED FOR i18n */}
@@ -2025,7 +2025,7 @@ export default function ArtistRegister() {
             <div className="flex items-center gap-2"> {/* ADDED FOR i18n */}
               <Link
                 to={`/login?role=${activeRole}`}
-                className="text-sm font-black text-orange-500 transition hover:text-orange-600"
+                className="text-xs sm:text-sm font-black text-orange-500 transition hover:text-orange-600"
               >
                 {t("auth.loginArrow")} {/* ADDED FOR i18n */}
               </Link>
@@ -2033,15 +2033,15 @@ export default function ArtistRegister() {
             </div>
           </div>
 
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl gradient-bg shadow-[0_12px_40px_rgba(232,111,58,0.25)]">
-              <Music className="h-7 w-7 text-white" />
+          <div className="mb-6 sm:mb-8 text-center px-1">
+            <div className="mx-auto mb-4 sm:mb-5 flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl gradient-bg shadow-[0_12px_40px_rgba(232,111,58,0.25)]">
+              <Music className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
             </div>
-            <h1 className="font-display text-4xl font-black tracking-tight text-[#1A1A1A] md:text-5xl">
+            <h1 className="font-display text-2xl sm:text-4xl md:text-5xl font-black tracking-tight text-[#1A1A1A] break-words">
               {t("register.join")} <span className="gradient-text-primary">{t("brand.name")}</span>
-              {t("register.asArtist")} {/* ADDED FOR i18n */}
+              {" "}{t("register.asArtist")} {/* ADDED FOR i18n */}
             </h1>
-            <p className="mt-2 text-sm font-semibold text-slate-500">
+            <p className="mt-2 text-xs sm:text-sm font-semibold text-slate-500 max-w-md mx-auto">
               {t("register.subtitle")} {/* ADDED FOR i18n */}
             </p>
           </div>
@@ -2054,14 +2054,14 @@ export default function ArtistRegister() {
               exit={{ opacity: 0, x: 18 }}
               transition={{ duration: 0.28 }}
               onSubmit={artistForm.handleSubmit(submitArtist, scrollToError)}
-              className="mt-8 space-y-8"
+              className="mt-6 sm:mt-8 space-y-6 sm:space-y-8 w-full"
               noValidate
             >
                 <div ref={errorRef} className="scroll-mt-24" />
                 <SectionHeading icon={Lock} title={t("register.section.loginAccount")} />
 
-                <div className="form-subcard rounded-2xl border border-orange-200/70 bg-orange-50/50 p-5">
-                  <p className="mb-4 text-sm font-semibold text-slate-500">
+                <div className="form-subcard rounded-2xl border border-orange-200/70 bg-orange-50/50 p-4 sm:p-5">
+                  <p className="mb-4 text-xs sm:text-sm font-semibold text-slate-500">
                     {t("register.section.loginAccountDesc")}
                   </p>
                   <div className="grid gap-4 md:grid-cols-2">

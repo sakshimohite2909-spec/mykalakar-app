@@ -145,7 +145,13 @@ function toSafeString(val: any, fallback: string = ""): string {
 function sanitizeLead(id: string, data: any): TelecallerLead {
   const safeId = toSafeString(id, `lead_${Date.now()}`);
   const requestedArtist = toSafeString(
-    data.artistName || data.requestedArtistName || (data.matchedArtists && data.matchedArtists[0]?.artistName),
+    data.artistName ||
+    data.requestedArtistName ||
+    data.confirmedArtistName ||
+    data.artist?.name ||
+    data.artist?.fullName ||
+    data.artistDisplayName ||
+    (data.matchedArtists && data.matchedArtists[0]?.artistName),
     ""
   );
 
@@ -153,6 +159,10 @@ function sanitizeLead(id: string, data: any): TelecallerLead {
     safeId.startsWith("booking_") ||
     Boolean(data.artistName) ||
     Boolean(data.artistId) ||
+    Boolean(data.artistUid) ||
+    Boolean(data.artistBookingId) ||
+    Boolean(requestedArtist) ||
+    data.leadType === "book_artist" ||
     toSafeString(data.subCategory).toLowerCase().includes("booking") ||
     toSafeString(data.subCategory).toLowerCase().includes("artist");
 
@@ -253,6 +263,9 @@ export function subscribeTelecallerLeads(callback: (leads: TelecallerLead[]) => 
         map.set(cid, {
           ...existing,
           ...l,
+          requestedArtistName: l.requestedArtistName || existing.requestedArtistName,
+          confirmedArtistName: l.confirmedArtistName || existing.confirmedArtistName,
+          leadType: l.leadType === "book_artist" || existing.leadType === "book_artist" ? "book_artist" : l.leadType,
           status: effectiveStatus,
         });
       }

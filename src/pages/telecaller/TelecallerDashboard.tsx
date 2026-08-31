@@ -89,12 +89,28 @@ export default function TelecallerDashboard() {
   const [callNotes, setCallNotes] = useState<string>("");
   const [savingCall, setSavingCall] = useState(false);
 
+  const formatLeadCategory = (lead: TelecallerLead): string => {
+    const event = String(lead.eventType || "").trim();
+    let sub = String(lead.subCategory || "").trim();
+    sub = sub.replace(/Artist Booking\s*\([^)]*\)/gi, "").replace(/Artist Booking/gi, "").replace(/\([^)]*\)/g, "").trim();
+    
+    if (event && sub && event.toLowerCase() !== sub.toLowerCase()) {
+      return `${event} • ${sub}`;
+    }
+    return event || sub || "इव्हेंट";
+  };
+
   const handleWhatsAppArtist = (artist: any) => {
     if (!activeLead) return;
     const phone = (artist.phone || artist.contactNumber || "9876543210").replace(/[^0-9]/g, "");
     const cleanPhone = phone.startsWith("91") && phone.length === 12 ? phone : phone.length === 10 ? `91${phone}` : phone;
 
-    const offerPrice = activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8);
+    const artistName = artist.name || "कलाकार";
+    const offerPrice = (activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8)).toLocaleString("en-IN");
+    const categoryText = formatLeadCategory(activeLead);
+    const dateText = activeLead.eventDate || "तारीख चर्चाधीन";
+    const timeText = activeLead.eventTime || "सायं. ०६:०० ते ०९:००";
+    const locText = `${activeLead.venueAddress ? `${activeLead.venueAddress}, ` : ""}${activeLead.eventLocation || "महाराष्ट्र"}`;
     const soundText =
       activeLead.soundRequired === true
         ? "कलाकाराने स्वतः साऊंड व माईक आणावे"
@@ -102,24 +118,82 @@ export default function TelecallerDashboard() {
         ? "साऊंड सिस्टीमची गरज नाही"
         : "हॉल / आयोजकांकडून उपलब्ध असेल";
 
-    const message = `🙏 *नमस्कार ${artist.name || "कलाकार"} जी!*
-MyKalakar कडून नवीन इव्हेंट बुकिंग उपलब्ध आहे:
+    const lines = [
+      `*MyKalakar इव्हेंट बुकिंग अलर्ट* 🚩`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `*नमस्कार ${artistName} जी!* 🙏`,
+      ``,
+      `MyKalakar कडून तुमच्यासाठी नवीन इव्हेंट बुकिंग उपलब्ध आहे:`,
+      ``,
+      `📋 *कार्यक्रमाचा तपशील:*`,
+      `• *कार्यक्रम:* ${categoryText}`,
+      `• *तारीख:* ${dateText}`,
+      `• *वेळ:* ${timeText}`,
+      `• *ठिकाण:* ${locText}`,
+      `• *ऑफर मानधन (Payout):* ₹${offerPrice}`,
+      `• *साऊंड सिस्टीम:* ${soundText}`,
+      ...(activeLead.telecallerNotes ? [`• *विशेष सूचना:* ${activeLead.telecallerNotes}`] : []),
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `👉 *कृपया तुमची उपलब्धता कळवण्यासाठी खालीलप्रमाणे रिप्लाय करा:*`,
+      ``,
+      `1️⃣ *YES* (होय, मी उपलब्ध आहे)`,
+      `2️⃣ *NO* (नाही, मी उपलब्ध नाही)`,
+      ``,
+      `_(टीप: सर्व मानधन MyKalakar द्वारे १००% सुरक्षित केले जाते.)_`,
+      `— *MyKalakar टीम*`,
+    ];
 
-📌 *कार्यक्रम:* ${activeLead.eventType || "इव्हेंट"} - ${activeLead.subCategory || "कलाकार"}
-📅 *तारीख:* ${activeLead.eventDate || "तारीख चर्चाधीन"}
-⏰ *वेळ:* ${activeLead.eventTime || "सायं. ०६:०० ते ०९:००"}
-📍 *ठिकाण:* ${activeLead.venueAddress ? `${activeLead.venueAddress}, ` : ""}${activeLead.eventLocation || "महाराष्ट्र"}
-💰 *ऑफर मानधन:* ₹${offerPrice.toLocaleString("en-IN")}
-🔊 *साऊंड सिस्टीम:* ${soundText}
-${activeLead.telecallerNotes ? `📝 *विशेष सूचना:* ${activeLead.telecallerNotes}\n` : ""}
-👉 *तुम्ही या तारखेला उपलब्ध असल्यास कृपया MyKalakar ला 'YES' किंवा 'NO' रिप्लाय द्या.*
-_(टीप: सर्व बुकिंग व पेमेंट MyKalakar द्वारे सुरक्षित केले जाईल.)_`;
-
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    const message = lines.join("\n");
+    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
     toast({
       title: "WhatsApp Message Sent! 🟢",
-      description: `Opened masked booking requirement for ${artist.name}. Customer phone is protected.`,
+      description: `Opened masked booking requirement for ${artistName}. Customer phone is protected.`,
+    });
+  };
+
+  const handleWhatsAppCustomerInquiry = () => {
+    if (!activeLead) return;
+    const phone = (activeLead.customerPhone || "").replace(/[^0-9]/g, "");
+    const cleanPhone = phone.startsWith("91") && phone.length === 12 ? phone : phone.length === 10 ? `91${phone}` : phone;
+
+    const customerName = activeLead.customerName || "ग्राहक";
+    const artistName = activeLead.confirmedArtistName || activeLead.requestedArtistName || "";
+    const categoryText = formatLeadCategory(activeLead);
+    const dateText = activeLead.eventDate || "तारीख चर्चाधीन";
+    const timeText = activeLead.eventTime || "सायं. ०६:०० ते ०९:००";
+    const locText = `${activeLead.eventLocation || "महाराष्ट्र"}${activeLead.venueAddress ? ` (${activeLead.venueAddress})` : ""}`;
+    const budgetText = (activeLead.budget || 15000).toLocaleString("en-IN");
+
+    const lines = [
+      `*MyKalakar इव्हेंट मॅनेजमेंट* 🚩`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `*नमस्कार ${customerName} जी!* 🙏`,
+      ``,
+      `तुमच्या इव्हेंट नियोजनासाठी MyKalakar ला तुमची चौकशी प्राप्त झाली आहे.`,
+      ``,
+      `📋 *कार्यक्रमाचा तपशील:*`,
+      `• *प्रकार:* ${categoryText}`,
+      ...(artistName ? [`• *पसंतीचे कलाकार:* ${artistName}`] : []),
+      `• *तारीख:* ${dateText}`,
+      `• *वेळ:* ${timeText}`,
+      `• *ठिकाण:* ${locText}`,
+      `• *अंदाजे बजेट:* ₹${budgetText}`,
+      ...(activeLead.telecallerNotes ? [`• *विशेष सूचना:* ${activeLead.telecallerNotes}`] : []),
+      ``,
+      `✓ आम्ही योग्य व नामांकित कलाकारांशी संपर्क करत आहोत. लवकरच तुम्हाला अपडेट देऊ.`,
+      `काही बदल किंवा प्रश्न असल्यास कृपया येथे रिप्लाय करा.`,
+      ``,
+      `— *MyKalakar सपोर्ट टीम*`,
+    ];
+
+    const message = lines.join("\n");
+    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank");
+    toast({
+      title: "Inquiry Message Sent! 💬",
+      description: `Opened WhatsApp with event inquiry update for ${customerName}.`,
     });
   };
 
@@ -128,15 +202,16 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
     const phone = (activeLead.customerPhone || "").replace(/[^0-9]/g, "");
     const cleanPhone = phone.startsWith("91") && phone.length === 12 ? phone : phone.length === 10 ? `91${phone}` : phone;
 
+    const customerName = activeLead.customerName || "ग्राहक";
     const artistName = activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार";
-    const amount = activeLead.budget || 15000;
+    const amount = (activeLead.budget || 15000).toLocaleString("en-IN");
+    const dateText = activeLead.eventDate || "तारीख चर्चाधीन";
+    const locText = activeLead.eventLocation || "महाराष्ट्र";
+    const categoryText = formatLeadCategory(activeLead);
 
     const upiIdToSend = paymentConfig.upiId || "mykalakar@icici";
     const upiNameToSend = paymentConfig.upiName || "MyKalakar";
-    
-    // In WhatsApp, 'localhost' has no TLD so WhatsApp makes it plain black text.
-    // By using 'lvh.me' (which points to 127.0.0.1 / localhost) or production domain,
-    // WhatsApp recognizes the TLD and turns it into a clickable BLUE link!
+
     const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     let baseDomain = window.location.origin;
     if (paymentConfig.websiteUrl && paymentConfig.websiteUrl !== "https://mykalakar.com") {
@@ -146,31 +221,42 @@ _(टीप: सर्व बुकिंग व पेमेंट MyKalakar �
     }
     const cleanProfileLink = `${baseDomain.replace(/\/$/, "")}/profile`;
 
-    const message = `🙏 *नमस्कार ${activeLead.customerName || "ग्राहक"} जी!*
-🎉 *आनंदाची बातमी!* तुमच्या इव्हेंटसाठी कलाकार *${artistName}* यांनी होकार दिला आहे.
+    const lines = [
+      `*MyKalakar बुकिंग कन्फर्मेशन* 🚩`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `*नमस्कार ${customerName} जी!* 🙏`,
+      ``,
+      `🎉 *आनंदाची बातमी!* तुमच्या इव्हेंटसाठी कलाकार *${artistName}* यांनी होकार दिला आहे.`,
+      ``,
+      `📋 *अंतिम तपशील:*`,
+      `• *कलाकार:* ${artistName}`,
+      `• *कार्यक्रम:* ${categoryText}`,
+      `• *तारीख:* ${dateText}`,
+      `• *ठिकाण:* ${locText}`,
+      `• *मानधन रक्कम:* ₹${amount}`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `💳 *सुरक्षित पेमेंट पद्धत:*`,
+      ``,
+      `*१. थेट UPI द्वारे पेमेंट:*`,
+      `• *UPI ID:* \`${upiIdToSend}\``,
+      `• *नाव:* ${upiNameToSend}`,
+      `_(पेमेंट केल्यावर स्क्रीनशॉट याच WhatsApp वर पाठवा)_`,
+      ``,
+      `*२. १-क्लिक ऑनलाइन पेमेंट लिंक:*`,
+      `${cleanProfileLink}`,
+      ``,
+      `✓ *टीप:* तुमचे पैसे MyKalakar Escrow खात्यात कार्यक्रम पूर्ण होईपर्यंत १००% सुरक्षित राहतील.`,
+      ``,
+      `— *MyKalakar टीम*`,
+    ];
 
-📌 *कार्यक्रमाचा तपशील:*
-📅 *तारीख:* ${activeLead.eventDate || "तारीख चर्चाधीन"}
-📍 *ठिकाण:* ${activeLead.eventLocation || "महाराष्ट्र"}
-💰 *अंतिम मानधन:* ₹${amount.toLocaleString("en-IN")}
-
-👉 *तुम्ही खालील कोणत्याही सोप्या पद्धतीने सुरक्षित पेमेंट करू शकता:*
-
-*१. थेट PhonePe / GPay / UPI द्वारे:*
-• *कंपनी UPI ID:* \`${upiIdToSend}\` (${upiNameToSend})
-• *पेमेंट झाल्यावर कृपया स्क्रीनशॉट / UTR नंबर याच चॅटवर पाठवा.*
-
-*२. वेबसाइटवरून १-क्लिक ऑनलाइन पेमेंट:*
-${cleanProfileLink}
-
-*(टीप: तुमचे पैसे MyKalakar Escrow खात्यात कार्यक्रम पूर्ण होईपर्यंत सुरक्षित राहतील.)*
-- MyKalakar टीम 🚩`;
-
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    const message = lines.join("\n");
+    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
     toast({
-      title: "Payment Link Sent to Customer! 🟢",
-      description: `Opened WhatsApp with pre-filled payment confirmation for ${activeLead.customerName}.`,
+      title: "Payment Link Sent! 🟢",
+      description: `Opened WhatsApp payment confirmation for ${customerName}.`,
     });
   };
 
@@ -560,7 +646,8 @@ ${cleanProfileLink}
                 <div className="space-y-3 max-h-[600px] lg:max-h-[650px] overflow-y-auto pr-1">
                   {filteredLeads.map((lead) => {
                     const isSelected = activeLead?.id === lead.id;
-                    const isBookArtist = lead.leadType === "book_artist";
+                    const targetArtist = lead.confirmedArtistName || lead.requestedArtistName || (lead.matchedArtists && lead.matchedArtists[0]?.artistName);
+                    const isBookArtist = lead.leadType === "book_artist" || Boolean(targetArtist);
                     return (
                       <div
                         key={lead.id}
@@ -587,17 +674,30 @@ ${cleanProfileLink}
                             {lead.status.replace("_", " ")}
                           </span>
                           {isBookArtist ? (
-                            <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200 truncate">
-                              🎯 Book Artist
+                            <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200 truncate flex items-center gap-1">
+                              <UserCheck className="h-3 w-3" /> Book Artist
                             </span>
                           ) : (
-                            <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200 truncate">
-                              📋 Requirement
+                            <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200 truncate flex items-center gap-1">
+                              <FileText className="h-3 w-3" /> Requirement
                             </span>
                           )}
                         </div>
 
-                        <h4 className="text-sm font-black text-stone-900 mt-2 truncate">{lead.customerName || "Customer"}</h4>
+                        {/* Customer Name */}
+                        <h4 className="text-sm font-black text-stone-900 mt-2 truncate">
+                          {lead.customerName || "Customer"}
+                        </h4>
+
+                        {/* Booked / Requested Artist Name Tag */}
+                        {targetArtist && (
+                          <div className="flex items-center gap-1.5 text-xs font-black text-orange-950 bg-gradient-to-r from-orange-100/90 to-amber-100/70 border border-orange-300/80 rounded-xl px-2.5 py-1.5 mt-1.5 shadow-2xs">
+                            <UserCheck className="h-3.5 w-3.5 text-orange-600 shrink-0" />
+                            <span className="truncate">
+                              कलाकार: <strong className="text-orange-950 font-black">{targetArtist}</strong>
+                            </span>
+                          </div>
+                        )}
 
                         <p className="flex items-center gap-1.5 text-xs font-extrabold text-stone-800 mt-1 truncate">
                           <Sparkles className="h-3.5 w-3.5 text-orange-600 shrink-0" />
@@ -751,6 +851,17 @@ ${cleanProfileLink}
                         <p className="text-xs font-bold text-stone-600 mt-0.5">
                           {activeLead.eventType} • <span className="text-orange-600 font-black">{activeLead.subCategory}</span>
                         </p>
+                        {(activeLead.confirmedArtistName || activeLead.requestedArtistName || (activeLead.matchedArtists && activeLead.matchedArtists[0]?.artistName)) && (
+                          <div className="inline-flex items-center gap-1.5 text-xs font-black text-orange-950 bg-orange-100/90 border border-orange-300 px-2.5 py-1 rounded-lg mt-1 shadow-2xs">
+                            <UserCheck className="h-3.5 w-3.5 text-orange-600 shrink-0" />
+                            <span>
+                              {activeLead.confirmedArtistName ? "नक्की झालेला कलाकार:" : "ग्राहकाने बुक केलेला कलाकार:"}{" "}
+                              <strong className="text-orange-950 font-black">
+                                {activeLead.confirmedArtistName || activeLead.requestedArtistName || activeLead.matchedArtists?.[0]?.artistName}
+                              </strong>
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -867,20 +978,27 @@ ${cleanProfileLink}
 
                       {/* Customer Communication Row */}
                       {activeLead.customerPhone && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <a
                             href={`tel:${activeLead.customerPhone}`}
                             onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
-                            className="w-full py-2.5 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+                            className="w-full py-2.5 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-[0.99]"
                           >
-                            <Phone className="h-3.5 w-3.5 text-emerald-400" /> 📞 ग्राहक कॉल ({activeLead.customerName || "ग्राहक"})
+                            <Phone className="h-3.5 w-3.5 text-emerald-400" /> 📞 ग्राहक कॉल
                           </a>
                           <button
                             type="button"
-                            onClick={handleWhatsAppCustomerPaymentLink}
-                            className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+                            onClick={handleWhatsAppCustomerInquiry}
+                            className="w-full py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-[0.99]"
                           >
-                            <MessageCircle className="h-3.5 w-3.5" /> 🟢 ग्राहक पेमेंट लिंक
+                            <MessageSquare className="h-3.5 w-3.5" /> 💬 ग्राहक WhatsApp (अपडेट)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleWhatsAppCustomerPaymentLink}
+                            className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-[0.99]"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" /> 💳 ग्राहक पेमेंट लिंक
                           </button>
                         </div>
                       )}

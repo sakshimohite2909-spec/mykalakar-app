@@ -52,6 +52,7 @@ const ArtistEarnings = lazy(() => import("./pages/artist/ArtistEarnings"));
 const ArtistSettings = lazy(() => import("./pages/artist/ArtistSettings"));
 const PendingReview = lazy(() => import("./pages/PendingReview"));
 const SchoolTemplate = lazy(() => import("./components/SchoolTemplate"));
+const ArtistBookingResponsePage = lazy(() => import("./pages/ArtistBookingResponsePage"));
 const TelecallerProtectedRoute = lazy(() => import("./components/TelecallerProtectedRoute"));
 const TelecallerLayout = lazy(() => import("./pages/telecaller/TelecallerLayout"));
 const TelecallerDashboard = lazy(() => import("./pages/telecaller/TelecallerDashboard"));
@@ -122,6 +123,8 @@ const router = createBrowserRouter([
       { path: "location-select", element: <LocationSelection /> },
       { path: "event-requirements", element: <EventRequirements /> },
       { path: "artist/:id", element: <ArtistProfile /> },
+      { path: "artist-response/:leadId", element: <ArtistBookingResponsePage /> },
+      { path: "booking-response/:leadId", element: <ArtistBookingResponsePage /> },
       {
         path: "artist/dashboard",
         element: (

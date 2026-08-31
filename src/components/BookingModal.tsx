@@ -115,7 +115,7 @@ export default function BookingModal({
     eventType: "Wedding",
     message: "",
     specialRequirements: "",
-    authorizedAmount: 15000,
+    authorizedAmount: "15000",
   });
 
   // Availability validation state
@@ -194,6 +194,9 @@ export default function BookingModal({
         expiryDate: "",
         cvv: "",
       });
+
+      const initialBudget = startingPrice ? String(parsePriceToNumber(startingPrice)) : "15000";
+
       setFormData({
         customerName: authName || "",
         customerEmail: authEmail || "",
@@ -207,10 +210,10 @@ export default function BookingModal({
         eventType: "",
         message: "",
         specialRequirements: "",
-        authorizedAmount: "" as any,
+        authorizedAmount: initialBudget,
       });
     }
-  }, [open, preselectedDate, services, currentUser, userProfile]);
+  }, [open]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -229,6 +232,14 @@ export default function BookingModal({
       setFormData((prev) => ({
         ...prev,
         clientWhatsapp: sanitizePhoneNumber(value),
+      }));
+      return;
+    }
+    if (name === "authorizedAmount") {
+      const numericDigits = value.replace(/\D/g, "");
+      setFormData((prev) => ({
+        ...prev,
+        authorizedAmount: numericDigits,
       }));
       return;
     }
@@ -634,9 +645,10 @@ export default function BookingModal({
                   <Label className="text-xs font-bold text-stone-700">Your Budget/Offer (₹) *</Label>
                   <Input
                     name="authorizedAmount"
-                    type="number"
-                    min={500}
-                    value={formData.authorizedAmount || ""}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={formData.authorizedAmount ?? ""}
                     onChange={handleChange}
                     placeholder="e.g. 15000"
                     autoComplete="off"
