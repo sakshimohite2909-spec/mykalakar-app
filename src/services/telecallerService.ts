@@ -6,6 +6,7 @@ import {
   getDoc,
   addDoc,
   updateDoc,
+  deleteDoc,
   setDoc,
   onSnapshot,
   query,
@@ -15,6 +16,11 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
+import {
+  calculateCommissionSplit,
+  getLocalCommissionConfig,
+  type CommissionSplitType,
+} from "@/services/commissionSettingsService";
 
 export type LeadStatus =
   | "new"
@@ -79,6 +85,17 @@ export type TelecallerLead = {
   artistContactNumber?: string;
   leadType: LeadType;
   confirmedPrice?: number;
+  // Commission & Profit Split Fields
+  bookingAmount?: number;
+  artistPayout?: number;
+  grossMargin?: number;
+  telecallerCommission?: number;
+  telecallerCommissionPct?: number;
+  ownerProfit?: number;
+  ownerProfitPct?: number;
+  commissionSplitType?: CommissionSplitType;
+  commissionPayoutStatus?: "pending" | "paid" | "cancelled";
+  commissionSettledAt?: string;
   source: "website_inquiry" | "manual_phone_call";
   createdAt?: string | Date;
   updatedAt?: string | Date;
@@ -233,6 +250,17 @@ function sanitizeLead(id: string, data: any): TelecallerLead {
     requestedArtistName: requestedArtist || undefined,
     leadType,
     confirmedPrice: data.confirmedPrice ? Number(data.confirmedPrice) : undefined,
+    // Commission Fields
+    bookingAmount: data.bookingAmount ? Number(data.bookingAmount) : undefined,
+    artistPayout: data.artistPayout ? Number(data.artistPayout) : undefined,
+    grossMargin: data.grossMargin ? Number(data.grossMargin) : undefined,
+    telecallerCommission: data.telecallerCommission ? Number(data.telecallerCommission) : undefined,
+    telecallerCommissionPct: data.telecallerCommissionPct ? Number(data.telecallerCommissionPct) : undefined,
+    ownerProfit: data.ownerProfit ? Number(data.ownerProfit) : undefined,
+    ownerProfitPct: data.ownerProfitPct ? Number(data.ownerProfitPct) : undefined,
+    commissionSplitType: data.commissionSplitType,
+    commissionPayoutStatus: (data.commissionPayoutStatus as any) || (data.telecallerCommission ? "pending" : undefined),
+    commissionSettledAt: data.commissionSettledAt ? toSafeString(data.commissionSettledAt, "") : undefined,
     source: (data.source === "manual_phone_call" ? "manual_phone_call" : "website_inquiry") as any,
     createdAt: toSafeString(data.createdAt, new Date().toISOString()),
     updatedAt: toSafeString(data.updatedAt, ""),
@@ -548,6 +576,35 @@ export async function updateLeadStatus(
     updatePayload.confirmedPrice = confirmedArtist.price;
   }
 
+  // Calculate Commission & Profit Split if deal has value or is being closed
+  const bookingAmt = Number(targetLead?.budget || confirmedArtist?.price || 0);
+  const artistAmt = Number(confirmedArtist?.price || targetLead?.artistOfferBudget || (bookingAmt > 0 ? Math.round(bookingAmt * 0.8) : 0));
+
+  if (bookingAmt > 0 && (status === "booked" || status === "artist_confirmed" || confirmedArtist)) {
+    const split = calculateCommissionSplit(bookingAmt, artistAmt);
+    updatePayload.bookingAmount = split.bookingAmount;
+    updatePayload.artistPayout = split.artistPayout;
+    updatePayload.grossMargin = split.grossMargin;
+    updatePayload.telecallerCommission = split.telecallerCommission;
+    updatePayload.telecallerCommissionPct = split.telecallerCommissionPct;
+    updatePayload.ownerProfit = split.ownerProfit;
+    updatePayload.ownerProfitPct = split.ownerProfitPct;
+    updatePayload.commissionSplitType = split.splitType;
+    updatePayload.commissionPayoutStatus = targetLead?.commissionPayoutStatus || "pending";
+
+    if (targetLead) {
+      targetLead.bookingAmount = split.bookingAmount;
+      targetLead.artistPayout = split.artistPayout;
+      targetLead.grossMargin = split.grossMargin;
+      targetLead.telecallerCommission = split.telecallerCommission;
+      targetLead.telecallerCommissionPct = split.telecallerCommissionPct;
+      targetLead.ownerProfit = split.ownerProfit;
+      targetLead.ownerProfitPct = split.ownerProfitPct;
+      targetLead.commissionSplitType = split.splitType;
+      targetLead.commissionPayoutStatus = targetLead.commissionPayoutStatus || "pending";
+    }
+  }
+
   // 2. Write/Upsert to telecaller_leads AND target source collection
   const realDocId = cleanId(leadId);
 
@@ -713,3 +770,58 @@ export async function updateLeadDetails(
     // Ignore permissions or collection mismatch
   }
 }
+
+export async function deleteLead(leadId: string): Promise<void> {
+  // 1. Remove from local storage cache
+  const localList = getLocalLeads();
+  const filtered = localList.filter((l) => l.id !== leadId && cleanId(l.id) !== cleanId(leadId));
+  try {
+    localStorage.setItem(LOCAL_LEADS_KEY, JSON.stringify(filtered));
+  } catch (e) {
+    console.warn("Local storage delete warning:", e);
+  }
+
+  // 2. Delete from Firestore collections
+  const realDocId = cleanId(leadId);
+  const collections = [LEADS_COLLECTION, "inquiries", "bookings", "eventBriefs", "event_briefs"];
+
+  await Promise.allSettled(
+    collections.flatMap((col) => [
+      deleteDoc(doc(db, col, realDocId)),
+      deleteDoc(doc(db, col, leadId)),
+    ])
+  );
+}
+
+export async function settleLeadCommission(leadId: string, status: "pending" | "paid" | "cancelled"): Promise<void> {
+  const localList = getLocalLeads();
+  const realDocId = cleanId(leadId);
+  const settledAt = status === "paid" ? new Date().toISOString() : undefined;
+
+  localList.forEach((lead) => {
+    if (lead.id === leadId || cleanId(lead.id) === realDocId) {
+      lead.commissionPayoutStatus = status;
+      if (settledAt) lead.commissionSettledAt = settledAt;
+    }
+  });
+
+  try {
+    localStorage.setItem(LOCAL_LEADS_KEY, JSON.stringify(localList.slice(0, 100)));
+  } catch (e) {
+    console.warn("Local storage commission update warning:", e);
+  }
+
+  const updatePayload: Record<string, any> = {
+    commissionPayoutStatus: status,
+    commissionSettledAt: settledAt || null,
+    updatedAt: serverTimestamp(),
+  };
+
+  try {
+    await setDoc(doc(db, LEADS_COLLECTION, realDocId), updatePayload, { merge: true });
+    await setDoc(doc(db, LEADS_COLLECTION, leadId), updatePayload, { merge: true });
+  } catch (e) {
+    console.warn("Firestore commission settlement error:", e);
+  }
+}
+

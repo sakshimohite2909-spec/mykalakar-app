@@ -141,7 +141,18 @@ service cloud.firestore {
     }
 
     match /telecaller_leads/{id} {
-      allow read, write: if isAuth();
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAuth();
+    }
+
+    match /system_settings/{id} {
+      allow read: if true;
+      allow write: if isAuth();
+      match /{document=**} {
+        allow read: if true;
+        allow write: if isAuth();
+      }
     }
   }
 }

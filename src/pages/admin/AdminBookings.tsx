@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Check, X, Calendar, Loader2, MapPin, Home, MessageSquare, AlertTriangle, ShieldCheck, FileText, Scale, ArrowRight, UploadCloud, MessageCircle } from "lucide-react";
+import { Check, X, Calendar, Loader2, MapPin, Home, MessageSquare, AlertTriangle, ShieldCheck, FileText, Scale, ArrowRight, UploadCloud, MessageCircle, Wallet, IndianRupee, Sparkles, CheckCircle2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, doc } from "firebase/firestore";
@@ -14,6 +14,17 @@ import type { BookingEvent, BookingStatus } from "@/types/booking";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  subscribeTelecallerLeads,
+  settleLeadCommission,
+  type TelecallerLead,
+} from "@/services/telecallerService";
+import {
+  subscribeCommissionConfig,
+  getLocalCommissionConfig,
+  calculateCommissionSplit,
+  type CommissionConfig,
+} from "@/services/commissionSettingsService";
 
 function formatDate(date: string) {
   if (!date) return "Date not provided";
@@ -26,7 +37,10 @@ function formatDate(date: string) {
 
 export default function AdminBookings() {
   const [bookings, setBookings] = useState<BookingEvent[]>([]);
+  const [telecallerLeads, setTelecallerLeads] = useState<TelecallerLead[]>([]);
+  const [commissionConfig, setCommissionConfig] = useState<CommissionConfig>(getLocalCommissionConfig());
   const [loading, setLoading] = useState(true);
+  const [settlingId, setSettlingId] = useState<string | null>(null);
 
   // Dispute dialogue review
   const [selectedDispute, setSelectedDispute] = useState<BookingEvent | null>(null);
@@ -37,7 +51,7 @@ export default function AdminBookings() {
 
   useEffect(() => {
     const q = query(collection(db, "artist_bookings"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeBookings = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -50,11 +64,21 @@ export default function AdminBookings() {
       setLoading(false);
     });
 
+    const unsubscribeLeads = subscribeTelecallerLeads((data) => {
+      setTelecallerLeads(data);
+    });
+
+    const unsubscribeCommission = subscribeCommissionConfig((cfg) => {
+      setCommissionConfig(cfg);
+    });
+
     const timer = setTimeout(() => setLoading(false), 600);
 
     return () => {
       clearTimeout(timer);
-      unsubscribe();
+      unsubscribeBookings();
+      unsubscribeLeads();
+      unsubscribeCommission();
     };
   }, []);
 
@@ -98,18 +122,76 @@ export default function AdminBookings() {
   const activeBookings = bookings.filter(b => b.status !== "DISPUTE_OPENED");
   const disputeBookings = bookings.filter(b => b.status === "DISPUTE_OPENED");
 
+  // Telecaller Leads with closed deals or financial activity
+  const closedLeads = useMemo(() => {
+    return telecallerLeads.filter(
+      (l) => l.status === "booked" || l.status === "artist_confirmed" || l.confirmedPrice || l.telecallerCommission
+    );
+  }, [telecallerLeads]);
+
+  const commissionStats = useMemo(() => {
+    let totalCommission = 0;
+    let paidCommission = 0;
+    let pendingCommission = 0;
+    let totalOwnerProfit = 0;
+
+    closedLeads.forEach((l) => {
+      const b = Number(l.budget || 0);
+      const a = Number(l.confirmedPrice || l.artistOfferBudget || (b > 0 ? Math.round(b * 0.8) : 0));
+      const split = calculateCommissionSplit(b, a, commissionConfig);
+
+      const comm = typeof l.telecallerCommission === "number" ? l.telecallerCommission : split.telecallerCommission;
+      const profit = typeof l.ownerProfit === "number" ? l.ownerProfit : split.ownerProfit;
+
+      totalCommission += comm;
+      totalOwnerProfit += profit;
+      if (l.commissionPayoutStatus === "paid") {
+        paidCommission += comm;
+      } else {
+        pendingCommission += comm;
+      }
+    });
+
+    return { totalCommission, paidCommission, pendingCommission, totalOwnerProfit };
+  }, [closedLeads, commissionConfig]);
+
+  const handleToggleCommissionSettlement = async (lead: TelecallerLead) => {
+    const nextStatus = lead.commissionPayoutStatus === "paid" ? "pending" : "paid";
+    setSettlingId(lead.id);
+    try {
+      await settleLeadCommission(lead.id, nextStatus);
+      await logAdminActivity(
+        "admin@mykalakar.com",
+        "SETTLE_COMMISSION",
+        `Marked lead ${lead.id} commission as ${nextStatus} for ${lead.customerName}`
+      );
+      toast({
+        title: nextStatus === "paid" ? "कमिशन पेड केले (Paid) ✅" : "कमिशन प्रलंबित केले (Pending) ⏳",
+        description: `Lead: "${lead.customerName}" चे कमिशन स्टेटस अपडेट केले.`,
+      });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "Status बदलता आला नाही." });
+    } finally {
+      setSettlingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold mb-1">Bookings & Escrow Hub</h1>
-          <p className="text-sm text-muted-foreground">{bookings.length} total transactional records</p>
+          <p className="text-sm text-muted-foreground">{bookings.length} platform bookings | {closedLeads.length} telecaller closed deals</p>
         </div>
       </div>
 
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 flex flex-wrap gap-1">
           <TabsTrigger value="all">Platform Bookings ({activeBookings.length})</TabsTrigger>
+          <TabsTrigger value="commissions" className="flex items-center gap-1.5 font-bold">
+            <Wallet className="h-3.5 w-3.5 text-blue-600" />
+            Telecaller Payouts & Commission ({closedLeads.length})
+          </TabsTrigger>
           <TabsTrigger value="disputes" className="relative">
             Escrow Disputes
             {disputeBookings.length > 0 && (
@@ -119,6 +201,156 @@ export default function AdminBookings() {
             )}
           </TabsTrigger>
         </TabsList>
+
+        {/* Telecaller Commissions Tab */}
+        <TabsContent value="commissions" className="space-y-4">
+          {/* Top Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-1">
+              <span className="text-[10px] font-black uppercase text-blue-700 block">एकूण टेलिकॉलर कमिशन (Total)</span>
+              <p className="text-2xl font-black text-blue-900">
+                ₹{commissionStats.totalCommission.toLocaleString("en-IN")}
+              </p>
+              <p className="text-[11px] text-blue-600 font-semibold">नियम: {commissionConfig.telecallerPercentage}% rate</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-1">
+              <span className="text-[10px] font-black uppercase text-amber-700 block">देय / प्रलंबित (Pending Payable)</span>
+              <p className="text-2xl font-black text-amber-900">
+                ₹{commissionStats.pendingCommission.toLocaleString("en-IN")}
+              </p>
+              <p className="text-[11px] text-amber-600 font-semibold">टेलिकॉलर्सना द्यायचे बाकी</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-teal-50/70 border border-teal-200/80 space-y-1">
+              <span className="text-[10px] font-black uppercase text-teal-700 block">दिलेले कमिशन (Paid Out)</span>
+              <p className="text-2xl font-black text-teal-900">
+                ₹{commissionStats.paidCommission.toLocaleString("en-IN")}
+              </p>
+              <p className="text-[11px] text-teal-600 font-semibold">यशस्वीरित्या सेटल केलेले</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-1">
+              <span className="text-[10px] font-black uppercase text-emerald-700 block">मायकलाकार निव्वळ नफा (Owner Net)</span>
+              <p className="text-2xl font-black text-emerald-950">
+                ₹{commissionStats.totalOwnerProfit.toLocaleString("en-IN")}
+              </p>
+              <p className="text-[11px] text-emerald-700 font-semibold">प्लॅटफॉर्म हिस्सा ({commissionConfig.ownerPercentage}%)</p>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader className="pb-3 border-b">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-[#FF6B00]" />
+                  टेलिकॉलरनिहाय कमिशन व पे-आऊट हिशोब
+                </CardTitle>
+                <Badge variant="outline" className="text-xs border-orange-200 text-orange-800 bg-orange-50 font-bold w-fit">
+                  {commissionConfig.splitType === "margin_percentage" ? "Margin % Model" : "Total Booking % Model"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ग्राहक & इव्हेंट</TableHead>
+                    <TableHead>कलाकार</TableHead>
+                    <TableHead>एकूण डील / बजेट</TableHead>
+                    <TableHead>कलाकार मानधन</TableHead>
+                    <TableHead>प्लॅटफॉर्म मार्जिन</TableHead>
+                    <TableHead>टेलिकॉलर कमिशन</TableHead>
+                    <TableHead>ओनर नफा</TableHead>
+                    <TableHead>पेमेंट स्थिती</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {closedLeads.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                        कोणतीही क्लोज झालेली लीड सापडली नाही.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    closedLeads.map((lead) => {
+                      const b = Number(lead.budget || 0);
+                      const a = Number(lead.confirmedPrice || lead.artistOfferBudget || (b > 0 ? Math.round(b * 0.8) : 0));
+                      const split = calculateCommissionSplit(b, a, commissionConfig);
+
+                      const comm = typeof lead.telecallerCommission === "number" ? lead.telecallerCommission : split.telecallerCommission;
+                      const profit = typeof lead.ownerProfit === "number" ? lead.ownerProfit : split.ownerProfit;
+                      const isPaid = lead.commissionPayoutStatus === "paid";
+
+                      return (
+                        <TableRow key={lead.id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-bold text-sm text-stone-900">{lead.customerName}</p>
+                              <p className="text-[11px] text-stone-500">{lead.eventType} • {lead.customerPhone}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-bold text-xs text-orange-700">
+                            {lead.confirmedArtistName || lead.requestedArtistName || "कलाकार"}
+                          </TableCell>
+                          <TableCell className="font-bold text-xs">
+                            ₹{b.toLocaleString("en-IN")}
+                          </TableCell>
+                          <TableCell className="text-xs font-semibold text-stone-600">
+                            ₹{a.toLocaleString("en-IN")}
+                          </TableCell>
+                          <TableCell className="font-bold text-xs text-purple-700">
+                            ₹{split.grossMargin.toLocaleString("en-IN")}
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-black text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                              ₹{comm.toLocaleString("en-IN")}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-black text-xs text-emerald-800">
+                            ₹{profit.toLocaleString("en-IN")}
+                          </TableCell>
+                          <TableCell>
+                            {isPaid ? (
+                              <Badge className="bg-emerald-600 text-white font-bold text-[10px]">
+                                ✓ Paid
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 font-bold text-[10px]">
+                                ⏳ Pending
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              disabled={settlingId === lead.id}
+                              onClick={() => handleToggleCommissionSettlement(lead)}
+                              className={`h-7 px-2.5 rounded-lg text-xs font-bold ${
+                                isPaid
+                                  ? "bg-stone-100 hover:bg-stone-200 text-stone-700 border"
+                                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                              }`}
+                            >
+                              {settlingId === lead.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : isPaid ? (
+                                "Mark Pending"
+                              ) : (
+                                "Mark as Paid ✅"
+                              )}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Plattform Bookings Tab */}
         <TabsContent value="all">

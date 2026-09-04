@@ -573,11 +573,16 @@ function CreateBriefModal({ open, onClose }: CreateBriefModalProps) {
                         <div className={`relative flex rounded-xl border overflow-hidden transition-all duration-200 ${errors.budget ? "border-red-300 bg-red-50/50 focus-within:ring-2 focus-within:ring-red-200" : "border-stone-200 bg-white/70 focus-within:ring-2 focus-within:ring-[#E25C1D]/30 focus-within:border-[#E25C1D]"}`}>
                           <input
                             id="brief-budget"
-                            type="number"
-                            min="0"
-                            placeholder="50000"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="Enter budget (e.g. 50000)"
                             value={form.budget}
-                            onChange={(e) => setField("budget", e.target.value)}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const devanagariConverted = raw.replace(/[०-९]/g, (d) => String(d.charCodeAt(0) - 0x0966));
+                              const clean = devanagariConverted.replace(/[^\d]/g, "");
+                              setField("budget", clean);
+                            }}
                             className="w-full bg-transparent px-4 py-3 text-sm font-semibold text-stone-800 outline-none placeholder:text-stone-400"
                           />
                           <span className="flex items-center justify-center border-l border-stone-200 bg-stone-50 px-4 text-sm font-extrabold text-stone-600 select-none shrink-0">

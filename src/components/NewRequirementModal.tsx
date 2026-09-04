@@ -308,12 +308,17 @@ export default function NewRequirementModal({ open, onClose }: NewRequirementMod
                     <Field label={t("event.budget") || "Total Budget (₹)"} required icon={IndianRupee}>
                       <input
                         id="brief-budget"
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         required
-                        min={0}
-                        placeholder="50000"
+                        placeholder={t("events.modal.totalBudgetPlaceholder") || "Enter budget (e.g. 50000)"}
                         value={form.totalBudget}
-                        onChange={(e) => set("totalBudget", e.target.value)}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const devanagariConverted = raw.replace(/[०-९]/g, (d) => String(d.charCodeAt(0) - 0x0966));
+                          const clean = devanagariConverted.replace(/[^\d]/g, "");
+                          set("totalBudget", clean);
+                        }}
                         className={inputCls}
                       />
                     </Field>

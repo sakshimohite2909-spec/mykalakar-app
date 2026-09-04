@@ -32,15 +32,25 @@ import {
   RotateCcw,
   Wallet,
   QrCode,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   fetchTelecallerLeads,
   subscribeTelecallerLeads,
   updateLeadStatus,
+  deleteLead,
   logArtistCall,
   type TelecallerLead,
   type LeadStatus,
@@ -55,6 +65,12 @@ import {
   getLocalPaymentConfig,
   type PaymentConfig,
 } from "@/services/paymentSettingsService";
+import {
+  subscribeCommissionConfig,
+  getLocalCommissionConfig,
+  calculateCommissionSplit,
+  type CommissionConfig,
+} from "@/services/commissionSettingsService";
 import ArtistReelViewerModal, { type ArtistReelItem } from "@/components/artist/ArtistReelViewerModal";
 import { MAIN_EVENT_CARDS } from "@/constants/artistSystem";
 import { subscribeActiveArtists } from "@/services/dataService";
@@ -76,6 +92,7 @@ export default function TelecallerDashboard() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getLocalPaymentConfig());
+  const [commissionConfig, setCommissionConfig] = useState<CommissionConfig>(getLocalCommissionConfig());
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [artistCategoryFilter, setArtistCategoryFilter] = useState<string>("all");
@@ -88,6 +105,33 @@ export default function TelecallerDashboard() {
   const [quotedPrice, setQuotedPrice] = useState<number>(15000);
   const [callNotes, setCallNotes] = useState<string>("");
   const [savingCall, setSavingCall] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState<TelecallerLead | null>(null);
+  const [deletingLead, setDeletingLead] = useState(false);
+
+  const confirmDeleteLead = async () => {
+    if (!leadToDelete) return;
+    setDeletingLead(true);
+    try {
+      await deleteLead(leadToDelete.id);
+      setLeads((prev) => prev.filter((l) => l.id !== leadToDelete.id));
+      if (activeLead?.id === leadToDelete.id) {
+        setActiveLead(null);
+      }
+      toast({
+        title: "लीड हटवली! 🗑️",
+        description: `"${leadToDelete.customerName || "Customer"}" ची लीड यशस्वीरीत्या डिलीट केली.`,
+      });
+      setLeadToDelete(null);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "लीड डिलीट करता आली नाही. कृपया पुन्हा प्रयत्न करा.",
+      });
+    } finally {
+      setDeletingLead(false);
+    }
+  };
 
   const formatLeadCategory = (lead: TelecallerLead): string => {
     const event = String(lead.eventType || "").trim();
@@ -333,10 +377,15 @@ export default function TelecallerDashboard() {
       setPaymentConfig(cfg);
     });
 
+    const unsubCommission = subscribeCommissionConfig((cfg) => {
+      setCommissionConfig(cfg);
+    });
+
     return () => {
       unsubLeads();
       unsubArtists();
       unsubPayment();
+      unsubCommission();
     };
   }, []);
 
@@ -356,12 +405,13 @@ export default function TelecallerDashboard() {
     });
   }, [leads, searchQuery, statusFilter, leadTypeFilter]);
 
+
   // Matching artists for active lead from real active artists list
   const matchingArtists = useMemo(() => {
     if (!activeLead) return activeArtists.slice(0, 5);
 
-    const targetSubCategory = activeLead.subCategory.toLowerCase();
-    const targetCategory = activeLead.category.toLowerCase();
+    const targetSubCategory = (activeLead.subCategory || "").toLowerCase();
+    const targetCategory = (activeLead.category || "").toLowerCase();
 
     return activeArtists.filter((artist) => {
       const sub = (artist.subcategory || artist.artForm || "").toLowerCase();
@@ -441,13 +491,16 @@ export default function TelecallerDashboard() {
 
       toast({
         title: "Call Outcome Saved!",
-        description: `Logged '${callOutcome}' for ${selectedArtistForCall.name}.`,
+        description: `Logged call with ${selectedArtistForCall.name} (${callOutcome}).`,
       });
-
       setSelectedArtistForCall(null);
       setCallNotes("");
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to log call result." });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "कॉल रेकॉर्ड सेव्ह करता आला नाही.",
+      });
     } finally {
       setSavingCall(false);
     }
@@ -476,15 +529,35 @@ export default function TelecallerDashboard() {
     }
   };
 
-  // Metrics summary
+  // Metrics summary with commission and earnings calculation
   const metrics = useMemo(() => {
+    const confirmedLeads = leads.filter((l) => l.status === "artist_confirmed" || l.status === "booked");
+    let totalEarnings = 0;
+    let pendingEarnings = 0;
+
+    confirmedLeads.forEach((l) => {
+      let comm = l.telecallerCommission;
+      if (typeof comm !== "number") {
+        const b = l.budget || 0;
+        const a = l.confirmedPrice || l.artistOfferBudget || (b > 0 ? Math.round(b * 0.8) : 0);
+        const split = calculateCommissionSplit(b, a, commissionConfig);
+        comm = split.telecallerCommission;
+      }
+      totalEarnings += comm;
+      if (l.commissionPayoutStatus !== "paid") {
+        pendingEarnings += comm;
+      }
+    });
+
     return {
       total: leads.length,
       newLeads: leads.filter((l) => l.status === "new").length,
-      confirmed: leads.filter((l) => l.status === "artist_confirmed" || l.status === "booked").length,
+      confirmed: confirmedLeads.length,
       inProgress: leads.filter((l) => l.status === "contacting_artists").length,
+      totalEarnings,
+      pendingEarnings,
     };
-  }, [leads]);
+  }, [leads, commissionConfig]);
 
   return (
     <div className="space-y-6">
@@ -495,13 +568,17 @@ export default function TelecallerDashboard() {
             <PhoneCall className="h-6 w-6 text-orange-600" />
             Telecaller Workbench
           </h1>
-          <p className="text-xs text-stone-600 font-bold mt-1 flex flex-wrap items-center gap-2">
+          <div className="text-xs text-stone-600 font-bold mt-1.5 flex flex-wrap items-center gap-2">
             <span>Good Morning 👋</span>
             <span className="text-stone-300">•</span>
             <span className="bg-stone-100 text-stone-800 px-3 py-1 rounded-full text-[11px] font-extrabold border border-stone-200">
               {metrics.total} Total Leads | {metrics.newLeads} New | {metrics.inProgress} In Progress | {metrics.confirmed} Confirmed
             </span>
-          </p>
+            <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 px-3 py-1 rounded-full text-[11px] font-black flex items-center gap-1 shadow-2xs">
+              💰 माझी कमाई: ₹{metrics.totalEarnings.toLocaleString("en-IN")}
+              <span className="text-[10px] font-normal text-emerald-700">({commissionConfig.telecallerPercentage}% rate)</span>
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
@@ -662,26 +739,41 @@ export default function TelecallerDashboard() {
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span
-                            className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border shrink-0 ${
-                              lead.status === "new"
-                                ? "bg-amber-100 text-amber-900 border-amber-300"
-                                : lead.status === "artist_confirmed" || lead.status === "booked"
-                                ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                                : "bg-sky-100 text-sky-900 border-sky-300"
-                            }`}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border shrink-0 ${
+                                lead.status === "new"
+                                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                                  : lead.status === "artist_confirmed" || lead.status === "booked"
+                                  ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                                  : "bg-sky-100 text-sky-900 border-sky-300"
+                              }`}
+                            >
+                              {lead.status.replace("_", " ")}
+                            </span>
+                            {isBookArtist ? (
+                              <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200 truncate flex items-center gap-1">
+                                <UserCheck className="h-3 w-3" /> Book Artist
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200 truncate flex items-center gap-1">
+                                <FileText className="h-3 w-3" /> Requirement
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Delete Lead Trash Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLeadToDelete(lead);
+                            }}
+                            className="h-6 w-6 rounded-md text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center shrink-0 cursor-pointer"
+                            title="ही लीड हटवा (Delete Lead)"
                           >
-                            {lead.status.replace("_", " ")}
-                          </span>
-                          {isBookArtist ? (
-                            <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200 truncate flex items-center gap-1">
-                              <UserCheck className="h-3 w-3" /> Book Artist
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200 truncate flex items-center gap-1">
-                              <FileText className="h-3 w-3" /> Requirement
-                            </span>
-                          )}
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
 
                         {/* Customer Name */}
@@ -710,9 +802,20 @@ export default function TelecallerDashboard() {
                         </p>
 
                         <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-stone-100">
-                          <span className="text-xs font-black text-emerald-700 flex items-center gap-1">
-                            <IndianRupee className="h-3.5 w-3.5 shrink-0" /> Budget: ₹{lead.budget?.toLocaleString("en-IN") || "N/A"}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-xs font-black text-emerald-700 flex items-center gap-1">
+                              <IndianRupee className="h-3.5 w-3.5 shrink-0" /> Budget: ₹{lead.budget?.toLocaleString("en-IN") || "N/A"}
+                            </span>
+                            {lead.telecallerCommission ? (
+                              <span className="text-[10px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded mt-0.5 w-fit">
+                                💰 कमिशन: ₹{lead.telecallerCommission.toLocaleString("en-IN")}
+                              </span>
+                            ) : lead.budget ? (
+                              <span className="text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.2 rounded mt-0.5 w-fit">
+                                कमिशन: ~₹{calculateCommissionSplit(lead.budget, lead.artistOfferBudget || Math.round(lead.budget * 0.8), commissionConfig).telecallerCommission.toLocaleString("en-IN")}
+                              </span>
+                            ) : null}
+                          </div>
                           {isSelected ? (
                             <span className="text-[11px] font-black text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full flex items-center gap-1">
                               ● Active
@@ -1097,45 +1200,54 @@ export default function TelecallerDashboard() {
                     </div>
                   </div>
 
-                  {/* SECTION 3: ESCROW & PAYOUT (1-Row Quick Controls) */}
-                  <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-4 text-xs font-bold flex-wrap">
-                      <div>
-                        <span className="text-stone-400 block text-[10px] uppercase font-bold">Client Paid</span>
-                        <span className="text-emerald-700 font-black">₹{activeLead.budget?.toLocaleString("en-IN")}</span>
-                      </div>
-                      <div>
-                        <span className="text-stone-400 block text-[10px] uppercase font-bold">Artist Payout</span>
-                        <span className="text-orange-600 font-black">
-                          ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8)).toLocaleString("en-IN")}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-stone-400 block text-[10px] uppercase font-bold">Margin</span>
-                        <span className="text-purple-700 font-black">
-                          ₹{Math.max(0, (activeLead.budget || 0) - (activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8))).toLocaleString("en-IN")}
-                        </span>
-                      </div>
-                    </div>
+                  {/* SECTION 3: ESCROW & PAYOUT (with live Commission Breakdown) */}
+                  {(() => {
+                    const bookingAmt = activeLead.budget || 0;
+                    const artistAmt = activeLead.confirmedPrice || activeLead.artistOfferBudget || (bookingAmt > 0 ? Math.round(bookingAmt * 0.8) : 0);
+                    const split = calculateCommissionSplit(bookingAmt, artistAmt, commissionConfig);
+                    const myComm = typeof activeLead.telecallerCommission === "number" ? activeLead.telecallerCommission : split.telecallerCommission;
 
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleReleasePayout(activeLead)}
-                        className="h-8.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm"
-                      >
-                        💸 Release Payout
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleProcessRefund(activeLead)}
-                        className="h-8.5 px-3 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold"
-                      >
-                        🔄 Refund
-                      </Button>
-                    </div>
-                  </div>
+                    return (
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-orange-50/70 via-white to-blue-50/70 border border-orange-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-4 text-xs font-bold flex-wrap">
+                          <div>
+                            <span className="text-stone-400 block text-[10px] uppercase font-bold">Client Paid</span>
+                            <span className="text-emerald-700 font-black">₹{bookingAmt.toLocaleString("en-IN")}</span>
+                          </div>
+                          <div>
+                            <span className="text-stone-400 block text-[10px] uppercase font-bold">Artist Payout</span>
+                            <span className="text-stone-800 font-black">₹{artistAmt.toLocaleString("en-IN")}</span>
+                          </div>
+                          <div>
+                            <span className="text-stone-400 block text-[10px] uppercase font-bold">Gross Margin</span>
+                            <span className="text-purple-700 font-black">₹{split.grossMargin.toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="pl-3 border-l-2 border-blue-300">
+                            <span className="text-blue-600 block text-[10px] uppercase font-black">📞 Your Commission</span>
+                            <span className="text-blue-800 font-black text-sm">₹{myComm.toLocaleString("en-IN")}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleReleasePayout(activeLead)}
+                            className="h-8.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm"
+                          >
+                            💸 Release Payout
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleProcessRefund(activeLead)}
+                            className="h-8.5 px-3 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold"
+                          >
+                            🔄 Refund
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="p-12 text-center rounded-2xl bg-white border border-stone-200 text-stone-500 text-xs shadow-sm">
@@ -1383,6 +1495,44 @@ export default function TelecallerDashboard() {
           }}
         />
       )}
+
+      {/* Delete Lead Confirmation Dialog */}
+      <Dialog open={Boolean(leadToDelete)} onOpenChange={(open) => !open && setLeadToDelete(null)}>
+        <DialogContent className="sm:max-w-md bg-white rounded-3xl p-6 border border-stone-200 shadow-2xl">
+          <DialogHeader>
+            <div className="h-12 w-12 rounded-2xl bg-red-50 border border-red-200 text-red-600 flex items-center justify-center mb-2 mx-auto sm:mx-0">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-base font-black text-stone-950">
+              लीड कायमची हटवायची आहे का?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-stone-600 font-semibold pt-1 leading-relaxed">
+              तुम्ही <strong>"{leadToDelete?.customerName || "Customer"}"</strong> ची (
+              {leadToDelete?.eventType || "Event"}) लीड हटवत आहात. ही कृती पूर्ववत करता येणार नाही.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deletingLead}
+              onClick={() => setLeadToDelete(null)}
+              className="rounded-xl text-xs font-bold"
+            >
+              रद्द करा (Cancel)
+            </Button>
+            <Button
+              type="button"
+              disabled={deletingLead}
+              onClick={confirmDeleteLead}
+              className="rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black gap-1.5"
+            >
+              {deletingLead ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              <span>होय, डिलीट करा (Delete)</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
