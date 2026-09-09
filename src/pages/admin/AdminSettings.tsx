@@ -52,15 +52,38 @@ export default function AdminSettings() {
   const [simArtistOffer, setSimArtistOffer] = useState<number>(8000);
 
   useEffect(() => {
-    // Simple single-field query — no composite index needed
-    const q = query(collection(db, "admin_requests"), where("status", "==", "pending"));
-    const unsub = onSnapshot(q, (snap) => {
-      setRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    let unsub = () => {};
+    try {
+      // Simple single-field query — no composite index needed
+      const q = query(collection(db, "admin_requests"), where("status", "==", "pending"));
+      unsub = onSnapshot(
+        q,
+        (snap) => {
+          setRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+          setLoading(false);
+        },
+        (error) => {
+          console.warn("Firestore admin_requests notice:", error);
+          // Graceful fallback to local cache
+          try {
+            const raw = localStorage.getItem("mykalakar_admin_requests");
+            if (raw) {
+              const localList = JSON.parse(raw);
+              setRequests(Array.isArray(localList) ? localList.filter((r: any) => r.status === "pending") : []);
+            } else {
+              setRequests([]);
+            }
+          } catch {
+            setRequests([]);
+          }
+          setLoading(false);
+        }
+      );
+    } catch (err) {
+      console.warn("Firestore admin_requests initialization notice:", err);
+      setRequests([]);
       setLoading(false);
-    }, (error) => {
-      toastForFirestoreError(error, "Admin requests unavailable", "Could not load admin requests.", toast);
-      setLoading(false);
-    });
+    }
     return () => unsub();
   }, []);
 

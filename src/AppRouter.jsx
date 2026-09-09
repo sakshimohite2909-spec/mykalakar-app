@@ -90,6 +90,7 @@ const router = createBrowserRouter([
       { path: "admin/login", element: <AdminLogin /> },
       { path: "user-login", element: <ArtistLogin /> },
       { path: "telecaller-login", element: <TelecallerLogin /> },
+      { path: "telecaller/login", element: <TelecallerLogin /> },
       { path: "forgot-password", element: <ForgotPassword /> },
       { path: "school", element: <SchoolTemplate /> },
       {

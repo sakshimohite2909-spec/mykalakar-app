@@ -378,30 +378,33 @@ export default function UserProfile() {
     if (!currentUser) return;
     setLoadingBookings(true);
 
-    const loadBookings = () => {
-      return subscribeCustomerBookings(currentUser.uid, (data) => {
+    const customerCriteria = {
+      customerId: currentUser.uid,
+      customerEmail: currentUser.email || "",
+      customerPhone: form.phone || (userProfile as any)?.phone || (artistData as any)?.phone || "",
+      customerName: form.name || currentUser.displayName || (userProfile as any)?.name || (userProfile as any)?.fullName || "",
+      ids: [currentUser.uid, (userProfile as any)?.id, (userProfile as any)?.uid].filter(Boolean) as string[],
+      emails: [currentUser.email, (userProfile as any)?.email].filter(Boolean) as string[],
+      phones: [form.phone, (userProfile as any)?.phone, (userProfile as any)?.mobile, (artistData as any)?.phone, (artistData as any)?.mobileNumber].filter(Boolean) as string[],
+      names: [form.name, currentUser.displayName, (userProfile as any)?.name, (userProfile as any)?.fullName].filter(Boolean) as string[],
+    };
+
+    const unsub = subscribeCustomerBookings(
+      customerCriteria,
+      (data) => {
         setBookings(data);
         setLoadingBookings(false);
-      }, (err) => {
-        console.error(err);
+      },
+      (err) => {
+        console.error("Error subscribing customer bookings:", err);
         setLoadingBookings(false);
-      });
-    };
-
-    let unsub = loadBookings();
-
-    const handleLeadChange = () => {
-      if (unsub) unsub();
-      unsub = loadBookings();
-    };
-
-    window.addEventListener("mykalakar_lead_status_changed", handleLeadChange);
+      }
+    );
 
     return () => {
       if (unsub) unsub();
-      window.removeEventListener("mykalakar_lead_status_changed", handleLeadChange);
     };
-  }, [currentUser]);
+  }, [currentUser, form.name, form.phone, userProfile, artistData]);
 
   useEffect(() => {
     const unsubPayment = subscribePaymentConfig((cfg) => {
@@ -605,22 +608,22 @@ export default function UserProfile() {
     if (!checkoutBooking) return;
     setCompletingCheckout(true);
     try {
-      if (checkoutBooking.status === "PAYMENT_PENDING") {
-        const amountToCapture = checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000;
-        await updateArtistBookingStatus(checkoutBooking, "CONFIRMED", {
-          isPaymentCaptured: true,
-          escrowState: "HELD",
-          authorizedAmount: amountToCapture,
-          confirmedPrice: amountToCapture,
-        });
-        toast({
-          title: "Payment Successful! 🎉",
-          description: `₹${amountToCapture.toLocaleString("en-IN")} received via Razorpay. Your booking with ${checkoutBooking.artistName || "the artist"} is confirmed!`,
-        });
-        setCheckoutBooking(null);
-      } else {
-        await processAcceptCounter(checkoutBooking, checkoutBooking.counterOfferAmount || 0);
-      }
+      const amountToCapture =
+        checkoutBooking.confirmedPrice ||
+        checkoutBooking.counterOfferAmount ||
+        checkoutBooking.authorizedAmount ||
+        15000;
+      await updateArtistBookingStatus(checkoutBooking, "CONFIRMED", {
+        isPaymentCaptured: true,
+        escrowState: "HELD",
+        authorizedAmount: amountToCapture,
+        confirmedPrice: amountToCapture,
+      });
+      toast({
+        title: "Payment Successful! 🎉",
+        description: `₹${amountToCapture.toLocaleString("en-IN")} received. Your booking with ${checkoutBooking.artistName || "the artist"} is confirmed!`,
+      });
+      setCheckoutBooking(null);
     } catch (err) {
       console.error(err);
       toast({ variant: "destructive", title: "Payment Failed", description: "Could not process Razorpay payment." });
@@ -946,7 +949,8 @@ export default function UserProfile() {
                     ) : (
                       <div className="space-y-4">
                         {bookings.map((booking) => {
-                          const isPending = ["SOFT_HOLD_ACTIVE", "PAYMENT_AUTHORIZED", "PENDING_ARTIST_RESPONSE", "PENDING_TELECALLER_VERIFICATION"].includes(booking.status);
+                          const isPending = ["SOFT_HOLD_ACTIVE", "PAYMENT_AUTHORIZED", "PENDING_ARTIST_RESPONSE", "PENDING_TELECALLER_VERIFICATION", "COUNTER_OFFER_SENT", "PAYMENT_PENDING"].includes(booking.status);
+                          const finalAgreedPrice = booking.confirmedPrice || booking.counterOfferAmount || booking.authorizedAmount || 0;
 
                           return (
                             <div key={booking.id} className="border border-slate-200/80 rounded-2xl bg-white p-5 shadow-sm space-y-4 hover:shadow-md transition duration-200">
@@ -958,11 +962,11 @@ export default function UserProfile() {
                                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-stone-500">
                                     <span className="flex items-center gap-1">
                                       <Clock className="h-3.5 w-3.5 text-stone-400" />
-                                      {formatDate(booking.eventDate)} ({booking.eventStartTime || "18:00"} - {booking.eventEndTime || "22:00"})
+                                      {formatDate(booking.counterOfferDate || booking.eventDate)} ({booking.counterOfferStartTime || booking.eventStartTime || "18:00"} - {booking.counterOfferEndTime || booking.eventEndTime || "22:00"})
                                     </span>
                                     <span className="flex items-center gap-1">
                                       <MapPin className="h-3.5 w-3.5 text-stone-400" />
-                                      {booking.venueLocation}
+                                      {booking.counterOfferLocation || booking.venueLocation}
                                     </span>
                                   </div>
                                 </div>
@@ -984,10 +988,10 @@ export default function UserProfile() {
                                   <span>{t("profile.bookings.gateway")} <strong className="text-stone-900 uppercase">{booking.paymentGateway || "Razorpay"}</strong></span>
                                 </div>
                                 <div>
-                                  <span>Offer/Budget: <strong className="text-[#FF6B00] text-sm font-black">Rs {(booking.confirmedPrice || booking.authorizedAmount || 0).toLocaleString("en-IN")}</strong></span>
+                                  <span>{booking.status === "PAYMENT_PENDING" || booking.status === "COUNTER_OFFER_SENT" ? "Final Agreed Price:" : "Offer/Budget:"} <strong className="text-[#FF6B00] text-sm font-black">Rs {finalAgreedPrice.toLocaleString("en-IN")}</strong></span>
                                 </div>
                                 <div>
-                                  <span>{t("profile.bookings.escrowPayout")} <strong className="text-stone-900 font-extrabold uppercase">{booking.status === "PAYMENT_PENDING" ? "PAYMENT REQUIRED" : (booking.escrowState || "PENDING")}</strong></span>
+                                  <span>{t("profile.bookings.escrowPayout")} <strong className="text-stone-900 font-extrabold uppercase">{(booking.status === "PAYMENT_PENDING" || booking.status === "COUNTER_OFFER_SENT") ? "PAYMENT REQUIRED" : (booking.escrowState || "PENDING")}</strong></span>
                                 </div>
                               </div>
 
@@ -1002,55 +1006,41 @@ export default function UserProfile() {
                                 </div>
                               )}
 
-                              {/* PAYMENT PENDING (DEAL CONFIRMED BY TELECALLER) BANNER */}
-                              {booking.status === "PAYMENT_PENDING" && (
-                                <div className="border border-emerald-200 bg-emerald-50/90 rounded-xl p-4 text-xs text-emerald-950 font-semibold space-y-3">
+                              {/* DEAL CONFIRMED / PAYMENT REQUIRED (TELECALLER VERIFIED) BANNER */}
+                              {(booking.status === "PAYMENT_PENDING" || booking.status === "COUNTER_OFFER_SENT") && (
+                                <div className="border border-emerald-200 bg-emerald-50/90 rounded-2xl p-4 text-xs text-emerald-950 font-semibold space-y-3 shadow-xs">
                                   <div className="flex items-start gap-2.5">
                                     <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-                                    <div>
-                                      <span className="font-extrabold text-emerald-900 block text-sm mb-0.5">Deal Confirmed by Telecaller!</span>
-                                      Telecaller has finalized agreement with {booking.artistName || "the artist"}. Agreed Final Price: <strong className="text-emerald-700 text-sm font-black">₹{(booking.confirmedPrice || booking.authorizedAmount || 15000).toLocaleString("en-IN")}</strong>. Complete payment to finalize booking.
+                                    <div className="space-y-1">
+                                      <span className="font-extrabold text-emerald-900 block text-sm">डील फायनल झाली आहे (Deal Confirmed)!</span>
+                                      <p className="text-emerald-900 leading-relaxed">
+                                        टेलिकॉलरने {booking.artistName || "कलाकारासोबत"} चर्चा करून तारीख, वेळ व मानधन निश्चित केले आहे. 
+                                        अंतिम ठरलेले मानधन: <strong className="text-emerald-700 text-sm font-black">₹{finalAgreedPrice.toLocaleString("en-IN")}</strong>
+                                      </p>
+                                      {(booking.counterOfferDate || booking.counterOfferStartTime) && (
+                                        <p className="text-[11px] text-emerald-800 font-bold">
+                                          📅 वेळ: {formatDate(booking.counterOfferDate || booking.eventDate)} ({booking.counterOfferStartTime || booking.eventStartTime || "18:00"} - {booking.counterOfferEndTime || booking.eventEndTime || "22:00"})
+                                        </p>
+                                      )}
+                                      {booking.counterOfferNotes && (
+                                        <p className="text-[11px] text-emerald-800 italic">
+                                          💬 टीप: "{booking.counterOfferNotes}"
+                                        </p>
+                                      )}
                                     </div>
                                   </div>
-                                  <Button
-                                    size="sm"
-                                    className="w-full sm:w-auto bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-extrabold text-xs px-6 py-2.5 shadow-md flex items-center justify-center gap-2"
-                                    onClick={() => {
-                                      setCheckoutBooking(booking);
-                                      setCheckoutGateway("razorpay");
-                                    }}
-                                  >
-                                    <CreditCard className="h-4 w-4" /> Pay ₹{(booking.confirmedPrice || booking.authorizedAmount || 15000).toLocaleString("en-IN")} via Razorpay
-                                  </Button>
-                                </div>
-                              )}
-
-                              {/* COUNTER OFFER DIFF VIEW */}
-                              {booking.status === "COUNTER_OFFER_SENT" && (
-                                <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-4 space-y-3">
-                                  <span className="flex items-center gap-1.5 font-black text-amber-900 text-xs uppercase tracking-wider">
-                                    <RefreshCw className="h-4 w-4 text-amber-600 animate-spin" />
-                                    {t("profile.bookings.diffTitle")}
-                                  </span>
-                                  <div className="grid grid-cols-2 gap-4 text-xs font-semibold">
-                                    <div className="p-3 bg-white/70 border border-slate-100 rounded-xl">
-                                      <p className="text-[10px] font-black uppercase text-stone-400 mb-2">{t("profile.bookings.original")}</p>
-                                      <p className="mb-1">{t("profile.bookings.price")} <strong className="text-stone-700">Rs {booking.authorizedAmount?.toLocaleString("en-IN")}</strong></p>
-                                      <p className="mb-1">{t("profile.bookings.date")} <strong className="text-stone-700">{formatDate(booking.eventDate)}</strong></p>
-                                      <p className="mb-1">{t("profile.bookings.time")} <strong className="text-stone-700">{booking.eventStartTime} - {booking.eventEndTime}</strong></p>
-                                      <p>{t("profile.bookings.location")} <strong className="text-stone-700">{booking.venueLocation}</strong></p>
-                                    </div>
-                                    <div className="p-3 bg-amber-100/40 border border-amber-200/50 rounded-xl">
-                                      <p className="text-[10px] font-black uppercase text-amber-600 mb-2">{t("profile.bookings.counter")}</p>
-                                      <p className="mb-1">{t("profile.bookings.price")} <strong className="text-amber-800 font-black">Rs {booking.counterOfferAmount?.toLocaleString("en-IN")}</strong></p>
-                                      <p className="mb-1">{t("profile.bookings.date")} <strong className="text-amber-800 font-bold">{formatDate(booking.counterOfferDate || booking.eventDate)}</strong></p>
-                                      <p className="mb-1">{t("profile.bookings.time")} <strong className="text-amber-800 font-bold">{booking.counterOfferStartTime || booking.eventStartTime} - {booking.counterOfferEndTime || booking.eventEndTime}</strong></p>
-                                      <p>{t("profile.bookings.location")} <strong className="text-amber-800 font-bold">{booking.counterOfferLocation || booking.venueLocation}</strong></p>
-                                    </div>
+                                  <div className="pt-1">
+                                    <Button
+                                      size="sm"
+                                      className="w-full sm:w-auto bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-xl font-black text-xs px-6 py-2.5 shadow-md flex items-center justify-center gap-2"
+                                      onClick={() => {
+                                        setCheckoutBooking(booking);
+                                        setCheckoutGateway("razorpay");
+                                      }}
+                                    >
+                                      <CreditCard className="h-4 w-4" /> ₹{finalAgreedPrice.toLocaleString("en-IN")} भरा / टोकन द्या (Pay via Razorpay / UPI)
+                                    </Button>
                                   </div>
-                                  {booking.counterOfferNotes && (
-                                    <p className="text-xs text-amber-800 italic pl-1.5 pt-1">{t("profile.bookings.notes")} "{booking.counterOfferNotes}"</p>
-                                  )}
                                 </div>
                               )}
 
@@ -1075,16 +1065,6 @@ export default function UserProfile() {
                                   <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50 rounded-xl" onClick={() => triggerCancelCancellation(booking)}>
                                     {t("profile.bookings.btnCancelRequest")}
                                   </Button>
-                                )}
-                                {booking.status === "COUNTER_OFFER_SENT" && (
-                                  <>
-                                    <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50 rounded-xl" onClick={() => handleRejectCounter(booking)}>
-                                      {t("profile.bookings.btnDeclineCounter")}
-                                    </Button>
-                                    <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold px-4" onClick={() => handleAcceptCounterInit(booking)}>
-                                      {t("profile.bookings.btnAcceptCounter")}
-                                    </Button>
-                                  </>
                                 )}
                                 {booking.status === "EVENT_COMPLETED" && (
                                   <>
@@ -1236,52 +1216,33 @@ export default function UserProfile() {
 
           {checkoutBooking && (
             <div className="space-y-4 py-2 text-sm text-stone-700 font-semibold">
-              {checkoutBooking.status === "PAYMENT_PENDING" ? (
-                <div className="p-4 bg-emerald-50/90 border border-emerald-200 rounded-2xl space-y-2 font-bold text-emerald-950 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1">
-                      <ShieldCheck className="h-4 w-4 text-emerald-600" /> टेलिकॉलर कन्फर्म डील ✓
-                    </span>
-                    <span className="text-[10px] bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-full font-extrabold">
-                      Escrow Safe
-                    </span>
-                  </div>
+              <div className="p-4 bg-emerald-50/90 border border-emerald-200 rounded-2xl space-y-2 font-bold text-emerald-950 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600" /> टेलिकॉलर कन्फर्म डील ✓
+                  </span>
+                  <span className="text-[10px] bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-full font-extrabold">
+                    Escrow Safe
+                  </span>
+                </div>
 
-                  <div className="space-y-1 pt-1 text-xs sm:text-sm">
-                    <div className="flex items-center justify-between text-stone-700">
-                      <span className="text-stone-500 font-medium">कलाकार (Artist):</span>
-                      <strong className="text-stone-950 font-black">{checkoutBooking.artistName || "Artist"}</strong>
-                    </div>
-                    <div className="flex items-center justify-between text-stone-700">
-                      <span className="text-stone-500 font-medium">तारीख (Event Date):</span>
-                      <strong className="text-stone-950 font-black">{formatDate(checkoutBooking.eventDate)}</strong>
-                    </div>
-                    <div className="flex items-center justify-between text-emerald-950 border-t border-emerald-200 pt-2 mt-1.5 font-black text-base">
-                      <span>अंतिम मानधन (Total Amount):</span>
-                      <span className="text-emerald-700 text-lg">
-                        ₹{(checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000).toLocaleString("en-IN")}
-                      </span>
-                    </div>
+                <div className="space-y-1 pt-1 text-xs sm:text-sm">
+                  <div className="flex items-center justify-between text-stone-700">
+                    <span className="text-stone-500 font-medium">कलाकार (Artist):</span>
+                    <strong className="text-stone-950 font-black">{checkoutBooking.artistName || "Artist"}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-stone-700">
+                    <span className="text-stone-500 font-medium">तारीख (Event Date):</span>
+                    <strong className="text-stone-950 font-black">{formatDate(checkoutBooking.counterOfferDate || checkoutBooking.eventDate)}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-emerald-950 border-t border-emerald-200 pt-2 mt-1.5 font-black text-base">
+                    <span>अंतिम मानधन (Total Amount):</span>
+                    <span className="text-emerald-700 text-lg font-black">
+                      ₹{(checkoutBooking.confirmedPrice || checkoutBooking.counterOfferAmount || checkoutBooking.authorizedAmount || 15000).toLocaleString("en-IN")}
+                    </span>
                   </div>
                 </div>
-              ) : (
-                <div className="p-4 bg-amber-50/90 border border-amber-200 rounded-2xl space-y-2 font-bold text-amber-950">
-                  <p className="flex justify-between text-xs sm:text-sm">
-                    <span className="text-amber-800 font-medium">{t("profile.checkoutDialog.originalHold", { defaultValue: "मूळ रक्कम" })}:</span>
-                    <span>Rs {checkoutBooking.authorizedAmount?.toLocaleString("en-IN")}</span>
-                  </p>
-                  <p className="flex justify-between text-xs sm:text-sm">
-                    <span className="text-amber-800 font-medium">{t("profile.checkoutDialog.newCounterPrice", { defaultValue: "नवीन ऑफर" })}:</span>
-                    <span>Rs {checkoutBooking.counterOfferAmount?.toLocaleString("en-IN")}</span>
-                  </p>
-                  <p className="flex justify-between text-amber-950 text-base border-t border-amber-200 pt-2 mt-1 font-black">
-                    <span>{t("profile.checkoutDialog.extraHoldToAuthorize", { defaultValue: "फरक रक्कम" })}:</span>
-                    <span className="text-amber-800">
-                      Rs {((checkoutBooking.counterOfferAmount || 0) - (checkoutBooking.authorizedAmount || 0)).toLocaleString("en-IN")}
-                    </span>
-                  </p>
-                </div>
-              )}
+              </div>
 
               {/* Direct UPI & QR Code Box */}
               <div className="border border-stone-200/90 rounded-2xl bg-stone-50/90 p-4 space-y-3 shadow-xs">
@@ -1299,7 +1260,7 @@ export default function UserProfile() {
                         paymentConfig.qrImageUrl ||
                         `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
                           `upi://pay?pa=${paymentConfig.upiId || "mykalakar@icici"}&pn=MyKalakar&am=${
-                            checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000
+                            checkoutBooking.confirmedPrice || checkoutBooking.counterOfferAmount || checkoutBooking.authorizedAmount || 15000
                           }&cu=INR`
                         )}`
                       }
@@ -1383,10 +1344,8 @@ export default function UserProfile() {
             >
               {completingCheckout ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
-              ) : checkoutBooking?.status === "PAYMENT_PENDING" ? (
-                `₹${(checkoutBooking.confirmedPrice || checkoutBooking.authorizedAmount || 15000).toLocaleString("en-IN")} भरा (Pay via Razorpay)`
               ) : (
-                "पेमेंट कन्फर्म करा (Authorize Payment)"
+                `₹${(checkoutBooking?.confirmedPrice || checkoutBooking?.counterOfferAmount || checkoutBooking?.authorizedAmount || 15000).toLocaleString("en-IN")} भरा (Pay via Razorpay / UPI)`
               )}
             </Button>
           </DialogFooter>

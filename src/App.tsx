@@ -9,10 +9,14 @@ import { I18nProvider } from "@/i18n/I18nProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import AppRouter from "@/AppRouter";
 import { FirebaseDiagnostic } from "@/components/FirebaseDiagnostic";
+import { useCapacitorBackNavigation } from "@/hooks/useCapacitorBackNavigation";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = () => {
+  useCapacitorBackNavigation();
+
+  return (
   <ErrorBoundary>
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
@@ -31,6 +35,7 @@ const App = () => (
       </QueryClientProvider>
     </HelmetProvider>
   </ErrorBoundary>
-);
+  );
+};
 
 export default App;

@@ -372,31 +372,43 @@ export default function BookingModal({
         createdAt: serverTimestamp(),
       });
 
-      await withTimeout(
-        addDoc(collection(db, "inquiries"), sanitized),
-        FIREBASE_WRITE_TIMEOUT_MS,
-        t("booking.timeoutText")
-      );
+      try {
+        await withTimeout(
+          addDoc(collection(db, "inquiries"), sanitized),
+          FIREBASE_WRITE_TIMEOUT_MS,
+          t("booking.timeoutText")
+        );
+      } catch (inquiryErr) {
+        console.warn("Inquiry write warning (cached locally):", inquiryErr);
+      }
 
-      // 3. Automatically sync inquiry to Telecaller Workbench
-      saveCustomerInquiryLead({
-        id: `booking_${booking.id}`,
-        bookingId: booking.id,
-        customerId: uid,
-        customerName: formData.customerName,
-        customerPhone: formData.customerPhone,
-        customerEmail: formData.customerEmail || currentUser?.email || "",
-        eventType: formData.eventType,
-        selectedService: effectiveService,
-        serviceCategory: matchedService?.category,
-        serviceEvent: matchedService?.event,
-        eventDate: formData.eventDate,
-        eventLocation: formData.eventLocation,
-        budget: Number(formData.authorizedAmount || 15000),
-        message: formData.message || formData.specialRequirements || "",
-        artistId,
-        artistName,
-      });
+      // 3. Automatically sync inquiry to Telecaller Workbench & local cache
+      try {
+        await saveCustomerInquiryLead({
+          id: `booking_${booking.id}`,
+          bookingId: booking.id,
+          customerId: uid,
+          customerName: formData.customerName,
+          customerPhone: formData.customerPhone,
+          customerEmail: formData.customerEmail || currentUser?.email || "",
+          eventType: formData.eventType,
+          selectedService: effectiveService,
+          serviceCategory: matchedService?.category,
+          serviceEvent: matchedService?.event,
+          eventDate: formData.eventDate,
+          eventLocation: formData.eventLocation,
+          budget: Number(formData.authorizedAmount || 15000),
+          message: formData.message || formData.specialRequirements || "",
+          artistId,
+          artistName,
+        });
+      } catch (leadErr) {
+        console.warn("Telecaller lead save warning:", leadErr);
+      }
+
+      // Broadcast local events for instantaneous reactive update in Artist Dashboard
+      window.dispatchEvent(new CustomEvent("mykalakar_booking_created", { detail: booking }));
+      window.dispatchEvent(new CustomEvent("mykalakar_lead_created", { detail: sanitized }));
 
       const generatedCode = booking.id.slice(0, 8).toUpperCase();
       setBookingCode(generatedCode);

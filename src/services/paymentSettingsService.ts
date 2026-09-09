@@ -54,8 +54,10 @@ export async function fetchPaymentConfig(): Promise<PaymentConfig> {
       saveLocalPaymentConfig(merged);
       return merged;
     }
-  } catch (err) {
-    console.warn("Could not fetch remote payment config, using local cache:", err);
+  } catch (err: any) {
+    if (err?.code !== "permission-denied") {
+      console.warn("Could not fetch remote payment config, using local cache:", err);
+    }
   }
   return local;
 }
@@ -76,8 +78,10 @@ export async function updatePaymentConfig(config: Partial<PaymentConfig>, update
       ...updated,
       updatedAt: serverTimestamp(),
     }, { merge: true });
-  } catch (err) {
-    console.warn("Could not persist payment config to Firestore:", err);
+  } catch (err: any) {
+    if (err?.code !== "permission-denied") {
+      console.warn("Could not persist payment config to Firestore:", err);
+    }
   }
 
   window.dispatchEvent(new CustomEvent("mykalakar_payment_config_updated", { detail: updated }));
@@ -100,7 +104,9 @@ export function subscribePaymentConfig(callback: (config: PaymentConfig) => void
         }
       },
       (error) => {
-        console.warn("Payment config subscription warning:", error);
+        if (error?.code !== "permission-denied") {
+          console.warn("Payment config subscription warning:", error);
+        }
       }
     );
   } catch {

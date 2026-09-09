@@ -33,6 +33,21 @@ import { BookingStatusBadge } from "@/components/artist-bookings/BookingStatusBa
 import { BookingDetailModal } from "@/components/artist-bookings/BookingDetailModal";
 import type { BookingEvent } from "@/types/booking";
 
+function isContactRevealed(status: string): boolean {
+  const s = (status || "").toLowerCase();
+  return ["confirmed", "event_completed", "completed", "payout_released", "booked", "artist_confirmed"].includes(s);
+}
+
+function maskPhoneNumber(phone?: string): string {
+  if (!phone) return "Phone not shared";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length >= 4) {
+    const last4 = digits.slice(-4);
+    return `+91 •••••• ${last4}`;
+  }
+  return "••••••••••";
+}
+
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -338,7 +353,7 @@ export default function ArtistDashboard() {
                               {b.clientName || "Event Client"}
                             </div>
                             <div className="text-stone-400 text-xs font-semibold">
-                              {b.clientPhone || "Phone not shared"}
+                              {isContactRevealed(b.status) ? (b.clientPhone || "Phone not shared") : maskPhoneNumber(b.clientPhone)}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">

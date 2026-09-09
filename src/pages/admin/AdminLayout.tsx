@@ -1,9 +1,11 @@
-import { Outlet, Link, useLocation } from "react-router-dom";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Users, FolderOpen, CalendarDays, Settings, LogOut, Menu, X, ShieldCheck, Search, UserCircle, Loader2 } from "lucide-react";
+import { LayoutDashboard, Users, FolderOpen, CalendarDays, Settings, LogOut, Menu, X, ShieldCheck, Search, UserCircle, Loader2, ArrowLeft } from "lucide-react";
 import { useState, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { STATIC_IMAGES } from "@/services/ImageRegistryService";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 const sidebarItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -23,14 +25,33 @@ function AdminDashboardLoader() {
 
 export default function AdminLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+
+  const handleAdminLogout = async () => {
+    try {
+      await logout();
+      toast({
+        title: "Logged Out",
+        description: "Admin session terminated successfully.",
+      });
+      navigate("/admin-login", { replace: true });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Logout Error",
+        description: err.message || "Failed to terminate session.",
+      });
+    }
+  };
 
   return (
     <div className="admin-layout min-h-screen bg-transparent flex w-full max-w-full overflow-x-hidden">
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 border-r border-border/50 bg-card/50 backdrop-blur-xl p-4 flex flex-col transition-all duration-300 lg:translate-x-0 lg:static shrink-0",
+        "fixed inset-y-0 left-0 z-50 border-r border-border/50 bg-card/80 backdrop-blur-xl p-4 flex flex-col transition-all duration-300 lg:translate-x-0 lg:static shrink-0 shadow-sm",
         collapsed ? "w-64 lg:w-24" : "w-64",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
@@ -46,20 +67,20 @@ export default function AdminLayout() {
 
         <button
           type="button"
-          className="mb-4 hidden h-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-muted-foreground transition hover:text-foreground lg:flex"
+          className="mb-4 hidden h-10 items-center justify-center rounded-lg border border-border/60 bg-secondary/30 text-muted-foreground transition hover:text-foreground lg:flex"
           onClick={() => setCollapsed((value) => !value)}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <Menu className="h-4 w-4" />
         </button>
 
-        <div className={cn("mb-6 flex items-center gap-3 rounded-lg border border-border/50 bg-secondary/40 p-3", collapsed && "lg:justify-center lg:px-2")}>
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/70 text-primary shadow-sm">
+        <div className={cn("mb-6 flex items-center gap-3 rounded-xl border border-orange-500/20 bg-orange-500/5 p-3", collapsed && "lg:justify-center lg:px-2")}>
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-600 text-white shadow-sm shrink-0">
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div className={cn("min-w-0", collapsed && "lg:hidden")}>
-            <p className="truncate text-sm font-semibold">Admin Workspace</p>
-            <p className="truncate text-xs text-muted-foreground">Manage platform content</p>
+            <p className="truncate text-xs font-black text-foreground">Master Console</p>
+            <p className="truncate text-[11px] text-muted-foreground">{user?.email || "Super Administrator"}</p>
           </div>
         </div>
 
@@ -72,9 +93,9 @@ export default function AdminLayout() {
                 to={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all",
                   collapsed && "lg:justify-center lg:px-2",
-                  active ? "gradient-bg text-primary-foreground shadow-md" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                  active ? "bg-orange-600 text-white shadow-md shadow-orange-600/20" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                 )}
               >
                 <item.icon className="h-4 w-4" />
@@ -83,10 +104,18 @@ export default function AdminLayout() {
             );
           })}
         </nav>
-        <div className="border-t border-border/50 pt-3">
-          <Link to="/" className={cn("flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground", collapsed && "lg:justify-center lg:px-2")}>
-            <LogOut className="h-4 w-4" /> <span className={cn(collapsed && "lg:hidden")}>Back to Website</span>
+
+        <div className="border-t border-border/50 pt-3 space-y-1">
+          <Link to="/" className={cn("flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground", collapsed && "lg:justify-center lg:px-2")}>
+            <ArrowLeft className="h-4 w-4" /> <span className={cn(collapsed && "lg:hidden")}>View Website</span>
           </Link>
+          <button
+            type="button"
+            onClick={handleAdminLogout}
+            className={cn("w-full flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-500/10 transition-colors text-left", collapsed && "lg:justify-center lg:px-2")}
+          >
+            <LogOut className="h-4 w-4" /> <span className={cn(collapsed && "lg:hidden")}>Sign Out Admin</span>
+          </button>
         </div>
       </aside>
 
@@ -108,13 +137,19 @@ export default function AdminLayout() {
               <input
                 aria-label="Admin search"
                 placeholder="Search workspace"
-                className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.06] pl-10 pr-3 text-sm font-semibold outline-none transition focus:border-cyan-300/50 focus:ring-4 focus:ring-cyan-300/10"
+                className="h-10 w-full rounded-lg border border-border/60 bg-secondary/30 pl-10 pr-3 text-sm font-semibold outline-none transition focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20"
               />
             </div>
-            <div className="flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-xs font-extrabold text-muted-foreground shrink-0">
-              <UserCircle className="h-4 w-4 text-cyan-200" />
+            <div className="flex h-10 items-center gap-2 rounded-lg border border-border/60 bg-secondary/30 px-3 text-xs font-extrabold text-muted-foreground shrink-0">
+              <UserCircle className="h-4 w-4 text-orange-500" />
               Admin
             </div>
+            <button
+              onClick={handleAdminLogout}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition shrink-0"
+            >
+              <LogOut className="h-3.5 w-3.5" /> Logout
+            </button>
           </div>
           <Link to="/" className="hidden rounded-lg border border-border/60 bg-white/50 px-3 py-2 text-xs font-bold text-muted-foreground transition hover:bg-white/80 hover:text-foreground sm:inline-flex shrink-0">
             Website
@@ -131,3 +166,4 @@ export default function AdminLayout() {
     </div>
   );
 }
+

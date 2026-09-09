@@ -33,10 +33,12 @@ import {
   Wallet,
   QrCode,
   Trash2,
+  ArrowLeft,
+  Share2,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
@@ -47,7 +49,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  fetchTelecallerLeads,
   subscribeTelecallerLeads,
   updateLeadStatus,
   deleteLead,
@@ -99,14 +100,46 @@ export default function TelecallerDashboard() {
   const [leadTypeFilter, setLeadTypeFilter] = useState<"all" | "book_artist" | "post_requirement">("all");
   const [mobileTab, setMobileTab] = useState<"leads" | "workbench">("leads");
 
-  // Call logger form state for selected artist
-  const [selectedArtistForCall, setSelectedArtistForCall] = useState<any>(null);
-  const [callOutcome, setCallOutcome] = useState<ArtistCallOutcome>("agreed");
-  const [quotedPrice, setQuotedPrice] = useState<number>(15000);
-  const [callNotes, setCallNotes] = useState<string>("");
-  const [savingCall, setSavingCall] = useState(false);
+  // Action status tracking
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null);
   const [leadToDelete, setLeadToDelete] = useState<TelecallerLead | null>(null);
   const [deletingLead, setDeletingLead] = useState(false);
+  const [previewArtistReels, setPreviewArtistReels] = useState<{ artist: any; reels: ArtistReelItem[] } | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    const unsubLeads = subscribeTelecallerLeads((data) => {
+      setLeads(data);
+      setLoading(false);
+      setActiveLead((prev) => {
+        if (!prev && data.length > 0) return data[0];
+        if (prev) {
+          const updatedCurrent = data.find((l) => l.id === prev.id || l.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "") === prev.id.replace(/^(booking_|brief_|lead_|inquiry_)/, ""));
+          return updatedCurrent || (data.length > 0 ? data[0] : null);
+        }
+        return null;
+      });
+    });
+
+    const unsubArtists = subscribeActiveArtists(50, (data) => {
+      setActiveArtists(data as any[]);
+    });
+
+    const unsubPayment = subscribePaymentConfig((cfg) => {
+      setPaymentConfig(cfg);
+    });
+
+    const unsubCommission = subscribeCommissionConfig((cfg) => {
+      setCommissionConfig(cfg);
+    });
+
+    return () => {
+      unsubLeads();
+      unsubArtists();
+      unsubPayment();
+      unsubCommission();
+    };
+  }, []);
 
   const confirmDeleteLead = async () => {
     if (!leadToDelete) return;
@@ -115,7 +148,8 @@ export default function TelecallerDashboard() {
       await deleteLead(leadToDelete.id);
       setLeads((prev) => prev.filter((l) => l.id !== leadToDelete.id));
       if (activeLead?.id === leadToDelete.id) {
-        setActiveLead(null);
+        const remaining = leads.filter((l) => l.id !== leadToDelete.id);
+        setActiveLead(remaining.length > 0 ? remaining[0] : null);
       }
       toast({
         title: "लीड हटवली! 🗑️",
@@ -142,6 +176,54 @@ export default function TelecallerDashboard() {
       return `${event} • ${sub}`;
     }
     return event || sub || "इव्हेंट";
+  };
+
+  const handleStatusChange = async (leadId: string, newStatus: LeadStatus, confirmedArtistData?: { artistId: string; artistName: string; price: number }) => {
+    setProcessingStatus(leadId);
+    const cleanTargetId = leadId.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
+    
+    // 1. Immediate optimistic UI update
+    setLeads((prev) =>
+      prev.map((l) => {
+        const lCleanId = l.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
+        if (l.id === leadId || lCleanId === cleanTargetId) {
+          return {
+            ...l,
+            status: newStatus,
+            confirmedArtistName: confirmedArtistData?.artistName || l.confirmedArtistName,
+            confirmedArtistId: confirmedArtistData?.artistId || l.confirmedArtistId,
+            confirmedPrice: confirmedArtistData?.price || l.confirmedPrice,
+          };
+        }
+        return l;
+      })
+    );
+
+    if (activeLead && (activeLead.id === leadId || activeLead.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "") === cleanTargetId)) {
+      setActiveLead((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: newStatus,
+              confirmedArtistName: confirmedArtistData?.artistName || prev.confirmedArtistName,
+              confirmedArtistId: confirmedArtistData?.artistId || prev.confirmedArtistId,
+              confirmedPrice: confirmedArtistData?.price || prev.confirmedPrice,
+            }
+          : null
+      );
+    }
+
+    try {
+      await updateLeadStatus(leadId, newStatus, confirmedArtistData);
+      toast({
+        title: "स्थिती अपडेट झाली! ✓",
+        description: `लीड स्टेटस बदलून "${newStatus.replace("_", " ")}" करण्यात आले.`,
+      });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Update Failed", description: "स्थिती बदलता आली नाही." });
+    } finally {
+      setProcessingStatus(null);
+    }
   };
 
   const handleWhatsAppArtist = (artist: any) => {
@@ -179,7 +261,7 @@ export default function TelecallerDashboard() {
       ...(activeLead.telecallerNotes ? [`• *विशेष सूचना:* ${activeLead.telecallerNotes}`] : []),
       ``,
       `━━━━━━━━━━━━━━━━━━━━`,
-      `👉 *कृपया तुमची उपलब्धता कळवण्यासाठी खालीलप्रमाणे रिप्लाय करा:*`,
+      `👉 *कृपया तुमची उपलब्धता कळवण्यासाठी लगेच रिप्लाय करा:*`,
       ``,
       `1️⃣ *YES* (होय, मी उपलब्ध आहे)`,
       `2️⃣ *NO* (नाही, मी उपलब्ध नाही)`,
@@ -189,11 +271,11 @@ export default function TelecallerDashboard() {
     ];
 
     const message = lines.join("\n");
-    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
     toast({
-      title: "WhatsApp Message Sent! 🟢",
-      description: `Opened masked booking requirement for ${artistName}. Customer phone is protected.`,
+      title: "WhatsApp उघडले! 🟢",
+      description: `${artistName} यांना बुकिंग मेसेज पाठवला जात आहे.`,
     });
   };
 
@@ -233,11 +315,11 @@ export default function TelecallerDashboard() {
     ];
 
     const message = lines.join("\n");
-    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
     toast({
-      title: "Inquiry Message Sent! 💬",
-      description: `Opened WhatsApp with event inquiry update for ${customerName}.`,
+      title: "ग्राहक WhatsApp अपडेट! 💬",
+      description: `${customerName} यांना इव्हेंट अपडेट पाठवले.`,
     });
   };
 
@@ -296,39 +378,45 @@ export default function TelecallerDashboard() {
     ];
 
     const message = lines.join("\n");
-    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
     toast({
-      title: "Payment Link Sent! 🟢",
-      description: `Opened WhatsApp payment confirmation for ${customerName}.`,
+      title: "पेमेंट लिंक पाठवली! 🟢",
+      description: `${customerName} यांच्यासाठी WhatsApp पेमेंट मेसेज उघडला.`,
     });
   };
 
-  const [previewArtistReels, setPreviewArtistReels] = useState<{ artist: any; reels: ArtistReelItem[] } | null>(null);
-
   const handleReleasePayout = async (lead: TelecallerLead) => {
+    setProcessingStatus(`payout_${lead.id}`);
     try {
       await updateLeadStatus(lead.id, "booked");
       setActiveLead((prev) => (prev ? { ...prev, status: "booked" } : null));
+      setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, status: "booked" } : l)));
       toast({
-        title: "Payout Authorized & Released! 💸",
-        description: `Artist payout of ₹${(lead.artistOfferBudget || Math.round((lead.budget || 15000) * 0.8)).toLocaleString("en-IN")} cleared for release.`,
+        title: "पे-आऊट मंजूर झाले! 💸",
+        description: `कलाकाराचे मानधन ₹${(lead.artistOfferBudget || Math.round((lead.budget || 15000) * 0.8)).toLocaleString("en-IN")} रिलीजसाठी क्लिअर केले.`,
       });
     } catch (e) {
       toast({ variant: "destructive", title: "Action Failed", description: "Could not release payout." });
+    } finally {
+      setProcessingStatus(null);
     }
   };
 
   const handleProcessRefund = async (lead: TelecallerLead) => {
+    setProcessingStatus(`refund_${lead.id}`);
     try {
       await updateLeadStatus(lead.id, "cancelled");
       setActiveLead((prev) => (prev ? { ...prev, status: "cancelled" } : null));
+      setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, status: "cancelled" } : l)));
       toast({
-        title: "Refund Approved & Processed 🔄",
-        description: `Customer refund of ₹${lead.budget?.toLocaleString("en-IN")} processed as per cancellation policy.`,
+        title: "रिफंड प्रोसेस केले 🔄",
+        description: `ग्राहकाचे ₹${lead.budget?.toLocaleString("en-IN")} रिफंडसाठी मंजूर केले.`,
       });
     } catch (e) {
       toast({ variant: "destructive", title: "Action Failed", description: "Could not process refund." });
+    } finally {
+      setProcessingStatus(null);
     }
   };
 
@@ -341,53 +429,18 @@ export default function TelecallerDashboard() {
 
     const parsed: ArtistReelItem[] = rawList.map((item: any, idx: number) => {
       if (typeof item === "string") {
-        return { id: `reel_${idx}`, url: item, title: `${artist.name || "Artist"} Performance ${idx + 1}` };
+        return { id: `reel_${idx}`, url: item, title: `${artist.name || "Artist"} Reel ${idx + 1}` };
       }
       return { id: item.id || `reel_${idx}`, url: item.url || item.videoUrl || "", title: item.title || `${artist.name || "Artist"} Reel` };
     }).filter((r: any) => Boolean(r.url));
 
     if (parsed.length === 0) {
-      toast({ title: "No Reels Available", description: `${artist.name} has not uploaded any performance reels yet.` });
+      toast({ title: "रील्स उपलब्ध नाहीत", description: `${artist.name} यांनी अद्याप रील अपलोड केलेली नाही.` });
       return;
     }
 
     setPreviewArtistReels({ artist, reels: parsed });
   };
-
-  useEffect(() => {
-    setLoading(true);
-    const unsubLeads = subscribeTelecallerLeads((data) => {
-      setLeads(data);
-      setLoading(false);
-      setActiveLead((prev) => {
-        if (!prev && data.length > 0) return data[0];
-        if (prev) {
-          const updatedCurrent = data.find((l) => l.id === prev.id);
-          return updatedCurrent || (data.length > 0 ? data[0] : null);
-        }
-        return null;
-      });
-    });
-
-    const unsubArtists = subscribeActiveArtists(50, (data) => {
-      setActiveArtists(data as any[]);
-    });
-
-    const unsubPayment = subscribePaymentConfig((cfg) => {
-      setPaymentConfig(cfg);
-    });
-
-    const unsubCommission = subscribeCommissionConfig((cfg) => {
-      setCommissionConfig(cfg);
-    });
-
-    return () => {
-      unsubLeads();
-      unsubArtists();
-      unsubPayment();
-      unsubCommission();
-    };
-  }, []);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -405,22 +458,21 @@ export default function TelecallerDashboard() {
     });
   }, [leads, searchQuery, statusFilter, leadTypeFilter]);
 
-
-  // Matching artists for active lead from real active artists list
   const matchingArtists = useMemo(() => {
-    if (!activeLead) return activeArtists.slice(0, 5);
+    if (!activeLead) return activeArtists.slice(0, 6);
 
     const targetSubCategory = (activeLead.subCategory || "").toLowerCase();
     const targetCategory = (activeLead.category || "").toLowerCase();
 
-    return activeArtists.filter((artist) => {
+    const matched = activeArtists.filter((artist) => {
       const sub = (artist.subcategory || artist.artForm || "").toLowerCase();
       const cat = (artist.category || "").toLowerCase();
       return sub.includes(targetSubCategory) || cat.includes(targetCategory) || targetSubCategory.includes(sub);
     });
+
+    return matched.length > 0 ? matched : activeArtists.slice(0, 6);
   }, [activeLead, activeArtists]);
 
-  // Artist Directory Filtered
   const filteredArtistDirectory = useMemo(() => {
     return activeArtists.filter((artist) => {
       const nameStr = (artist.name || artist.displayName || "").toLowerCase();
@@ -443,97 +495,10 @@ export default function TelecallerDashboard() {
     });
   }, [activeArtists, searchQuery, artistCategoryFilter]);
 
-  const handleLogArtistCall = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeLead || !selectedArtistForCall) return;
-
-    setSavingCall(true);
-    try {
-      const artistCallRecord: MatchedArtistCall = {
-        artistId: selectedArtistForCall.name.replace(/\s+/g, "_").toLowerCase(),
-        artistName: selectedArtistForCall.name,
-        artistPhone: selectedArtistForCall.phone || selectedArtistForCall.contactNumber || "+91 9876543210",
-        category: selectedArtistForCall.category,
-        subCategory: selectedArtistForCall.subcategory,
-        callOutcome,
-        quotedPrice,
-        callNotes,
-      };
-
-      const updatedMatched = await logArtistCall(
-        activeLead.id,
-        artistCallRecord,
-        activeLead.matchedArtists || []
-      );
-
-      const nextStatus: LeadStatus = callOutcome === "agreed" ? "artist_confirmed" : activeLead.status;
-      await updateLeadStatus(
-        activeLead.id,
-        nextStatus,
-        callOutcome === "agreed"
-          ? {
-              artistId: artistCallRecord.artistId,
-              artistName: artistCallRecord.artistName,
-              price: quotedPrice,
-            }
-          : undefined
-      );
-
-      const updatedLead = {
-        ...activeLead,
-        matchedArtists: updatedMatched,
-        status: nextStatus,
-        confirmedArtistName: callOutcome === "agreed" ? artistCallRecord.artistName : activeLead.confirmedArtistName,
-      };
-
-      setActiveLead(updatedLead);
-      setLeads((prev) => prev.map((l) => (l.id === updatedLead.id ? updatedLead : l)));
-
-      toast({
-        title: "Call Outcome Saved!",
-        description: `Logged call with ${selectedArtistForCall.name} (${callOutcome}).`,
-      });
-      setSelectedArtistForCall(null);
-      setCallNotes("");
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "कॉल रेकॉर्ड सेव्ह करता आला नाही.",
-      });
-    } finally {
-      setSavingCall(false);
-    }
-  };
-
-  const handleStatusChange = async (leadId: string, newStatus: LeadStatus) => {
-    const cleanTargetId = leadId.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
-    
-    // 1. Optimistic immediate state update in React UI
-    setLeads((prev) =>
-      prev.map((l) => {
-        const lCleanId = l.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
-        return l.id === leadId || lCleanId === cleanTargetId ? { ...l, status: newStatus } : l;
-      })
-    );
-    if (activeLead && (activeLead.id === leadId || activeLead.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "") === cleanTargetId)) {
-      setActiveLead({ ...activeLead, status: newStatus });
-    }
-
-    try {
-      // 2. Persist to Firestore and Local Storage
-      await updateLeadStatus(leadId, newStatus);
-      toast({ title: "Status Updated", description: `Lead status changed to ${newStatus}` });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Update Failed", description: "Could not update lead status." });
-    }
-  };
-
-  // Metrics summary with commission and earnings calculation
+  // Metrics summary with commission
   const metrics = useMemo(() => {
     const confirmedLeads = leads.filter((l) => l.status === "artist_confirmed" || l.status === "booked");
     let totalEarnings = 0;
-    let pendingEarnings = 0;
 
     confirmedLeads.forEach((l) => {
       let comm = l.telecallerCommission;
@@ -544,187 +509,191 @@ export default function TelecallerDashboard() {
         comm = split.telecallerCommission;
       }
       totalEarnings += comm;
-      if (l.commissionPayoutStatus !== "paid") {
-        pendingEarnings += comm;
-      }
     });
 
     return {
       total: leads.length,
       newLeads: leads.filter((l) => l.status === "new").length,
-      confirmed: confirmedLeads.length,
       inProgress: leads.filter((l) => l.status === "contacting_artists").length,
+      confirmed: confirmedLeads.length,
       totalEarnings,
-      pendingEarnings,
     };
   }, [leads, commissionConfig]);
 
   return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-stone-200/60 pb-4">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+      {/* Top Header & Fast Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-stone-200 shadow-xs">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-stone-900 flex items-center gap-2">
-            <PhoneCall className="h-6 w-6 text-orange-600" />
-            Telecaller Workbench
-          </h1>
-          <div className="text-xs text-stone-600 font-bold mt-1.5 flex flex-wrap items-center gap-2">
-            <span>Good Morning 👋</span>
-            <span className="text-stone-300">•</span>
-            <span className="bg-stone-100 text-stone-800 px-3 py-1 rounded-full text-[11px] font-extrabold border border-stone-200">
-              {metrics.total} Total Leads | {metrics.newLeads} New | {metrics.inProgress} In Progress | {metrics.confirmed} Confirmed
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-xl bg-orange-600 text-white flex items-center justify-center shadow-sm shrink-0">
+              <PhoneCall className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-black tracking-tight text-stone-900">
+                Telecaller Dashboard
+              </h1>
+              <p className="text-xs text-stone-500 font-semibold">
+                कॉलिंग, WhatsApp बुकिंग आणि पेमेंट मॅनेजमेंट
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 text-xs">
+            <span className="bg-stone-100 text-stone-800 px-2.5 py-1 rounded-lg font-extrabold border border-stone-200">
+              एकूण लीड्स: {metrics.total}
             </span>
-            <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 px-3 py-1 rounded-full text-[11px] font-black flex items-center gap-1 shadow-2xs">
+            <span className="bg-amber-100 text-amber-900 px-2.5 py-1 rounded-lg font-extrabold border border-amber-300">
+              नवीन: {metrics.newLeads}
+            </span>
+            <span className="bg-sky-100 text-sky-900 px-2.5 py-1 rounded-lg font-extrabold border border-sky-300">
+              कॉलिंग चालू: {metrics.inProgress}
+            </span>
+            <span className="bg-emerald-100 text-emerald-900 px-2.5 py-1 rounded-lg font-extrabold border border-emerald-300">
+              नक्की: {metrics.confirmed}
+            </span>
+            <span className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white px-3 py-1 rounded-lg font-black shadow-xs flex items-center gap-1">
               💰 माझी कमाई: ₹{metrics.totalEarnings.toLocaleString("en-IN")}
-              <span className="text-[10px] font-normal text-emerald-700">({commissionConfig.telecallerPercentage}% rate)</span>
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+        {/* Top Right Action Buttons */}
+        <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap">
           <Button
             variant="outline"
             onClick={() => setQrModalOpen(true)}
-            className="rounded-full border-stone-300 bg-white hover:bg-stone-50 text-stone-800 font-extrabold text-xs shadow-xs px-4 py-2.5 flex items-center gap-2"
+            className="h-10 px-3.5 rounded-xl border-stone-300 bg-white hover:bg-stone-50 text-stone-800 font-bold text-xs shadow-2xs flex items-center gap-1.5"
           >
             <QrCode className="h-4 w-4 text-orange-600" />
-            ⚙️ UPI व QR सेट करा
+            <span>QR / UPI</span>
           </Button>
 
           <Button
             onClick={() => setManualModalOpen(true)}
-            className="rounded-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-xs shadow-md px-5 py-2.5 flex items-center gap-2"
+            className="h-10 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black text-xs shadow-sm flex items-center gap-1.5"
           >
             <PlusCircle className="h-4 w-4" />
-            ＋ Log Incoming Call
+            <span>＋ नवीन कॉल लीड</span>
           </Button>
         </div>
       </div>
 
       {/* VIEW 1: DASHBOARD WORKBENCH */}
       {isDashboardTab && (
-        <>
-          {/* Mobile 2-Tab Segment Switcher (Hidden on Desktop lg:) */}
-          <div className="flex lg:hidden items-center gap-2 p-1 bg-stone-200/90 rounded-2xl mb-3 shadow-inner">
+        <div className="space-y-3 sm:space-y-4">
+          {/* Mobile Tab Switcher */}
+          <div className="grid grid-cols-2 gap-1.5 p-1 bg-stone-200/80 rounded-2xl lg:hidden shadow-inner">
             <button
               onClick={() => setMobileTab("leads")}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
                 mobileTab === "leads"
-                  ? "bg-white text-stone-950 shadow-md"
+                  ? "bg-white text-stone-950 shadow-sm"
                   : "text-stone-600 hover:text-stone-900"
               }`}
             >
-              <FileText className="h-4 w-4 text-orange-600" /> Leads List ({filteredLeads.length})
+              <FileText className="h-4 w-4 text-orange-600" />
+              <span>📋 लीड्स ({filteredLeads.length})</span>
             </button>
             <button
               onClick={() => setMobileTab("workbench")}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
                 mobileTab === "workbench"
-                  ? "bg-orange-600 text-white shadow-md"
+                  ? "bg-orange-600 text-white shadow-sm"
                   : "text-stone-600 hover:text-stone-900"
               }`}
             >
-              <PhoneCall className="h-4 w-4" /> Call Workbench
+              <PhoneCall className="h-4 w-4" />
+              <span>⚡ कॉलिंग व ॲक्शन</span>
             </button>
           </div>
 
-          {/* Main 2-Column Workbench */}
-          <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] xl:grid-cols-[390px_1fr] gap-5 sm:gap-6">
+          {/* 2-Column Responsive Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] xl:grid-cols-[390px_1fr] gap-4 sm:gap-5">
             {/* Left Column: Leads Feed */}
-            <div className={`space-y-4 ${mobileTab === "leads" ? "block" : "hidden lg:block"}`}>
-              {/* Filter Tabs - Horizontal Scrollable on Mobile */}
-              <div className="flex items-center gap-1.5 p-1 bg-stone-100 rounded-xl overflow-x-auto no-scrollbar whitespace-nowrap">
+            <div className={`space-y-3 ${mobileTab === "leads" ? "block" : "hidden lg:block"}`}>
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-xl overflow-x-auto no-scrollbar whitespace-nowrap">
                 <button
                   onClick={() => {
                     setLeadTypeFilter("all");
                     setStatusFilter("all");
                   }}
-                  className={`py-1.5 px-3 rounded-lg text-[11px] font-extrabold transition-all shrink-0 ${
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 ${
                     leadTypeFilter === "all" && statusFilter === "all"
-                      ? "bg-white text-stone-900 shadow-sm"
+                      ? "bg-white text-stone-900 shadow-2xs"
                       : "text-stone-600 hover:text-stone-900"
                   }`}
                 >
-                  All ({leads.length})
+                  सर्व ({leads.length})
                 </button>
                 <button
                   onClick={() => setStatusFilter("new")}
-                  className={`py-1.5 px-3 rounded-lg text-[11px] font-extrabold transition-all shrink-0 ${
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 ${
                     statusFilter === "new"
-                      ? "bg-amber-500 text-white shadow-sm"
-                      : "text-amber-700 hover:bg-amber-100/60"
+                      ? "bg-amber-500 text-white shadow-2xs"
+                      : "text-amber-800 hover:bg-amber-100/60"
                   }`}
                 >
-                  New ({leads.filter((l) => l.status === "new").length})
+                  नवीन ({leads.filter((l) => l.status === "new").length})
                 </button>
                 <button
                   onClick={() => {
                     setLeadTypeFilter("book_artist");
                     setStatusFilter("all");
                   }}
-                  className={`py-1.5 px-3 rounded-lg text-[11px] font-extrabold transition-all shrink-0 flex items-center gap-1 ${
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 flex items-center gap-1 ${
                     leadTypeFilter === "book_artist"
-                      ? "bg-purple-600 text-white shadow-sm"
-                      : "text-purple-700 hover:bg-purple-100/60"
+                      ? "bg-purple-600 text-white shadow-2xs"
+                      : "text-purple-800 hover:bg-purple-100/60"
                   }`}
                 >
-                  <UserCheck className="h-3 w-3" /> Booking ({leads.filter((l) => l.leadType === "book_artist").length})
+                  <UserCheck className="h-3 w-3" />
+                  बुकिंग ({leads.filter((l) => l.leadType === "book_artist").length})
                 </button>
                 <button
                   onClick={() => {
                     setLeadTypeFilter("post_requirement");
                     setStatusFilter("all");
                   }}
-                  className={`py-1.5 px-3 rounded-lg text-[11px] font-extrabold transition-all shrink-0 flex items-center gap-1 ${
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 flex items-center gap-1 ${
                     leadTypeFilter === "post_requirement"
-                      ? "bg-amber-600 text-white shadow-sm"
-                      : "text-amber-700 hover:bg-amber-100/60"
+                      ? "bg-stone-800 text-white shadow-2xs"
+                      : "text-stone-700 hover:bg-stone-200"
                   }`}
                 >
-                  <FileText className="h-3 w-3" /> Requirement ({leads.filter((l) => l.leadType === "post_requirement").length})
+                  रिक्वायरमेंट ({leads.filter((l) => l.leadType === "post_requirement").length})
                 </button>
               </div>
 
               {/* Search Bar */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
-                  <Input
-                    placeholder="Search leads..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 h-9 text-xs rounded-xl bg-white border-stone-200 text-stone-900"
-                  />
-                </div>
-                {(statusFilter !== "all" || leadTypeFilter !== "all") && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setStatusFilter("all");
-                      setLeadTypeFilter("all");
-                    }}
-                    className="h-9 px-2 text-xs font-bold text-stone-500 hover:text-stone-900 shrink-0"
-                  >
-                    Reset
-                  </Button>
-                )}
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
+                <Input
+                  placeholder="ग्राहक नाव किंवा फोन शोधा..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-9.5 text-xs rounded-xl bg-white border-stone-200 text-stone-900"
+                />
               </div>
 
+              {/* Leads List */}
               {loading ? (
-                <div className="flex items-center justify-center py-12">
+                <div className="flex items-center justify-center py-12 bg-white rounded-2xl border border-stone-200">
                   <Loader2 className="h-6 w-6 animate-spin text-orange-600" />
                 </div>
               ) : filteredLeads.length === 0 ? (
-                <div className="p-6 text-center rounded-2xl bg-white border border-stone-200 text-stone-500 text-xs shadow-sm">
-                  No leads found. Click <strong>＋ Log Incoming Call</strong> to add one.
+                <div className="p-8 text-center rounded-2xl bg-white border border-stone-200 text-stone-500 text-xs">
+                  कोणतीही लीड सापडली नाही. वर <strong>＋ नवीन कॉल लीड</strong> बटण दाबा.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[600px] lg:max-h-[650px] overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-[620px] overflow-y-auto pr-1">
                   {filteredLeads.map((lead) => {
-                    const isSelected = activeLead?.id === lead.id;
+                    const isSelected = activeLead?.id === lead.id || activeLead?.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "") === lead.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
                     const targetArtist = lead.confirmedArtistName || lead.requestedArtistName || (lead.matchedArtists && lead.matchedArtists[0]?.artistName);
                     const isBookArtist = lead.leadType === "book_artist" || Boolean(targetArtist);
+
                     return (
                       <div
                         key={lead.id}
@@ -732,16 +701,16 @@ export default function TelecallerDashboard() {
                           setActiveLead(lead);
                           setMobileTab("workbench");
                         }}
-                        className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer ${
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
                           isSelected
-                            ? "bg-orange-50/90 border-orange-400 shadow-md ring-2 ring-orange-200"
-                            : "bg-white border-stone-200/80 hover:border-orange-300 hover:bg-stone-50/50 shadow-sm"
+                            ? "bg-orange-50/90 border-orange-400 shadow-sm ring-2 ring-orange-200"
+                            : "bg-white border-stone-200/90 hover:border-orange-300 hover:bg-stone-50/60 shadow-2xs"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span
-                              className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border shrink-0 ${
+                              className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
                                 lead.status === "new"
                                   ? "bg-amber-100 text-amber-900 border-amber-300"
                                   : lead.status === "artist_confirmed" || lead.status === "booked"
@@ -749,82 +718,66 @@ export default function TelecallerDashboard() {
                                   : "bg-sky-100 text-sky-900 border-sky-300"
                               }`}
                             >
-                              {lead.status.replace("_", " ")}
+                              {lead.status === "new"
+                                ? "नवीन (New)"
+                                : lead.status === "contacting_artists"
+                                ? "कॉलिंग चालू"
+                                : lead.status === "artist_confirmed"
+                                ? "कलाकार नक्की"
+                                : lead.status === "booked"
+                                ? "पूर्ण / पे-आऊट"
+                                : lead.status}
                             </span>
-                            {isBookArtist ? (
-                              <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200 truncate flex items-center gap-1">
-                                <UserCheck className="h-3 w-3" /> Book Artist
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200 truncate flex items-center gap-1">
-                                <FileText className="h-3 w-3" /> Requirement
+                            {isBookArtist && (
+                              <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200">
+                                आर्टिस्ट बुकिंग
                               </span>
                             )}
                           </div>
 
-                          {/* Delete Lead Trash Button */}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setLeadToDelete(lead);
                             }}
-                            className="h-6 w-6 rounded-md text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center shrink-0 cursor-pointer"
-                            title="ही लीड हटवा (Delete Lead)"
+                            className="h-7 w-7 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 transition flex items-center justify-center shrink-0 cursor-pointer"
+                            title="लीड हटवा"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
 
                         {/* Customer Name */}
-                        <h4 className="text-sm font-black text-stone-900 mt-2 truncate">
-                          {lead.customerName || "Customer"}
-                        </h4>
+                        <div className="flex items-baseline justify-between mt-2">
+                          <h4 className="text-sm font-black text-stone-900 truncate">
+                            {lead.customerName || "Customer"}
+                          </h4>
+                          <span className="text-xs font-black text-emerald-700">
+                            ₹{lead.budget?.toLocaleString("en-IN") || "N/A"}
+                          </span>
+                        </div>
 
-                        {/* Booked / Requested Artist Name Tag */}
+                        {/* Requested / Confirmed Artist */}
                         {targetArtist && (
-                          <div className="flex items-center gap-1.5 text-xs font-black text-orange-950 bg-gradient-to-r from-orange-100/90 to-amber-100/70 border border-orange-300/80 rounded-xl px-2.5 py-1.5 mt-1.5 shadow-2xs">
-                            <UserCheck className="h-3.5 w-3.5 text-orange-600 shrink-0" />
-                            <span className="truncate">
-                              कलाकार: <strong className="text-orange-950 font-black">{targetArtist}</strong>
-                            </span>
+                          <div className="flex items-center gap-1 text-[11px] font-black text-orange-950 bg-orange-100/80 border border-orange-200 rounded-lg px-2 py-1 mt-1.5 truncate">
+                            <UserCheck className="h-3 w-3 text-orange-600 shrink-0" />
+                            <span className="truncate">कलाकार: {targetArtist}</span>
                           </div>
                         )}
 
-                        <p className="flex items-center gap-1.5 text-xs font-extrabold text-stone-800 mt-1 truncate">
-                          <Sparkles className="h-3.5 w-3.5 text-orange-600 shrink-0" />
+                        <p className="flex items-center gap-1 text-xs font-bold text-stone-700 mt-1 truncate">
+                          <Sparkles className="h-3 w-3 text-orange-500 shrink-0" />
                           <span className="truncate">{lead.eventType} • {lead.subCategory}</span>
                         </p>
 
-                        <p className="flex items-center gap-1.5 text-xs text-stone-500 font-semibold mt-1 flex-wrap">
-                          <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5 text-stone-400 shrink-0" /> {lead.eventDate || "Date TBD"}</span>
-                          <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-stone-400 shrink-0 ml-1" /> {lead.eventLocation || "Location"}</span>
-                        </p>
-
-                        <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-stone-100">
-                          <div className="flex flex-col">
-                            <span className="text-xs font-black text-emerald-700 flex items-center gap-1">
-                              <IndianRupee className="h-3.5 w-3.5 shrink-0" /> Budget: ₹{lead.budget?.toLocaleString("en-IN") || "N/A"}
-                            </span>
-                            {lead.telecallerCommission ? (
-                              <span className="text-[10px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded mt-0.5 w-fit">
-                                💰 कमिशन: ₹{lead.telecallerCommission.toLocaleString("en-IN")}
-                              </span>
-                            ) : lead.budget ? (
-                              <span className="text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.2 rounded mt-0.5 w-fit">
-                                कमिशन: ~₹{calculateCommissionSplit(lead.budget, lead.artistOfferBudget || Math.round(lead.budget * 0.8), commissionConfig).telecallerCommission.toLocaleString("en-IN")}
-                              </span>
-                            ) : null}
-                          </div>
-                          {isSelected ? (
-                            <span className="text-[11px] font-black text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              ● Active
-                            </span>
-                          ) : (
-                            <span className="text-[11px] font-semibold text-stone-400 flex items-center gap-0.5">
-                              Select →
-                            </span>
-                          )}
+                        <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium mt-1.5 pt-1.5 border-t border-stone-100">
+                          <span className="flex items-center gap-1 truncate">
+                            <Calendar className="h-3 w-3 text-stone-400" /> {lead.eventDate || "तारीख TBD"}
+                          </span>
+                          <span className="flex items-center gap-1 truncate">
+                            <MapPin className="h-3 w-3 text-stone-400" /> {lead.eventLocation || "महाराष्ट्र"}
+                          </span>
                         </div>
                       </div>
                     );
@@ -833,307 +786,307 @@ export default function TelecallerDashboard() {
               )}
             </div>
 
-            {/* Right Column: Lead Workbench & Matching Artists */}
-            <div className={`space-y-4 sm:space-y-6 ${mobileTab === "workbench" ? "block" : "hidden lg:block"}`}>
+            {/* Right Column: Workbench & Action Center */}
+            <div className={`space-y-3 sm:space-y-4 ${mobileTab === "workbench" ? "block" : "hidden lg:block"}`}>
               {/* Mobile Back Button */}
               <button
                 onClick={() => setMobileTab("leads")}
-                className="lg:hidden inline-flex items-center gap-1.5 text-xs font-black text-orange-700 hover:text-orange-800 bg-orange-50 px-4 py-2.5 rounded-xl border border-orange-200 mb-1 w-full justify-center shadow-sm"
+                className="lg:hidden w-full py-2.5 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-black flex items-center justify-center gap-1.5 shadow-2xs"
               >
-                ← Back to Leads List
+                <ArrowLeft className="h-4 w-4" />
+                <span>← परत लीड्स यादीकडे (Back to Leads)</span>
               </button>
 
               {activeLead ? (
-                <div className="space-y-4">
-                  {/* 4-STEP WORKFLOW VISUALIZER (Mobile Friendly Pipeline) */}
-                  <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-orange-600 via-amber-600 to-emerald-600 text-white shadow-md space-y-2.5">
+                <div className="space-y-3.5">
+                  {/* 4-STEP VISUAL PROGRESS PIPELINE */}
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-orange-600 via-amber-600 to-emerald-700 text-white shadow-sm space-y-2">
                     <div className="flex items-center justify-between text-xs font-black">
                       <span className="flex items-center gap-1.5">
-                        <Sparkles className="h-4 w-4" /> 4-Step Booking Flow (सुलभ पायऱ्या)
+                        <Sparkles className="h-4 w-4" /> बुकिंग पायऱ्या (4 Steps)
                       </span>
-                      <span className="bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[11px] font-extrabold">
+                      <span className="bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[11px]">
                         {activeLead.status === "new"
-                          ? "पायरी १: ग्राहकाशी बोला"
+                          ? "पायरी १: ग्राहकाशी संपर्क"
                           : activeLead.status === "contacting_artists"
                           ? "पायरी २: कलाकाराला पाठवा"
                           : activeLead.status === "artist_confirmed"
                           ? "पायरी ३: बुकिंग कन्फर्म"
                           : activeLead.status === "booked"
                           ? "पायरी ४: पे-आऊट पूर्ण"
-                          : "स्थिती: " + activeLead.status}
+                          : activeLead.status}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] sm:text-xs">
-                      {/* Step 1: Customer Call */}
-                      <div
+                      {/* Step 1 */}
+                      <button
+                        type="button"
                         onClick={() => handleStatusChange(activeLead.id, "new")}
-                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${
                           activeLead.status === "new"
                             ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
-                            : "bg-black/20 text-white/90 hover:bg-black/30"
+                            : "bg-black/25 text-white/90 hover:bg-black/40"
                         }`}
                       >
-                        <div className="font-extrabold flex items-center justify-center gap-0.5">
-                          <Phone className="h-3 w-3" /> १. ग्राहक कॉल
-                        </div>
-                        <div className="text-[9px] mt-0.5 opacity-80">
-                          {activeLead.isVerifiedByTelecaller ? "✓ व्हेरिफाय" : "तपशील तपासा"}
-                        </div>
-                      </div>
+                        <Phone className="h-3.5 w-3.5 mb-0.5" />
+                        <span className="font-extrabold">१. ग्राहक कॉल</span>
+                      </button>
 
-                      {/* Step 2: WhatsApp Artist */}
-                      <div
+                      {/* Step 2 */}
+                      <button
+                        type="button"
                         onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
-                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${
                           activeLead.status === "contacting_artists"
                             ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
-                            : "bg-black/20 text-white/90 hover:bg-black/30"
+                            : "bg-black/25 text-white/90 hover:bg-black/40"
                         }`}
                       >
-                        <div className="font-extrabold flex items-center justify-center gap-0.5">
-                          <MessageCircle className="h-3 w-3 text-emerald-600" /> २. WhatsApp
-                        </div>
-                        <div className="text-[9px] mt-0.5 opacity-80">कलाकार संपर्क</div>
-                      </div>
+                        <MessageCircle className="h-3.5 w-3.5 mb-0.5 text-emerald-400" />
+                        <span className="font-extrabold">२. WhatsApp</span>
+                      </button>
 
-                      {/* Step 3: Confirm Booking */}
-                      <div
+                      {/* Step 3 */}
+                      <button
+                        type="button"
                         onClick={() => handleStatusChange(activeLead.id, "artist_confirmed")}
-                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${
                           activeLead.status === "artist_confirmed"
                             ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
-                            : "bg-black/20 text-white/90 hover:bg-black/30"
+                            : "bg-black/25 text-white/90 hover:bg-black/40"
                         }`}
                       >
-                        <div className="font-extrabold flex items-center justify-center gap-0.5">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-600" /> ३. कन्फर्म
-                        </div>
-                        <div className="text-[9px] mt-0.5 opacity-80">
-                          {activeLead.status === "artist_confirmed" ? "✓ नक्की झाले" : "आर्टिस्ट होकार"}
-                        </div>
-                      </div>
+                        <CheckCircle2 className="h-3.5 w-3.5 mb-0.5 text-emerald-400" />
+                        <span className="font-extrabold">३. कन्फर्म</span>
+                      </button>
 
-                      {/* Step 4: Release Payout */}
-                      <div
+                      {/* Step 4 */}
+                      <button
+                        type="button"
                         onClick={() => handleStatusChange(activeLead.id, "booked")}
-                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${
                           activeLead.status === "booked"
                             ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
-                            : "bg-black/20 text-white/90 hover:bg-black/30"
+                            : "bg-black/25 text-white/90 hover:bg-black/40"
                         }`}
                       >
-                        <div className="font-extrabold flex items-center justify-center gap-0.5">
-                          <Wallet className="h-3 w-3 text-emerald-600" /> ४. पे-आऊट
-                        </div>
-                        <div className="text-[9px] mt-0.5 opacity-80">
-                          {activeLead.status === "booked" ? "✓ पूर्ण" : "एस्क्रो रिलीज"}
-                        </div>
-                      </div>
+                        <Wallet className="h-3.5 w-3.5 mb-0.5 text-emerald-400" />
+                        <span className="font-extrabold">४. पे-आऊट</span>
+                      </button>
                     </div>
                   </div>
 
-                  {/* SECTION 1: CUSTOMER REQUIREMENT (Clean & Actionable) */}
-                  <div className="p-4 sm:p-5 rounded-2xl bg-white border border-stone-200/80 shadow-sm space-y-3.5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-stone-100 pb-3">
+                  {/* CARD 1: CUSTOMER REQUIREMENT & FAST ACTION BUTTONS */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-white border border-stone-200 shadow-xs space-y-3.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-100 pb-3">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="text-base sm:text-lg font-black text-stone-950">
-                            {activeLead.customerName || "Customer Lead"}
+                            {activeLead.customerName || "Customer"}
                           </h3>
                           {activeLead.isVerifiedByTelecaller ? (
                             <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              <ShieldCheck className="h-3 w-3" /> Verified (तपासले)
+                              <ShieldCheck className="h-3 w-3" /> व्हेरिफाय झाले
                             </span>
                           ) : (
                             <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                              Pending Call Check
+                              कॉल व्हेरिफिकेशन बाकी
                             </span>
                           )}
                         </div>
                         <p className="text-xs font-bold text-stone-600 mt-0.5">
                           {activeLead.eventType} • <span className="text-orange-600 font-black">{activeLead.subCategory}</span>
                         </p>
-                        {(activeLead.confirmedArtistName || activeLead.requestedArtistName || (activeLead.matchedArtists && activeLead.matchedArtists[0]?.artistName)) && (
-                          <div className="inline-flex items-center gap-1.5 text-xs font-black text-orange-950 bg-orange-100/90 border border-orange-300 px-2.5 py-1 rounded-lg mt-1 shadow-2xs">
-                            <UserCheck className="h-3.5 w-3.5 text-orange-600 shrink-0" />
-                            <span>
-                              {activeLead.confirmedArtistName ? "नक्की झालेला कलाकार:" : "ग्राहकाने बुक केलेला कलाकार:"}{" "}
-                              <strong className="text-orange-950 font-black">
-                                {activeLead.confirmedArtistName || activeLead.requestedArtistName || activeLead.matchedArtists?.[0]?.artistName}
-                              </strong>
-                            </span>
-                          </div>
-                        )}
                       </div>
 
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           onClick={() => setEditModalOpen(true)}
-                          className="h-8 px-3 text-xs font-extrabold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 flex items-center gap-1"
+                          className="h-8.5 px-3 text-xs font-extrabold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 flex items-center gap-1"
                         >
-                          <Edit3 className="h-3.5 w-3.5" /> Edit
+                          <Edit3 className="h-3.5 w-3.5" /> बदल करा
                         </Button>
 
                         <Select
                           value={activeLead.status}
                           onValueChange={(val: LeadStatus) => handleStatusChange(activeLead.id, val)}
                         >
-                          <SelectTrigger className="w-36 h-8 text-xs rounded-xl bg-stone-50 border-stone-200 text-stone-900 font-bold">
+                          <SelectTrigger className="w-36 h-8.5 text-xs rounded-xl bg-stone-50 border-stone-200 text-stone-900 font-bold">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-white border-stone-200 text-xs">
-                            <SelectItem value="new">1. New Lead (नवीन)</SelectItem>
-                            <SelectItem value="contacting_artists">2. Calling (संपर्क)</SelectItem>
-                            <SelectItem value="artist_confirmed">3. Confirmed (नक्की)</SelectItem>
-                            <SelectItem value="booked">4. Completed / Paid</SelectItem>
-                            <SelectItem value="cancelled">5. Cancelled</SelectItem>
+                            <SelectItem value="new">१. नवीन लीड (New)</SelectItem>
+                            <SelectItem value="contacting_artists">२. कॉलिंग चालू (Calling)</SelectItem>
+                            <SelectItem value="artist_confirmed">३. नक्की झाले (Confirmed)</SelectItem>
+                            <SelectItem value="booked">४. पूर्ण / पेड (Booked)</SelectItem>
+                            <SelectItem value="cancelled">५. रद्द (Cancelled)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
 
-                    {/* Compact Details Strip */}
+                    {/* Details Badges */}
                     <div className="flex flex-wrap gap-2 text-xs">
-                      <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-bold text-stone-800 flex items-center gap-1">
-                        📅 {activeLead.eventDate || "Date TBD"} {activeLead.eventTime ? `(${activeLead.eventTime})` : ""}
+                      <span className="bg-stone-50 border border-stone-200 px-2.5 py-1 rounded-xl font-bold text-stone-800 flex items-center gap-1">
+                        📅 {activeLead.eventDate || "तारीख TBD"} {activeLead.eventTime ? `(${activeLead.eventTime})` : ""}
                       </span>
-                      <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-bold text-stone-800 flex items-center gap-1">
-                        📍 {activeLead.eventLocation || "Location"}{activeLead.venueAddress ? ` • ${activeLead.venueAddress}` : ""}
+                      <span className="bg-stone-50 border border-stone-200 px-2.5 py-1 rounded-xl font-bold text-stone-800 flex items-center gap-1">
+                        📍 {activeLead.eventLocation || "महाराष्ट्र"}{activeLead.venueAddress ? ` • ${activeLead.venueAddress}` : ""}
                       </span>
                       <span className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl font-black text-emerald-800 flex items-center gap-1">
-                        💰 बजेट: ₹{activeLead.budget?.toLocaleString("en-IN") || "N/A"}
+                        💰 ग्राहक बजेट: ₹{activeLead.budget?.toLocaleString("en-IN") || "N/A"}
                       </span>
                       <span className="bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-xl font-bold text-orange-800 flex items-center gap-1">
                         आर्टिस्ट मानधन: ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8)).toLocaleString("en-IN")}
                       </span>
-                      {activeLead.soundRequired !== undefined && (
-                        <span className="bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl font-semibold text-stone-700 flex items-center gap-1">
-                          🔊 {activeLead.soundRequired ? "आर्टिस्टचा साऊंड" : "हॉलचा साऊंड"}
-                        </span>
-                      )}
                     </div>
 
                     {activeLead.telecallerNotes && (
-                      <p className="text-xs bg-amber-50/60 border border-amber-200/60 text-amber-900 px-3 py-2 rounded-xl font-medium">
-                        📝 <strong>विशेष सूचना:</strong> {activeLead.telecallerNotes}
+                      <p className="text-xs bg-amber-50/70 border border-amber-200 text-amber-900 px-3 py-2 rounded-xl font-medium">
+                        📝 <strong>नोंद:</strong> {activeLead.telecallerNotes}
                       </p>
                     )}
 
-                    {/* Action Buttons: Artist WhatsApp/Call & Customer Call/Payment */}
+                    {/* BIG MOBILE-FRIENDLY CUSTOMER ACTION BUTTONS */}
                     <div className="space-y-2 pt-1">
-                      {/* Artist Communication Row */}
-                      {(activeLead.requestedArtistName || activeLead.confirmedArtistName || activeLead.artistPhone) && (
-                        <div className="p-3 rounded-xl bg-orange-50/80 border border-orange-200/90 space-y-2">
-                          <div className="flex items-center justify-between text-xs font-black text-orange-950">
-                            <span className="flex items-center gap-1.5">
-                              <Sparkles className="h-3.5 w-3.5 text-orange-600" />
-                              कलाकार संपर्क: <strong className="text-orange-700 font-black">{activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार"}</strong>
-                            </span>
-                            <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold">
-                              मानधन: ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 20000) * 0.8)).toLocaleString("en-IN")}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const artistObj = activeArtists.find(
-                                  (a) =>
-                                    (activeLead.requestedArtistName && (a.name?.toLowerCase() === activeLead.requestedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.requestedArtistName.toLowerCase())) ||
-                                    (activeLead.confirmedArtistName && (a.name?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase()))
-                                ) || {
-                                  name: activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार",
-                                  phone: activeLead.artistPhone || activeLead.artistContactNumber || "9876543210",
-                                };
-                                handleWhatsAppArtist(artistObj);
-                              }}
-                              className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
-                            >
-                              <MessageCircle className="h-4 w-4" /> 💬 कलाकार WhatsApp ({activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार"})
-                            </button>
+                      <div className="text-xs font-black text-stone-800 flex items-center gap-1">
+                        <Phone className="h-3.5 w-3.5 text-orange-600" /> ग्राहकाशी थेट संवाद (Customer Actions):
+                      </div>
 
-                            {(() => {
-                              const artistObj = activeArtists.find(
-                                (a) =>
-                                  (activeLead.requestedArtistName && (a.name?.toLowerCase() === activeLead.requestedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.requestedArtistName.toLowerCase())) ||
-                                  (activeLead.confirmedArtistName && (a.name?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase()))
-                              );
-                              const artistPhoneNum = activeLead.artistPhone || artistObj?.phone || artistObj?.contactNumber;
-                              return (
-                                <a
-                                  href={artistPhoneNum ? `tel:${artistPhoneNum}` : "#"}
-                                  onClick={() => {
-                                    if (!artistPhoneNum) {
-                                      toast({ title: "Phone number", description: "Artist phone number is not available." });
-                                    }
-                                  }}
-                                  className="w-full py-2.5 px-3 rounded-xl bg-white border border-stone-300 hover:bg-stone-50 text-stone-800 font-black text-xs shadow-2xs transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
-                                >
-                                  <Phone className="h-3.5 w-3.5 text-orange-600" /> 📞 कलाकार कॉल
-                                </a>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {/* 1. Call Customer */}
+                        <a
+                          href={activeLead.customerPhone ? `tel:${activeLead.customerPhone}` : "#"}
+                          onClick={() => {
+                            if (!activeLead.customerPhone) {
+                              toast({ title: "फोन नंबर नाही", description: "ग्राहकाचा फोन नंबर उपलब्ध नाही." });
+                            } else {
+                              handleStatusChange(activeLead.id, "contacting_artists");
+                            }
+                          }}
+                          className="min-h-[44px] py-2.5 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-black text-xs shadow-sm transition flex items-center justify-center gap-2 active:scale-98"
+                        >
+                          <Phone className="h-4 w-4 text-emerald-400" />
+                          <span>ग्राहक कॉल ({activeLead.customerPhone || "Call"})</span>
+                        </a>
 
-                      {/* Customer Communication Row */}
-                      {activeLead.customerPhone && (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          <a
-                            href={`tel:${activeLead.customerPhone}`}
-                            onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
-                            className="w-full py-2.5 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-[0.99]"
-                          >
-                            <Phone className="h-3.5 w-3.5 text-emerald-400" /> 📞 ग्राहक कॉल
-                          </a>
-                          <button
-                            type="button"
-                            onClick={handleWhatsAppCustomerInquiry}
-                            className="w-full py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-[0.99]"
-                          >
-                            <MessageSquare className="h-3.5 w-3.5" /> 💬 ग्राहक WhatsApp (अपडेट)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleWhatsAppCustomerPaymentLink}
-                            className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-[0.99]"
-                          >
-                            <MessageCircle className="h-3.5 w-3.5" /> 💳 ग्राहक पेमेंट लिंक
-                          </button>
-                        </div>
-                      )}
+                        {/* 2. Customer WhatsApp Update */}
+                        <button
+                          type="button"
+                          onClick={handleWhatsAppCustomerInquiry}
+                          className="min-h-[44px] py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-sm transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          <span>WhatsApp अपडेट पाठवा</span>
+                        </button>
+
+                        {/* 3. Customer Payment Link */}
+                        <button
+                          type="button"
+                          onClick={handleWhatsAppCustomerPaymentLink}
+                          className="min-h-[44px] py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs shadow-sm transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          <span>पेमेंट लिंक पाठवा (UPI)</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
-                  {/* SECTION 2: MATCHING ARTISTS (Fast WhatsApp & Call) */}
-                  <div className="p-4 sm:p-5 rounded-2xl bg-white border border-stone-200/80 shadow-sm space-y-3">
+                  {/* CARD 2: ASSIGNED / REQUESTED ARTIST DIRECT ACTION */}
+                  {(activeLead.requestedArtistName || activeLead.confirmedArtistName) && (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-orange-50/90 border border-orange-200 shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between flex-wrap gap-1 text-xs font-black text-orange-950">
+                        <span className="flex items-center gap-1.5">
+                          <Sparkles className="h-4 w-4 text-orange-600" />
+                          {activeLead.confirmedArtistName ? "नक्की केलेला कलाकार:" : "ग्राहकाने निवडलेला कलाकार:"}{" "}
+                          <strong className="text-orange-900 font-black text-sm">
+                            {activeLead.confirmedArtistName || activeLead.requestedArtistName}
+                          </strong>
+                        </span>
+                        <span className="text-[11px] bg-orange-200/80 text-orange-900 px-2.5 py-0.5 rounded-full font-bold">
+                          मानधन: ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 20000) * 0.8)).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const artistObj = activeArtists.find(
+                              (a) =>
+                                (activeLead.requestedArtistName && (a.name?.toLowerCase() === activeLead.requestedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.requestedArtistName.toLowerCase())) ||
+                                (activeLead.confirmedArtistName && (a.name?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase()))
+                            ) || {
+                              name: activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार",
+                              phone: activeLead.artistPhone || activeLead.artistContactNumber || "9876543210",
+                            };
+                            handleWhatsAppArtist(artistObj);
+                          }}
+                          className="min-h-[44px] py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-sm transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          <span>कलाकार WhatsApp ({activeLead.confirmedArtistName || activeLead.requestedArtistName})</span>
+                        </button>
+
+                        {(() => {
+                          const artistObj = activeArtists.find(
+                            (a) =>
+                              (activeLead.requestedArtistName && (a.name?.toLowerCase() === activeLead.requestedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.requestedArtistName.toLowerCase())) ||
+                              (activeLead.confirmedArtistName && (a.name?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase() || a.displayName?.toLowerCase() === activeLead.confirmedArtistName.toLowerCase()))
+                          );
+                          const artistPhoneNum = activeLead.artistPhone || artistObj?.phone || artistObj?.contactNumber;
+                          return (
+                            <a
+                              href={artistPhoneNum ? `tel:${artistPhoneNum}` : "#"}
+                              onClick={() => {
+                                if (!artistPhoneNum) {
+                                  toast({ title: "फोन नंबर नाही", description: "कलाकाराचा फोन नंबर उपलब्ध नाही." });
+                                }
+                              }}
+                              className="min-h-[44px] py-2.5 px-3 rounded-xl bg-white border border-stone-300 hover:bg-stone-50 text-stone-900 font-black text-xs shadow-2xs transition flex items-center justify-center gap-2 active:scale-98"
+                            >
+                              <Phone className="h-4 w-4 text-orange-600" />
+                              <span>कलाकार थेट कॉल</span>
+                            </a>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CARD 3: AVAILABLE ARTISTS (Quick WhatsApp & 1-Click Confirm) */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-white border border-stone-200 shadow-xs space-y-3">
                     <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
                       <h4 className="text-sm font-black text-stone-950 flex items-center gap-2">
                         <Users className="h-4 w-4 text-orange-600 shrink-0" />
-                        <span>उपलब्ध कलाकार ({matchingArtists.length}) - WhatsApp पाठवा</span>
+                        <span>उपलब्ध कलाकार ({matchingArtists.length})</span>
                       </h4>
-                      <span className="text-[10px] font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
-                        🔒 ग्राहक फोन सुरक्षित
+                      <span className="text-[10px] font-bold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
+                        🔒 ग्राहक फोन गुप्त राहतो
                       </span>
                     </div>
 
                     <div className="space-y-2.5">
                       {matchingArtists.slice(0, 6).map((artist) => {
                         const phoneNum = artist.phone || artist.contactNumber || "+91 98765 43210";
-                        const isConfirmed = activeLead.status === "artist_confirmed" && activeLead.requestedArtistName === artist.name;
+                        const isConfirmed =
+                          (activeLead.status === "artist_confirmed" || activeLead.status === "booked") &&
+                          (activeLead.confirmedArtistName === artist.name || activeLead.requestedArtistName === artist.name);
 
                         return (
                           <div
                             key={artist.name}
-                            className={`p-3 sm:p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
-                              isConfirmed ? "bg-emerald-50/90 border-emerald-300 shadow-sm ring-1 ring-emerald-200" : "bg-stone-50/70 border-stone-200/80 hover:border-orange-200"
+                            className={`p-3 sm:p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                              isConfirmed
+                                ? "bg-emerald-50/90 border-emerald-400 shadow-sm ring-1 ring-emerald-200"
+                                : "bg-stone-50/80 border-stone-200 hover:border-orange-300"
                             }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="h-10 w-10 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-black text-sm shrink-0 shadow-sm">
+                              <div className="h-10 w-10 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-black text-sm shrink-0 shadow-2xs">
                                 {artist.name.charAt(0)}
                               </div>
                               <div className="min-w-0">
@@ -1155,43 +1108,43 @@ export default function TelecallerDashboard() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => openArtistReelsPreview(artist)}
-                                  className="h-8 px-2 text-xs font-bold text-orange-600 hover:bg-orange-100 rounded-xl"
+                                  className="h-9 px-2 text-xs font-bold text-orange-600 hover:bg-orange-100 rounded-xl"
                                 >
-                                  <Film className="h-3.5 w-3.5 mr-1" /> Reel
+                                  <Film className="h-3.5 w-3.5 mr-1" /> रील
                                 </Button>
                               )}
 
                               <Button
                                 size="sm"
                                 onClick={() => handleWhatsAppArtist(artist)}
-                                className="h-8.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95"
+                                className="h-9 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center gap-1.5 shadow-2xs active:scale-95"
                               >
-                                <MessageCircle className="h-4 w-4" /> WhatsApp
+                                <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
                               </Button>
 
                               <a
                                 href={`tel:${phoneNum}`}
-                                className="h-8.5 px-3 rounded-xl bg-white border border-stone-200 text-xs font-bold text-stone-800 hover:bg-stone-100 inline-flex items-center gap-1 shadow-sm active:scale-95"
+                                className="h-9 px-3 rounded-xl bg-white border border-stone-200 text-xs font-bold text-stone-800 hover:bg-stone-100 inline-flex items-center gap-1 shadow-2xs active:scale-95"
                               >
-                                <Phone className="h-3.5 w-3.5 text-orange-600" /> Call
+                                <Phone className="h-3.5 w-3.5 text-orange-600" /> कॉल
                               </a>
 
                               <Button
                                 size="sm"
                                 onClick={() => {
-                                  handleStatusChange(activeLead.id, "artist_confirmed");
-                                  toast({
-                                    title: "Artist Confirmed! ✓",
-                                    description: `${artist.name} has been assigned and confirmed for this booking.`,
+                                  handleStatusChange(activeLead.id, "artist_confirmed", {
+                                    artistId: artist.id || artist.name,
+                                    artistName: artist.name,
+                                    price: artist.startingPrice || activeLead.artistOfferBudget || 15000,
                                   });
                                 }}
-                                className={`h-8.5 px-3 rounded-xl text-xs font-black shadow-sm ${
+                                className={`h-9 px-3.5 rounded-xl text-xs font-black shadow-2xs ${
                                   isConfirmed
                                     ? "bg-emerald-700 text-white ring-2 ring-emerald-300"
                                     : "bg-stone-900 hover:bg-stone-800 text-white"
                                 }`}
                               >
-                                {isConfirmed ? "✓ Confirmed" : "Confirm"}
+                                {isConfirmed ? "✓ नक्की झाले" : "नक्की करा"}
                               </Button>
                             </div>
                           </div>
@@ -1200,7 +1153,7 @@ export default function TelecallerDashboard() {
                     </div>
                   </div>
 
-                  {/* SECTION 3: ESCROW & PAYOUT (with live Commission Breakdown) */}
+                  {/* CARD 4: ESCROW & PAYOUT RELEASE */}
                   {(() => {
                     const bookingAmt = activeLead.budget || 0;
                     const artistAmt = activeLead.confirmedPrice || activeLead.artistOfferBudget || (bookingAmt > 0 ? Math.round(bookingAmt * 0.8) : 0);
@@ -1208,22 +1161,20 @@ export default function TelecallerDashboard() {
                     const myComm = typeof activeLead.telecallerCommission === "number" ? activeLead.telecallerCommission : split.telecallerCommission;
 
                     return (
-                      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-orange-50/70 via-white to-blue-50/70 border border-orange-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-50/80 via-white to-blue-50/80 border border-orange-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-4 text-xs font-bold flex-wrap">
                           <div>
-                            <span className="text-stone-400 block text-[10px] uppercase font-bold">Client Paid</span>
+                            <span className="text-stone-400 block text-[10px] uppercase font-bold">ग्राहकाची रक्कम</span>
                             <span className="text-emerald-700 font-black">₹{bookingAmt.toLocaleString("en-IN")}</span>
                           </div>
                           <div>
-                            <span className="text-stone-400 block text-[10px] uppercase font-bold">Artist Payout</span>
+                            <span className="text-stone-400 block text-[10px] uppercase font-bold">कलाकार मानधन</span>
                             <span className="text-stone-800 font-black">₹{artistAmt.toLocaleString("en-IN")}</span>
                           </div>
-                          <div>
-                            <span className="text-stone-400 block text-[10px] uppercase font-bold">Gross Margin</span>
-                            <span className="text-purple-700 font-black">₹{split.grossMargin.toLocaleString("en-IN")}</span>
-                          </div>
                           <div className="pl-3 border-l-2 border-blue-300">
-                            <span className="text-blue-600 block text-[10px] uppercase font-black">📞 Your Commission</span>
+                            <span className="text-blue-600 block text-[10px] uppercase font-black">
+                              📞 तुमचे कमिशन ({commissionConfig.telecallerPercentage}%)
+                            </span>
                             <span className="text-blue-800 font-black text-sm">₹{myComm.toLocaleString("en-IN")}</span>
                           </div>
                         </div>
@@ -1231,18 +1182,26 @@ export default function TelecallerDashboard() {
                         <div className="flex items-center gap-2">
                           <Button
                             size="sm"
+                            disabled={processingStatus === `payout_${activeLead.id}`}
                             onClick={() => handleReleasePayout(activeLead)}
-                            className="h-8.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm"
+                            className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm"
                           >
-                            💸 Release Payout
+                            {processingStatus === `payout_${activeLead.id}` ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            ) : null}
+                            💸 पे-आऊट रिलीज करा
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
+                            disabled={processingStatus === `refund_${activeLead.id}`}
                             onClick={() => handleProcessRefund(activeLead)}
-                            className="h-8.5 px-3 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold"
+                            className="h-9 px-3 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold"
                           >
-                            🔄 Refund
+                            {processingStatus === `refund_${activeLead.id}` ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            ) : null}
+                            🔄 रिफंड
                           </Button>
                         </div>
                       </div>
@@ -1250,13 +1209,13 @@ export default function TelecallerDashboard() {
                   })()}
                 </div>
               ) : (
-                <div className="p-12 text-center rounded-2xl bg-white border border-stone-200 text-stone-500 text-xs shadow-sm">
-                  Select a lead from the left feed to start calling artists.
+                <div className="p-12 text-center rounded-2xl bg-white border border-stone-200 text-stone-500 text-xs shadow-xs">
+                  डाव्या बाजूच्या यादीतून कोणतीही लीड निवडा.
                 </div>
               )}
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* VIEW 2: PHONE INQUIRIES & LEADS TAB */}
@@ -1266,7 +1225,7 @@ export default function TelecallerDashboard() {
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-3 h-4 w-4 text-stone-400" />
               <Input
-                placeholder="Search leads by customer name, phone, or category..."
+                placeholder="ग्राहक नाव, फोन किंवा कॅटेगरी शोधा..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 h-10 text-xs rounded-xl bg-white border-stone-200 text-stone-900"
@@ -1274,15 +1233,15 @@ export default function TelecallerDashboard() {
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-44 h-10 text-xs rounded-xl bg-white border-stone-200 text-stone-900 font-bold">
-                <SelectValue placeholder="Filter by Status" />
+                <SelectValue placeholder="सर्व स्थिती" />
               </SelectTrigger>
               <SelectContent className="bg-white border-stone-200 text-stone-900 text-xs">
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="new">New Lead</SelectItem>
-                <SelectItem value="contacting_artists">Calling Artists</SelectItem>
-                <SelectItem value="artist_confirmed">Artist Confirmed</SelectItem>
-                <SelectItem value="booked">Booked</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="all">सर्व स्थिती (All)</SelectItem>
+                <SelectItem value="new">नवीन लीड (New)</SelectItem>
+                <SelectItem value="contacting_artists">कॉलिंग चालू</SelectItem>
+                <SelectItem value="artist_confirmed">कलाकार नक्की</SelectItem>
+                <SelectItem value="booked">पूर्ण (Booked)</SelectItem>
+                <SelectItem value="cancelled">रद्द (Cancelled)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1291,11 +1250,11 @@ export default function TelecallerDashboard() {
             {filteredLeads.map((lead) => (
               <div
                 key={lead.id}
-                className="p-5 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="p-4 sm:p-5 rounded-2xl bg-white border border-stone-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-extrabold text-stone-950">{lead.customerName}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-black text-stone-950">{lead.customerName}</h3>
                     <span
                       className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
                         lead.status === "new"
@@ -1305,10 +1264,10 @@ export default function TelecallerDashboard() {
                           : "bg-sky-100 text-sky-800"
                       }`}
                     >
-                      {lead.status.replace("_", " ")}
+                      {lead.status}
                     </span>
                     <span className="text-[10px] font-bold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
-                      Via {lead.source === "manual_phone_call" ? "Phone Call" : "Website Inquiry"}
+                      {lead.source === "manual_phone_call" ? "थेट फोन कॉल" : "वेबसाईट इन्क्वायरी"}
                     </span>
                   </div>
 
@@ -1317,16 +1276,16 @@ export default function TelecallerDashboard() {
                       <Phone className="h-3.5 w-3.5" />
                       <a href={`tel:${lead.customerPhone}`}>{lead.customerPhone}</a>
                     </span>
-                    <span>📍 Location: {lead.eventLocation}</span>
-                    <span>📅 Event Date: {lead.eventDate}</span>
+                    <span>📍 {lead.eventLocation}</span>
+                    <span>📅 {lead.eventDate}</span>
                   </p>
 
                   <p className="text-xs font-bold text-stone-800">
-                    Category: <span className="text-orange-600">{lead.eventType} ({lead.subCategory})</span> • Budget: ₹{lead.budget?.toLocaleString("en-IN")}
+                    कॅटेगरी: <span className="text-orange-600">{lead.eventType} ({lead.subCategory})</span> • बजेट: ₹{lead.budget?.toLocaleString("en-IN")}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
                   <Button
                     size="sm"
                     onClick={() => {
@@ -1335,14 +1294,14 @@ export default function TelecallerDashboard() {
                     }}
                     className="h-9 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 text-xs font-bold flex items-center gap-1"
                   >
-                    <Edit3 className="h-3.5 w-3.5" /> Edit
+                    <Edit3 className="h-3.5 w-3.5" /> बदल करा
                   </Button>
                   <a
                     href={`tel:${lead.customerPhone}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-50 border border-orange-200 text-xs font-bold text-orange-600 hover:bg-orange-100 transition"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-900 text-white text-xs font-bold hover:bg-stone-800 transition shadow-2xs"
                   >
-                    <Phone className="h-3.5 w-3.5" />
-                    Call
+                    <Phone className="h-3.5 w-3.5 text-emerald-400" />
+                    कॉल
                   </a>
                   <Select
                     value={lead.status}
@@ -1352,11 +1311,11 @@ export default function TelecallerDashboard() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-white border-stone-200 text-xs">
-                      <SelectItem value="new">New Lead</SelectItem>
-                      <SelectItem value="contacting_artists">Calling Artists</SelectItem>
-                      <SelectItem value="artist_confirmed">Confirmed</SelectItem>
-                      <SelectItem value="booked">Booked</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                      <SelectItem value="new">नवीन लीड</SelectItem>
+                      <SelectItem value="contacting_artists">कॉलिंग चालू</SelectItem>
+                      <SelectItem value="artist_confirmed">नक्की झाले</SelectItem>
+                      <SelectItem value="booked">पूर्ण / पेड</SelectItem>
+                      <SelectItem value="cancelled">रद्द</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1373,7 +1332,7 @@ export default function TelecallerDashboard() {
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-3 h-4 w-4 text-stone-400" />
               <Input
-                placeholder="Search artists by name, artform, or city..."
+                placeholder="कलाकाराचे नाव, कलाप्रकार किंवा शहर शोधा..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 h-10 text-xs rounded-xl bg-white border-stone-200 text-stone-900"
@@ -1381,10 +1340,10 @@ export default function TelecallerDashboard() {
             </div>
             <Select value={artistCategoryFilter} onValueChange={setArtistCategoryFilter}>
               <SelectTrigger className="w-48 h-10 text-xs rounded-xl bg-white border-stone-200 text-stone-900 font-bold">
-                <SelectValue placeholder="Category Filter" />
+                <SelectValue placeholder="सर्व कॅटेगरी" />
               </SelectTrigger>
               <SelectContent className="bg-white border-stone-200 text-stone-900 text-xs">
-                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="all">सर्व कॅटेगरी</SelectItem>
                 {MAIN_EVENT_CARDS.map((card) => (
                   <SelectItem key={card.name} value={card.name}>
                     {card.icon} {card.name}
@@ -1394,14 +1353,13 @@ export default function TelecallerDashboard() {
             </Select>
           </div>
 
-          {/* Artist Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredArtistDirectory.map((artist) => {
               const phoneNum = artist.phone || artist.contactNumber || "+91 98765 43210";
-              const priceDisplay = artist.startingPrice ? `₹${artist.startingPrice?.toLocaleString("en-IN")}+` : "Price on Request";
+              const priceDisplay = artist.startingPrice ? `₹${artist.startingPrice?.toLocaleString("en-IN")}+` : "दर विनंतीवर";
 
               return (
-                <div key={artist.name} className="p-5 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col justify-between space-y-4 hover:border-orange-300 transition">
+                <div key={artist.name} className="p-4 sm:p-5 rounded-2xl bg-white border border-stone-200 shadow-xs flex flex-col justify-between space-y-4 hover:border-orange-300 transition">
                   <div className="space-y-2">
                     <div className="flex items-start justify-between">
                       <div>
@@ -1412,7 +1370,7 @@ export default function TelecallerDashboard() {
                       </div>
                       <span className="flex items-center gap-1 text-xs font-extrabold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
                         <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                        {artist.rating}
+                        {artist.rating || 4.8}
                       </span>
                     </div>
 
@@ -1421,22 +1379,22 @@ export default function TelecallerDashboard() {
                     </p>
 
                     <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed">
-                      {artist.bio || "Verified performing artist on MyKalakar marketplace."}
+                      {artist.bio || "MyKalakar वरील अधिकृत परफॉर्मिंग कलाकार."}
                     </p>
                   </div>
 
                   <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] font-bold text-stone-400 block uppercase">Starting Price</span>
+                      <span className="text-[10px] font-bold text-stone-400 block uppercase">अंदाजे मानधन</span>
                       <span className="text-sm font-black text-stone-950">{priceDisplay}</span>
                     </div>
 
                     <a
                       href={`tel:${phoneNum}`}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-extrabold hover:bg-orange-700 transition shadow-sm"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-extrabold hover:bg-orange-700 transition shadow-2xs"
                     >
                       <Phone className="h-3.5 w-3.5" />
-                      Call {phoneNum}
+                      कॉल करा
                     </a>
                   </div>
                 </div>
@@ -1519,16 +1477,16 @@ export default function TelecallerDashboard() {
               onClick={() => setLeadToDelete(null)}
               className="rounded-xl text-xs font-bold"
             >
-              रद्द करा (Cancel)
+              रद्द करा
             </Button>
             <Button
               type="button"
               disabled={deletingLead}
               onClick={confirmDeleteLead}
-              className="rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black gap-1.5"
+              className="rounded-xl text-xs font-black bg-red-600 hover:bg-red-700 text-white"
             >
-              {deletingLead ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              <span>होय, डिलीट करा (Delete)</span>
+              {deletingLead ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              होय, लीड हटवा
             </Button>
           </DialogFooter>
         </DialogContent>

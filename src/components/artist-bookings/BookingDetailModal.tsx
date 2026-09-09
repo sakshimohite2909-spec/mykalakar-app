@@ -24,6 +24,33 @@ function telHref(phone: string) {
   return `tel:${phone}`;
 }
 
+function isContactRevealed(status: BookingStatus | string): boolean {
+  const s = (status || "").toLowerCase();
+  return ["confirmed", "event_completed", "completed", "payout_released", "booked", "artist_confirmed"].includes(s);
+}
+
+function maskPhoneNumber(phone?: string): string {
+  if (!phone) return "Not provided";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length >= 4) {
+    const last4 = digits.slice(-4);
+    return `+91 •••••• ${last4}`;
+  }
+  return "••••••••••";
+}
+
+function maskEmailAddress(email?: string): string {
+  if (!email) return "Not provided";
+  const parts = email.split("@");
+  if (parts.length === 2) {
+    const name = parts[0];
+    const domain = parts[1];
+    const maskedName = name.length > 2 ? `${name[0]}••••${name[name.length - 1]}` : `${name[0]}•••`;
+    return `${maskedName}@${domain}`;
+  }
+  return "••••••@email.com";
+}
+
 export function BookingDetailModal({
   booking,
   open,
@@ -147,6 +174,7 @@ export function BookingDetailModal({
   if (!booking) return null;
 
   const isActiveHold = ["SOFT_HOLD_ACTIVE", "PAYMENT_AUTHORIZED", "PENDING_ARTIST_RESPONSE"].includes(booking.status);
+  const isRevealed = isContactRevealed(booking.status);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -193,7 +221,28 @@ export function BookingDetailModal({
         <div className="space-y-4">
           {/* Client Details */}
           <section className="rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm space-y-3">
-            <h3 className="text-xs font-black uppercase tracking-wider text-stone-400">Client Contact Info</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-wider text-stone-400">Client Contact Info</h3>
+              {!isRevealed && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                  <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+                  Protected by MyKalakar
+                </span>
+              )}
+            </div>
+
+            {!isRevealed && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-950 font-medium leading-relaxed flex items-start gap-2">
+                <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-amber-900">Direct client contact is protected</p>
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    To prevent offline disputes and secure advance payment through Escrow, client direct numbers are disclosed once booking is <strong>Confirmed</strong> on MyKalakar. Our verified Telecaller coordinates all initial queries.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-2 text-sm">
               <div>
                 <p className="text-xs font-semibold text-stone-400">Client Name</p>
@@ -201,22 +250,29 @@ export function BookingDetailModal({
               </div>
               <div>
                 <p className="text-xs font-semibold text-stone-400">Email Address</p>
-                <p className="font-extrabold mt-0.5">{booking.customerEmail || "Not provided"}</p>
+                <p className="font-extrabold mt-0.5">
+                  {isRevealed ? (booking.customerEmail || "Not provided") : maskEmailAddress(booking.customerEmail)}
+                </p>
               </div>
               <div>
                 <p className="text-xs font-semibold text-stone-400">Phone Number</p>
-                {booking.clientPhone ? (
+                {isRevealed && booking.clientPhone ? (
                   <a className="inline-flex items-center gap-1.5 font-extrabold text-[#FF6B00] mt-0.5" href={telHref(booking.clientPhone)}>
                     <Phone className="h-3.5 w-3.5" />
                     {booking.clientPhone}
                   </a>
                 ) : (
-                  <p className="font-extrabold mt-0.5">Not provided</p>
+                  <p className="font-extrabold mt-0.5 text-stone-700 inline-flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5 text-stone-400" />
+                    {maskPhoneNumber(booking.clientPhone)}
+                  </p>
                 )}
               </div>
               <div>
                 <p className="text-xs font-semibold text-stone-400">WhatsApp Number</p>
-                <p className="font-extrabold mt-0.5">{booking.clientWhatsapp || "Not provided"}</p>
+                <p className="font-extrabold mt-0.5">
+                  {isRevealed ? (booking.clientWhatsapp || "Not provided") : (booking.clientWhatsapp ? maskPhoneNumber(booking.clientWhatsapp) : "Disclosed after confirmation")}
+                </p>
               </div>
             </div>
           </section>
@@ -230,7 +286,9 @@ export function BookingDetailModal({
                   <Home className="h-3.5 w-3.5 text-stone-500" />
                   Client Address
                 </p>
-                <p className="font-bold text-stone-700 leading-relaxed">{booking.clientAddress || "Not provided"}</p>
+                <p className="font-bold text-stone-700 leading-relaxed">
+                  {isRevealed ? (booking.clientAddress || "Not provided") : "🔒 Disclosed upon booking confirmation"}
+                </p>
               </div>
               <div className="rounded-xl border border-[#FF6B00]/20 bg-[#FF6B00]/5 p-3">
                 <p className="mb-1 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-[#FF6B00]">

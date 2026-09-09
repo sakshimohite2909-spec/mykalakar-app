@@ -40,8 +40,86 @@ function sortByEventDate(a: BookingEvent, b: BookingEvent) {
 
 export function useArtistBookings() {
   const { artistData, currentUser, userProfile } = useAuth();
-  const artistId = String(artistData?.id || artistData?.uid || currentUser?.uid || "");
-  const artistName = String(artistData?.name || (userProfile as any)?.fullName || currentUser?.displayName || "");
+  
+  const artistCriteria = useMemo(() => {
+    const ids = new Set<string>();
+    const names = new Set<string>();
+    const emails = new Set<string>();
+    const phones = new Set<string>();
+    const categories = new Set<string>();
+
+    [
+      artistData?.id,
+      artistData?.uid,
+      artistData?.userId,
+      artistData?.applicationId,
+      currentUser?.uid,
+      (userProfile as any)?.id,
+      (userProfile as any)?.uid,
+    ].forEach((val) => {
+      if (val) ids.add(String(val).trim().toLowerCase());
+    });
+
+    [
+      artistData?.name,
+      artistData?.fullName,
+      artistData?.stageName,
+      artistData?.artistName,
+      (userProfile as any)?.fullName,
+      (userProfile as any)?.displayName,
+      (userProfile as any)?.name,
+      currentUser?.displayName,
+    ].forEach((val) => {
+      if (val) names.add(String(val).trim());
+    });
+
+    [
+      artistData?.email,
+      currentUser?.email,
+      (userProfile as any)?.email,
+    ].forEach((val) => {
+      if (val) emails.add(String(val).trim().toLowerCase());
+    });
+
+    [
+      artistData?.phone,
+      artistData?.mobile,
+      artistData?.contactNumber,
+      artistData?.whatsapp,
+      currentUser?.phoneNumber,
+      (userProfile as any)?.phone,
+      (userProfile as any)?.mobile,
+    ].forEach((val) => {
+      if (val) {
+        const digits = String(val).replace(/\D/g, "").slice(-10);
+        if (digits) phones.add(digits);
+      }
+    });
+
+    [
+      artistData?.category,
+      artistData?.subcategory,
+      artistData?.artForm,
+    ].forEach((val) => {
+      if (val) categories.add(String(val).trim().toLowerCase());
+    });
+
+    const primaryId = String(artistData?.id || artistData?.uid || currentUser?.uid || "");
+    const primaryName = String(artistData?.name || (userProfile as any)?.fullName || currentUser?.displayName || "");
+
+    return {
+      artistId: primaryId,
+      artistName: primaryName,
+      ids: Array.from(ids),
+      names: Array.from(names),
+      emails: Array.from(emails),
+      phones: Array.from(phones),
+      categories: Array.from(categories),
+    };
+  }, [artistData, currentUser, userProfile]);
+
+  const artistId = artistCriteria.artistId;
+  const artistName = artistCriteria.artistName;
   const [bookings, setBookings] = useState<BookingEvent[]>([]);
   const [availability, setAvailability] = useState<ArtistAvailabilityBlock[]>([]);
   const [notifications, setNotifications] = useState<BookingNotification[]>([]);
@@ -56,7 +134,7 @@ export function useArtistBookings() {
   }, [bookings]);
 
   useEffect(() => {
-    if (!artistId && !artistName) {
+    if (artistCriteria.ids.length === 0 && artistCriteria.names.length === 0) {
       setBookings([]);
       setAvailability([]);
       setNotifications([]);
@@ -72,8 +150,7 @@ export function useArtistBookings() {
     setError(null);
 
     const unsubscribeBookings = subscribeArtistBookings(
-      artistId,
-      artistName,
+      artistCriteria,
       (data) => {
         setBookings(data);
         setLoadingBookings(false);
@@ -111,7 +188,7 @@ export function useArtistBookings() {
       unsubscribeAvailability();
       unsubscribeNotifications();
     };
-  }, [artistId, artistName]);
+  }, [artistCriteria, artistId]);
 
   const updateStatus = useCallback(
     async (booking: BookingEvent, status: BookingStatus, extraFields?: Partial<BookingEvent>) => {

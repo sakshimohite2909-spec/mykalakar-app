@@ -9,14 +9,16 @@ import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, doc } from "firebase/firestore";
 import { firebaseErrorMessage } from "@/lib/firebaseSafe";
 import { BookingStatusBadge } from "@/components/artist-bookings/BookingStatusBadge";
-import { updateArtistBookingStatus, logAdminActivity } from "@/services/artistBookingService";
+import { updateArtistBookingStatus, logAdminActivity, normalizeBooking } from "@/services/artistBookingService";
 import type { BookingEvent, BookingStatus } from "@/types/booking";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   subscribeTelecallerLeads,
   settleLeadCommission,
+  updateLeadCustomCommission,
   type TelecallerLead,
 } from "@/services/telecallerService";
 import {
@@ -35,12 +37,48 @@ function formatDate(date: string) {
   });
 }
 
+function getStoredLocalBookings(): BookingEvent[] {
+  const all: BookingEvent[] = [];
+  const storageKeys = [
+    "mykalakar_local_bookings",
+    "mykalakar_customer_bookings",
+    "mykalakar_local_telecaller_leads",
+    "mykalakar_telecaller_leads",
+    "mykalakar_local_inquiries",
+    "mykalakar_inquiries",
+  ];
+  storageKeys.forEach((key) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item: any) => {
+            if (item && (item.clientName || item.customerName || item.eventDate || item.date || item.artistName)) {
+              all.push(normalizeBooking(String(item.id || `local_${Date.now()}`), item));
+            }
+          });
+        }
+      }
+    } catch {
+      // Ignore JSON parse errors
+    }
+  });
+  return all;
+}
+
 export default function AdminBookings() {
   const [bookings, setBookings] = useState<BookingEvent[]>([]);
   const [telecallerLeads, setTelecallerLeads] = useState<TelecallerLead[]>([]);
   const [commissionConfig, setCommissionConfig] = useState<CommissionConfig>(getLocalCommissionConfig());
   const [loading, setLoading] = useState(true);
   const [settlingId, setSettlingId] = useState<string | null>(null);
+
+  // Custom Telecaller Commission Dialog State
+  const [commissionLead, setCommissionLead] = useState<TelecallerLead | null>(null);
+  const [customPct, setCustomPct] = useState<number>(20);
+  const [customNotes, setCustomNotes] = useState<string>("");
+  const [savingCommission, setSavingCommission] = useState(false);
 
   // Dispute dialogue review
   const [selectedDispute, setSelectedDispute] = useState<BookingEvent | null>(null);
@@ -50,19 +88,53 @@ export default function AdminBookings() {
   const [timelineDates, setTimelineDates] = useState({ created: "", hold: "", captured: "", disputed: "" });
 
   useEffect(() => {
-    const q = query(collection(db, "artist_bookings"), orderBy("createdAt", "desc"));
-    const unsubscribeBookings = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as BookingEvent[];
-      setBookings(data);
+    let remoteDocs: BookingEvent[] = [];
+
+    const syncAllBookings = () => {
+      const localDocs = getStoredLocalBookings();
+      const map = new Map<string, BookingEvent>();
+
+      [...remoteDocs, ...localDocs].forEach((b) => {
+        if (!b || !b.id) return;
+        if (!map.has(b.id)) {
+          map.set(b.id, b);
+        }
+      });
+
+      const merged = Array.from(map.values()).sort((a, b) => {
+        const timeA = new Date(a.createdAt || 0).getTime();
+        const timeB = new Date(b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
+
+      setBookings(merged);
+    };
+
+    // Initial load from local cache right away
+    syncAllBookings();
+
+    let unsubscribeBookings = () => {};
+    try {
+      const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
+      unsubscribeBookings = onSnapshot(
+        q,
+        (snapshot) => {
+          remoteDocs = snapshot.docs.map((d) => normalizeBooking(d.id, d.data()));
+          syncAllBookings();
+          setLoading(false);
+        },
+        (error) => {
+          console.warn("Firestore bookings sync notice:", error);
+          // Graceful fallback to local cache
+          syncAllBookings();
+          setLoading(false);
+        }
+      );
+    } catch (err) {
+      console.warn("Firestore initialization notice:", err);
+      syncAllBookings();
       setLoading(false);
-    }, (error) => {
-      console.error(error);
-      toast({ variant: "destructive", title: "Error", description: "Could not load platform bookings." });
-      setLoading(false);
-    });
+    }
 
     const unsubscribeLeads = subscribeTelecallerLeads((data) => {
       setTelecallerLeads(data);
@@ -173,6 +245,67 @@ export default function AdminBookings() {
       toast({ variant: "destructive", title: "Error", description: "Status बदलता आला नाही." });
     } finally {
       setSettlingId(null);
+    }
+  };
+
+  const handleOpenCommissionDialog = (lead: TelecallerLead) => {
+    setCommissionLead(lead);
+    const initialPct =
+      typeof lead.telecallerCommissionPct === "number"
+        ? lead.telecallerCommissionPct
+        : commissionConfig.telecallerPercentage;
+    setCustomPct(initialPct);
+    setCustomNotes(lead.specialNotes || "");
+  };
+
+  const handleSaveLeadCommission = async () => {
+    if (!commissionLead) return;
+    setSavingCommission(true);
+    try {
+      const b = Number(commissionLead.budget || 0);
+      const a = Number(commissionLead.confirmedPrice || commissionLead.artistOfferBudget || (b > 0 ? Math.round(b * 0.8) : 0));
+      const margin = Math.max(0, b - a);
+      const calculatedComm = Math.round((margin * customPct) / 100);
+      const calculatedOwnerProfit = Math.max(0, margin - calculatedComm);
+
+      await updateLeadCustomCommission(commissionLead.id, {
+        telecallerCommission: calculatedComm,
+        telecallerCommissionPct: customPct,
+        ownerProfit: calculatedOwnerProfit,
+        ownerProfitPct: 100 - customPct,
+        customCommissionOverride: true,
+        adminCommissionNotes: customNotes,
+      });
+
+      // Update local state in table
+      setTelecallerLeads((prev) =>
+        prev.map((l) =>
+          l.id === commissionLead.id
+            ? {
+                ...l,
+                telecallerCommission: calculatedComm,
+                telecallerCommissionPct: customPct,
+                ownerProfit: calculatedOwnerProfit,
+                ownerProfitPct: 100 - customPct,
+                customCommissionOverride: true,
+              }
+            : l
+        )
+      );
+
+      toast({
+        title: "कमिशन अपडेट झाले! 🎯",
+        description: `या बुकिंगसाठी टेलिकॉलर कमिशन ${customPct}% (₹${calculatedComm.toLocaleString("en-IN")}) सेट केले आहे.`,
+      });
+      setCommissionLead(null);
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "त्रुटी",
+        description: e.message || "कमिशन अपडेट करता आले नाही.",
+      });
+    } finally {
+      setSavingCommission(false);
     }
   };
 
@@ -304,9 +437,20 @@ export default function AdminBookings() {
                             ₹{split.grossMargin.toLocaleString("en-IN")}
                           </TableCell>
                           <TableCell>
-                            <span className="font-black text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
-                              ₹{comm.toLocaleString("en-IN")}
-                            </span>
+                            <div>
+                              <span className="font-black text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md inline-block">
+                                ₹{comm.toLocaleString("en-IN")}
+                              </span>
+                              {lead.customCommissionOverride ? (
+                                <span className="block text-[10px] text-purple-700 font-bold mt-0.5">
+                                  Admin Custom ({lead.telecallerCommissionPct || customPct}%)
+                                </span>
+                              ) : (
+                                <span className="block text-[10px] text-stone-400 font-medium mt-0.5">
+                                  Default ({commissionConfig.telecallerPercentage}%)
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="font-black text-xs text-emerald-800">
                             ₹{profit.toLocaleString("en-IN")}
@@ -323,24 +467,34 @@ export default function AdminBookings() {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              disabled={settlingId === lead.id}
-                              onClick={() => handleToggleCommissionSettlement(lead)}
-                              className={`h-7 px-2.5 rounded-lg text-xs font-bold ${
-                                isPaid
-                                  ? "bg-stone-100 hover:bg-stone-200 text-stone-700 border"
-                                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-                              }`}
-                            >
-                              {settlingId === lead.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : isPaid ? (
-                                "Mark Pending"
-                              ) : (
-                                "Mark as Paid ✅"
-                              )}
-                            </Button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenCommissionDialog(lead)}
+                                className="h-7 px-2 rounded-lg border-blue-200 text-blue-700 bg-blue-50/50 hover:bg-blue-100 text-xs font-bold"
+                              >
+                                ⚙️ कमिशन
+                              </Button>
+                              <Button
+                                size="sm"
+                                disabled={settlingId === lead.id}
+                                onClick={() => handleToggleCommissionSettlement(lead)}
+                                className={`h-7 px-2.5 rounded-lg text-xs font-bold ${
+                                  isPaid
+                                    ? "bg-stone-100 hover:bg-stone-200 text-stone-700 border"
+                                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                                }`}
+                              >
+                                {settlingId === lead.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : isPaid ? (
+                                  "Mark Pending"
+                                ) : (
+                                  "Mark as Paid ✅"
+                                )}
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -594,6 +748,135 @@ export default function AdminBookings() {
             >
               {resolving === "PAYOUT_RELEASED" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Release 100% Payout to Artist
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom Telecaller Commission Dialog */}
+      <Dialog open={Boolean(commissionLead)} onOpenChange={(open) => !open && setCommissionLead(null)}>
+        <DialogContent className="max-w-md rounded-2xl border-orange-200 bg-white">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg font-black text-stone-900 flex items-center gap-2 border-b border-stone-100 pb-2.5">
+              <Wallet className="h-5 w-5 text-orange-600" />
+              टेलिकॉलर कमिशन सेट करा (Admin Override)
+            </DialogTitle>
+          </DialogHeader>
+
+          {commissionLead && (() => {
+            const b = Number(commissionLead.budget || 0);
+            const a = Number(commissionLead.confirmedPrice || commissionLead.artistOfferBudget || (b > 0 ? Math.round(b * 0.8) : 0));
+            const margin = Math.max(0, b - a);
+            const previewComm = Math.round((margin * customPct) / 100);
+            const previewProfit = Math.max(0, margin - previewComm);
+
+            return (
+              <div className="space-y-4 text-xs font-semibold py-2">
+                {/* Lead Summary Card */}
+                <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-3 space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-stone-500 text-[11px]">ग्राहक / इव्हेंट:</span>
+                    <span className="font-bold text-stone-900">{commissionLead.customerName} ({commissionLead.eventType})</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-stone-500 text-[11px]">एकूण बजेट (Client Paid):</span>
+                    <span className="font-black text-emerald-700">₹{b.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-stone-500 text-[11px]">कलाकार मानधन (Artist Payout):</span>
+                    <span className="font-bold text-stone-800">₹{a.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-stone-200">
+                    <span className="text-stone-600 text-[11px] font-bold">प्लॅटफॉर्म ग्रॉस मार्जिन:</span>
+                    <span className="font-black text-purple-700">₹{margin.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+
+                {/* Percentage Selector */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-stone-800 flex items-center justify-between">
+                    <span>टेलिकॉलर कमिशन टक्केवारी (%):</span>
+                    <span className="text-blue-700 font-black text-sm">{customPct}%</span>
+                  </Label>
+                  
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={customPct}
+                      onChange={(e) => setCustomPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                      className="h-10 text-sm font-black text-stone-900 bg-white border-stone-200"
+                    />
+                    <span className="text-xs font-bold text-stone-500">%</span>
+                  </div>
+
+                  {/* Quick Presets */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {[5, 10, 15, 20, 25, 30, 40].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setCustomPct(pct)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                          customPct === pct
+                            ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                            : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                        }`}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Real-time Calculation Preview */}
+                <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-2">
+                  <span className="text-[10px] font-black uppercase text-blue-700 block">
+                    ⚡ थेट हिशोब (Live Split Preview):
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="p-2 rounded-lg bg-white border border-blue-100 shadow-2xs">
+                      <p className="text-[10px] text-stone-500 font-bold">📞 टेलिकॉलरला मिळेल</p>
+                      <p className="text-sm font-black text-blue-700">₹{previewComm.toLocaleString("en-IN")}</p>
+                      <p className="text-[9px] text-stone-400">({customPct}% मार्जिन हिस्सा)</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white border border-emerald-100 shadow-2xs">
+                      <p className="text-[10px] text-stone-500 font-bold">🏢 मायकलाकार ओनर नफा</p>
+                      <p className="text-sm font-black text-emerald-700">₹{previewProfit.toLocaleString("en-IN")}</p>
+                      <p className="text-[9px] text-stone-400">({100 - customPct}% हिस्सा)</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notes Input */}
+                <div>
+                  <Label className="text-[11px] font-bold text-stone-700 mb-1 block">
+                    ॲडमिन टीप / कारण (Optional Notes):
+                  </Label>
+                  <Input
+                    placeholder="उदा. VIP क्लायंट डील, स्पेशल ५% बोनस..."
+                    value={customNotes}
+                    onChange={(e) => setCustomNotes(e.target.value)}
+                    className="h-9 text-xs bg-white border-stone-200"
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
+          <DialogFooter className="flex gap-2 sm:justify-end border-t border-stone-100 pt-3">
+            <Button variant="outline" size="sm" onClick={() => setCommissionLead(null)}>
+              रद्द करा
+            </Button>
+            <Button
+              size="sm"
+              disabled={savingCommission}
+              onClick={handleSaveLeadCommission}
+              className="bg-orange-600 hover:bg-orange-700 text-white font-black shadow-sm"
+            >
+              {savingCommission ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              कमिशन लागू करा (Save Commission)
             </Button>
           </DialogFooter>
         </DialogContent>

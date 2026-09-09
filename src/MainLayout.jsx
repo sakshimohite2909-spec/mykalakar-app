@@ -15,7 +15,9 @@ const AUTH_PATHS = [
   "/login",
   "/artist-login",
   "/admin-login",
+  "/admin/login",
   "/user-login",
+  "/telecaller-login",
 ];
 
 function PageLoader() {

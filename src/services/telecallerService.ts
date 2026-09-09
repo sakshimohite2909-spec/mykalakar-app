@@ -96,6 +96,8 @@ export type TelecallerLead = {
   commissionSplitType?: CommissionSplitType;
   commissionPayoutStatus?: "pending" | "paid" | "cancelled";
   commissionSettledAt?: string;
+  customCommissionOverride?: boolean;
+  adminCommissionNotes?: string;
   source: "website_inquiry" | "manual_phone_call";
   createdAt?: string | Date;
   updatedAt?: string | Date;
@@ -824,4 +826,51 @@ export async function settleLeadCommission(leadId: string, status: "pending" | "
     console.warn("Firestore commission settlement error:", e);
   }
 }
+
+export async function updateLeadCustomCommission(
+  leadId: string,
+  commissionData: {
+    telecallerCommission: number;
+    telecallerCommissionPct: number;
+    ownerProfit: number;
+    ownerProfitPct: number;
+    customCommissionOverride: boolean;
+    adminCommissionNotes?: string;
+  }
+): Promise<void> {
+  const localList = getLocalLeads();
+  const realDocId = cleanId(leadId);
+
+  localList.forEach((lead) => {
+    if (lead.id === leadId || cleanId(lead.id) === realDocId) {
+      Object.assign(lead, commissionData);
+    }
+  });
+
+  try {
+    localStorage.setItem(LOCAL_LEADS_KEY, JSON.stringify(localList.slice(0, 100)));
+  } catch (e) {
+    console.warn("Local storage commission update warning:", e);
+  }
+
+  const updatePayload: Record<string, any> = {
+    ...commissionData,
+    updatedAt: serverTimestamp(),
+  };
+
+  try {
+    await setDoc(doc(db, LEADS_COLLECTION, realDocId), updatePayload, { merge: true });
+    await setDoc(doc(db, LEADS_COLLECTION, leadId), updatePayload, { merge: true });
+    if (leadId.startsWith("booking_")) {
+      await setDoc(doc(db, "bookings", realDocId), updatePayload, { merge: true });
+    } else if (leadId.startsWith("brief_")) {
+      await setDoc(doc(db, "eventBriefs", realDocId), updatePayload, { merge: true });
+    } else {
+      await setDoc(doc(db, "inquiries", realDocId), updatePayload, { merge: true });
+    }
+  } catch (e) {
+    console.warn("Firestore custom commission error:", e);
+  }
+}
+
 

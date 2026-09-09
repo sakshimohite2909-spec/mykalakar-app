@@ -30,8 +30,9 @@ export default function TelecallerLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = async () => {
+    localStorage.removeItem("MYKALAKAR_TELECALLER_BYPASS");
     await logout();
-    navigate("/login");
+    navigate("/telecaller-login");
   };
 
   return (

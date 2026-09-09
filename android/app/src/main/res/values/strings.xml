@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MyKalakar</string>
+    <string name="title_activity_main">MyKalakar</string>
+    <string name="package_name">com.mykalakar.app</string>
+    <string name="custom_url_scheme">com.mykalakar.app</string>
+</resources>

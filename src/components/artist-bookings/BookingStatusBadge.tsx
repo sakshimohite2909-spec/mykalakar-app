@@ -10,7 +10,7 @@ const STATUS_META: Record<BookingStatus, { label: string; color: string }> = {
   ARTIST_REVIEW: { label: "Under Review", color: "#A855F7" },
   CONFIRMED: { label: "Confirmed", color: "#FF6B00" },
   REJECTED: { label: "Rejected", color: "#EF4444" },
-  COUNTER_OFFER_SENT: { label: "Counter Offer", color: "#F59E0B" },
+  COUNTER_OFFER_SENT: { label: "Payment Required", color: "#10B981" },
   EVENT_COMPLETED: { label: "Event Completed", color: "#10B981" },
   PAYOUT_RELEASED: { label: "Escrow Released", color: "#059669" },
   SOFT_HOLD_ACTIVE: { label: "Soft Hold Active", color: "#0EA5E9" },
@@ -25,6 +25,11 @@ const STATUS_META: Record<BookingStatus, { label: string; color: string }> = {
   confirmed: { label: "Confirmed", color: "#FF6B00" },
   completed: { label: "Completed", color: "#22C55E" },
   cancelled: { label: "Cancelled", color: "#EF4444" },
+  booked: { label: "Booked", color: "#FF6B00" },
+  new: { label: "New", color: "#3B82F6" },
+  contacting_artists: { label: "Contacting Artists", color: "#8B5CF6" },
+  artist_confirmed: { label: "Artist Confirmed", color: "#10B981" },
+  quote_sent: { label: "Payment Required", color: "#10B981" },
 };
 
 export function getStatusMeta(status: BookingStatus) {

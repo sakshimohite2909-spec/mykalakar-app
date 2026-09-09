@@ -16,6 +16,21 @@ function formatDate(date: string) {
   });
 }
 
+function isContactRevealed(status: BookingStatus | string): boolean {
+  const s = (status || "").toLowerCase();
+  return ["confirmed", "event_completed", "completed", "payout_released", "booked", "artist_confirmed"].includes(s);
+}
+
+function maskPhoneNumber(phone?: string): string {
+  if (!phone) return "Not provided";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length >= 4) {
+    const last4 = digits.slice(-4);
+    return `+91 •••••• ${last4}`;
+  }
+  return "••••••••••";
+}
+
 function getArtEmoji(artName: string) {
   const lower = (artName || "").toLowerCase();
   if (lower.includes("comed") || lower.includes("हास्य")) return "🎭";
@@ -211,7 +226,11 @@ export function BookingListView({
                         </span>
                         <span className="flex min-w-0 items-center gap-2">
                           <Phone className="h-4 w-4 flex-shrink-0 text-[#FF6B00]" />
-                          <span className="truncate">{booking.clientPhone || "Phone not provided"}</span>
+                          <span className="truncate">
+                            {isContactRevealed(booking.status)
+                              ? (booking.clientPhone || "Phone not provided")
+                              : maskPhoneNumber(booking.clientPhone)}
+                          </span>
                         </span>
                       </div>
                     </div>

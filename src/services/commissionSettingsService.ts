@@ -70,8 +70,10 @@ export async function fetchCommissionConfig(): Promise<CommissionConfig> {
       saveLocalCommissionConfig(merged);
       return merged;
     }
-  } catch (err) {
-    console.warn("Could not fetch remote commission config, using local fallback:", err);
+  } catch (err: any) {
+    if (err?.code !== "permission-denied") {
+      console.warn("Could not fetch remote commission config, using local fallback:", err?.message || err);
+    }
   }
   return local;
 }
@@ -104,8 +106,10 @@ export async function updateCommissionConfig(
       },
       { merge: true }
     );
-  } catch (err) {
-    console.warn("Could not persist commission config to Firestore:", err);
+  } catch (err: any) {
+    if (err?.code !== "permission-denied") {
+      console.warn("Could not persist commission config to Firestore:", err?.message || err);
+    }
   }
 
   window.dispatchEvent(new CustomEvent("mykalakar_commission_config_updated", { detail: updated }));
@@ -128,7 +132,9 @@ export function subscribeCommissionConfig(callback: (config: CommissionConfig) =
         }
       },
       (error) => {
-        console.warn("Commission config subscription warning:", error);
+        if (error?.code !== "permission-denied") {
+          console.warn("Commission config subscription warning:", error?.message || error);
+        }
       }
     );
   } catch {

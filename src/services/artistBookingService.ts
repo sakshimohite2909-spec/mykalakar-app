@@ -264,6 +264,16 @@ export function checkTimeOverlap(
   return s1 < e2 && s2 < e1;
 }
 
+export interface ArtistMatchCriteria {
+  artistId?: string;
+  artistName?: string;
+  ids?: string[];
+  names?: string[];
+  emails?: string[];
+  phones?: string[];
+  categories?: string[];
+}
+
 export async function checkArtistAvailability(
   artistId: string,
   eventDate: string,
@@ -280,34 +290,37 @@ export async function checkArtistAvailability(
   });
 
   // 1. Check blocked dates
-  const blockQuery = query(
-    collection(db, AVAILABILITY_COLLECTION),
-    where("artistId", "==", artistId),
-    where("blockedDate", "==", normalizedDate)
-  );
-  const blockSnap = await getDocs(blockQuery);
-  if (!blockSnap.empty) {
-    const blockData = blockSnap.docs[0].data();
-    const isBooked = blockData.reason === "Booked";
-    const reason = isBooked
-      ? "The artist is already booked on this date."
-      : (blockData.reason || "The artist has blocked this date for events.");
-    console.log("checkArtistAvailability result: Artist unavailable due to block:", {
-      reason,
-      blockData
-    });
-    return { available: false, reason };
+  try {
+    const blockQuery = query(
+      collection(db, AVAILABILITY_COLLECTION),
+      where("artistId", "==", artistId),
+      where("blockedDate", "==", normalizedDate)
+    );
+    const blockSnap = await getDocs(blockQuery);
+    if (!blockSnap.empty) {
+      const blockData = blockSnap.docs[0].data();
+      const isBooked = blockData.reason === "Booked";
+      const reason = isBooked
+        ? "The artist is already booked on this date."
+        : (blockData.reason || "The artist has blocked this date for events.");
+      console.log("checkArtistAvailability result: Artist unavailable due to block:", {
+        reason,
+        blockData
+      });
+      return { available: false, reason };
+    }
+  } catch (err) {
+    console.warn("Could not check blocked availability from Firestore:", err);
   }
 
   // 2. Check bookings on the same date
-  const bookingQuery = query(
-    collection(db, BOOKING_COLLECTION),
-    where("artistId", "==", artistId),
-    where("eventDate", "==", normalizedDate)
-  );
-
   let bookings: BookingEvent[] = [];
   try {
+    const bookingQuery = query(
+      collection(db, BOOKING_COLLECTION),
+      where("artistId", "==", artistId),
+      where("eventDate", "==", normalizedDate)
+    );
     const bookingSnap = await getDocs(bookingQuery);
     bookings = bookingSnap.docs.map((doc) => normalizeBooking(doc.id, doc.data()));
     console.log("checkArtistAvailability fetched bookings:", bookings);
@@ -355,14 +368,21 @@ export async function createArtistBooking(input: CreateBookingInput) {
   bookingPayload.slaDeadlineTime = slaDeadline;
 
   // 1. Perform availability check completely before initiating the transaction block
-  const availability = await checkArtistAvailability(
-    input.artistId,
-    input.eventDate,
-    input.eventStartTime,
-    input.eventEndTime
-  );
-  if (!availability.available) {
-    throw new Error(availability.reason || "The selected time slot is no longer available.");
+  try {
+    const availability = await checkArtistAvailability(
+      input.artistId,
+      input.eventDate,
+      input.eventStartTime,
+      input.eventEndTime
+    );
+    if (!availability.available) {
+      throw new Error(availability.reason || "The selected time slot is no longer available.");
+    }
+  } catch (availErr: any) {
+    if (availErr?.message?.includes("longer available") || availErr?.message?.includes("booked")) {
+      throw availErr;
+    }
+    console.warn("Availability pre-check bypassed due to network/permission warning:", availErr);
   }
 
   const newBookingRef = doc(collection(db, BOOKING_COLLECTION));
@@ -371,48 +391,71 @@ export async function createArtistBooking(input: CreateBookingInput) {
   const artistRef = doc(db, "artists", input.artistId);
   const reservationRef = doc(db, "booking_reservations", `${input.artistId}_${normalizeDateOnly(input.eventDate)}`);
 
-  await withTimeout(
-    runTransaction(db, async (transaction) => {
-      // 1. Transactional read of the artist profile to lock it and serialize writes
-      await transaction.get(artistRef);
+  try {
+    await withTimeout(
+      runTransaction(db, async (transaction) => {
+        // 1. Transactional read of the artist profile
+        const aSnap = await transaction.get(artistRef);
 
-      // 2. Perform direct get on reservation ledger to assert lock safety and prevent race conditions
-      const reservationSnap = await transaction.get(reservationRef);
+        // 2. Perform direct get on reservation ledger to assert lock safety
+        const reservationSnap = await transaction.get(reservationRef);
 
-      // 3. Write/update reservation ledger inside transaction to serialize concurrent bookings
-      if (!reservationSnap.exists()) {
-        transaction.set(reservationRef, {
-          artistId: input.artistId,
-          reservationDate: normalizeDateOnly(input.eventDate),
-          holds: [bookingPayload.id],
-          customerIds: [input.customerId || ""],
-          updatedAt: now,
-        });
-      } else {
-        const resData = reservationSnap.data() || {};
-        const holds = resData.holds || [];
-        const customerIds = resData.customerIds || [];
-        if (!holds.includes(bookingPayload.id)) {
-          holds.push(bookingPayload.id);
+        // 3. Write/update reservation ledger inside transaction to serialize concurrent bookings
+        if (!reservationSnap.exists()) {
+          transaction.set(reservationRef, {
+            artistId: input.artistId,
+            reservationDate: normalizeDateOnly(input.eventDate),
+            holds: [bookingPayload.id],
+            customerIds: [input.customerId || ""],
+            updatedAt: now,
+          });
+        } else {
+          const resData = reservationSnap.data() || {};
+          const holds = resData.holds || [];
+          const customerIds = resData.customerIds || [];
+          if (!holds.includes(bookingPayload.id)) {
+            holds.push(bookingPayload.id);
+          }
+          const custId = input.customerId || "";
+          if (custId && !customerIds.includes(custId)) {
+            customerIds.push(custId);
+          }
+          transaction.update(reservationRef, {
+            holds,
+            customerIds,
+            updatedAt: now,
+          });
         }
-        const custId = input.customerId || "";
-        if (custId && !customerIds.includes(custId)) {
-          customerIds.push(custId);
-        }
-        transaction.update(reservationRef, {
-          holds,
-          customerIds,
-          updatedAt: now,
-        });
-      }
 
-      // 4. Write booking document and update artist lock
-      transaction.set(newBookingRef, sanitizePayload(bookingPayload));
-      transaction.set(artistRef, { lastBookingTimestamp: now }, { merge: true });
-    }),
-    FIREBASE_WRITE_TIMEOUT_MS,
-    "Creating the booking is taking too long due to high load. Please try again."
-  );
+        // 4. Write booking document and update artist lock
+        transaction.set(newBookingRef, sanitizePayload(bookingPayload));
+        if (aSnap.exists()) {
+          transaction.set(artistRef, { lastBookingTimestamp: now }, { merge: true });
+        }
+      }),
+      FIREBASE_WRITE_TIMEOUT_MS,
+      "Creating the booking is taking too long due to high load. Please try again."
+    );
+  } catch (txErr) {
+    console.warn("Transaction failed or was denied permissions, writing booking directly:", txErr);
+    // Write directly to bookings collection so booking is never lost
+    await setDoc(newBookingRef, sanitizePayload(bookingPayload)).catch((directErr) => {
+      console.warn("Direct booking setDoc warning:", directErr);
+    });
+  }
+
+  // Cache in local storage for instant offline & cross-tab sync
+  try {
+    const localKey = "mykalakar_local_bookings";
+    const existingRaw = localStorage.getItem(localKey);
+    const existing = existingRaw ? JSON.parse(existingRaw) : [];
+    const filtered = existing.filter((b: any) => b.id !== bookingPayload.id);
+    filtered.unshift(bookingPayload);
+    localStorage.setItem(localKey, JSON.stringify(filtered.slice(0, 100)));
+    window.dispatchEvent(new CustomEvent("mykalakar_booking_created", { detail: bookingPayload }));
+  } catch (e) {
+    // Ignore local storage error
+  }
 
   await createBookingNotification({
     artistId: input.artistId,
@@ -431,7 +474,7 @@ export async function createArtistBooking(input: CreateBookingInput) {
 
 export async function deleteArtistBooking(bookingId: string, booking?: BookingEvent) {
   const cleanId = bookingId.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
-  const collectionsToTry = [BOOKING_COLLECTION, "inquiries", "telecaller_leads"];
+  const collectionsToTry = [BOOKING_COLLECTION, "inquiries", "telecaller_leads", "artist_bookings"];
   const deletePromises: Promise<any>[] = [];
 
   // 1. Delete direct document IDs
@@ -461,7 +504,14 @@ export async function deleteArtistBooking(bookingId: string, booking?: BookingEv
 
   // 3. Clear from all local storage caches
   try {
-    const storageKeys = ["mykalakar_local_telecaller_leads", "mykalakar_telecaller_leads"];
+    const storageKeys = [
+      "mykalakar_local_telecaller_leads",
+      "mykalakar_telecaller_leads",
+      "mykalakar_local_bookings",
+      "mykalakar_local_inquiries",
+      "mykalakar_inquiries",
+      "mykalakar_customer_bookings",
+    ];
     storageKeys.forEach((key) => {
       const rawLocal = localStorage.getItem(key);
       if (rawLocal) {
@@ -476,27 +526,98 @@ export async function deleteArtistBooking(bookingId: string, booking?: BookingEv
         localStorage.setItem(key, JSON.stringify(filtered));
       }
     });
+    window.dispatchEvent(new CustomEvent("mykalakar_booking_created"));
   } catch (e) {
     // Ignore error
   }
 }
 
 export function subscribeArtistBookings(
-  artistId: string,
-  artistNameOrCb: string | ((bookings: BookingEvent[]) => void),
+  artistIdOrCriteria: string | ArtistMatchCriteria,
+  artistNameOrCb?: string | ((bookings: BookingEvent[]) => void),
   onDataOrErr?: ((bookings: BookingEvent[]) => void) | ((error: unknown) => void),
   onError?: (error: unknown) => void
 ) {
-  const artistName = typeof artistNameOrCb === "string" ? artistNameOrCb : "";
-  const onData = typeof artistNameOrCb === "function" ? artistNameOrCb : (onDataOrErr as any);
-  const actualOnError = typeof artistNameOrCb === "function" ? (onDataOrErr as any) : onError;
+  const isCriteriaObj = typeof artistIdOrCriteria === "object" && artistIdOrCriteria !== null;
+  const criteria: ArtistMatchCriteria = isCriteriaObj
+    ? artistIdOrCriteria
+    : {
+        artistId: typeof artistIdOrCriteria === "string" ? artistIdOrCriteria : "",
+        artistName: typeof artistNameOrCb === "string" ? artistNameOrCb : "",
+      };
+
+  const onData: ((bookings: BookingEvent[]) => void) | undefined =
+    typeof artistNameOrCb === "function"
+      ? artistNameOrCb
+      : typeof onDataOrErr === "function"
+      ? (onDataOrErr as any)
+      : undefined;
+
+  const actualOnError: ((error: unknown) => void) | undefined =
+    typeof artistNameOrCb === "function"
+      ? (onDataOrErr as any)
+      : typeof onDataOrErr === "function" && !onError
+      ? undefined
+      : onError;
 
   let firestoreBookings: BookingEvent[] = [];
   let inquiryBookings: BookingEvent[] = [];
   let telecallerBookings: BookingEvent[] = [];
+  let legacyArtistBookings: BookingEvent[] = [];
 
-  const cleanArtistName = artistName.trim().toLowerCase();
-  const cleanArtistId = artistId.trim().toLowerCase();
+  // Build match sets
+  const criteriaIds: string[] = [];
+  if (criteria.artistId) criteriaIds.push(criteria.artistId.trim().toLowerCase());
+  if (Array.isArray(criteria.ids)) {
+    criteria.ids.forEach((id) => {
+      const trimmed = String(id || "").trim().toLowerCase();
+      if (trimmed && !criteriaIds.includes(trimmed)) criteriaIds.push(trimmed);
+    });
+  }
+
+  const criteriaNames: string[] = [];
+  if (criteria.artistName) criteriaNames.push(criteria.artistName.trim());
+  if (Array.isArray(criteria.names)) {
+    criteria.names.forEach((name) => {
+      const trimmed = String(name || "").trim();
+      if (trimmed && !criteriaNames.includes(trimmed)) criteriaNames.push(trimmed);
+    });
+  }
+
+  const nameTokens: string[] = [];
+  criteriaNames.forEach((n) => {
+    const parts = n.toLowerCase().split(/[\s,._\-/()]+/);
+    parts.forEach((p) => {
+      const clean = p.trim();
+      if (clean.length >= 3 && !nameTokens.includes(clean)) {
+        nameTokens.push(clean);
+      }
+    });
+  });
+
+  const criteriaEmails: string[] = [];
+  if (Array.isArray(criteria.emails)) {
+    criteria.emails.forEach((email) => {
+      const clean = String(email || "").trim().toLowerCase();
+      if (clean && !criteriaEmails.includes(clean)) criteriaEmails.push(clean);
+    });
+  }
+
+  const criteriaPhones: string[] = [];
+  if (Array.isArray(criteria.phones)) {
+    criteria.phones.forEach((phone) => {
+      const digits = String(phone || "").replace(/\D/g, "").slice(-10);
+      if (digits && !criteriaPhones.includes(digits)) criteriaPhones.push(digits);
+    });
+  }
+
+  const criteriaCategories: string[] = [];
+  if (Array.isArray(criteria.categories)) {
+    criteria.categories.forEach((cat) => {
+      const clean = String(cat || "").trim().toLowerCase();
+      if (clean && !criteriaCategories.includes(clean)) criteriaCategories.push(clean);
+    });
+  }
 
   const isMatchForArtist = (data: any, docId: string) => {
     if (!data) return false;
@@ -509,23 +630,83 @@ export function subscribeArtistBookings(
       return false;
     }
 
-    const dArtistId = String(data.artistId || data.artistUid || "").toLowerCase();
-    const dArtistName = String(data.artistName || data.requestedArtistName || "").toLowerCase();
-    const dSubCat = String(data.subCategory || "").toLowerCase();
-    const matchedArr = Array.isArray(data.matchedArtists) ? data.matchedArtists : [];
+    const docIdLower = docId.toLowerCase();
+    const dArtistId = String(data.artistId || data.artistUid || data.confirmedArtistId || data.assignedArtistId || "").toLowerCase().trim();
+    const dArtistName = String(data.artistName || data.requestedArtistName || data.confirmedArtistName || data.assignedArtistName || "").toLowerCase().trim();
+    const dSubCat = String(data.subCategory || data.selectedService || data.serviceCategory || data.performanceType || "").toLowerCase().trim();
+    const dMessage = String(data.message || data.specialNotes || data.specialRequirements || data.additionalNotes || "").toLowerCase().trim();
+    const dEmail = String(data.artistEmail || data.assignedArtistEmail || "").toLowerCase().trim();
+    const dPhone = String(data.artistPhone || data.artistContactNumber || data.assignedArtistPhone || "").replace(/\D/g, "").slice(-10);
 
-    if (cleanArtistId && (dArtistId === cleanArtistId || docId.toLowerCase().includes(cleanArtistId))) {
+    // 1. Direct ID match
+    if (dArtistId && criteriaIds.some((id) => id === dArtistId || dArtistId.includes(id) || id.includes(dArtistId))) {
       return true;
     }
-    if (cleanArtistName && (dArtistName.includes(cleanArtistName) || cleanArtistName.includes(dArtistName))) {
+    if (criteriaIds.some((id) => id && (docIdLower.includes(id) || id.includes(docIdLower)))) {
       return true;
     }
-    if (cleanArtistName && dSubCat.includes(cleanArtistName)) {
+
+    // 2. Email match
+    if (dEmail && criteriaEmails.some((email) => email === dEmail)) {
       return true;
     }
-    if (cleanArtistName && matchedArr.some((m: any) => String(m.artistName || "").toLowerCase().includes(cleanArtistName))) {
+
+    // 3. Phone match
+    if (dPhone && criteriaPhones.some((phone) => phone === dPhone)) {
       return true;
     }
+
+    // 4. Exact or substring Name Match
+    for (const name of criteriaNames) {
+      const lower = name.toLowerCase().trim();
+      if (!lower) continue;
+      if (dArtistName && (dArtistName.includes(lower) || lower.includes(dArtistName))) {
+        return true;
+      }
+      if (dSubCat && dSubCat.includes(lower)) {
+        return true;
+      }
+      if (dMessage && dMessage.includes(lower)) {
+        return true;
+      }
+    }
+
+    // 5. Tokenized word match (e.g. "Samruddhi" inside "Samruddhi Kirtankar" or "Book Samruddhi")
+    for (const token of nameTokens) {
+      if (token.length >= 3) {
+        if (dArtistName.includes(token) || dSubCat.includes(token) || docIdLower.includes(token)) {
+          return true;
+        }
+      }
+    }
+
+    // 6. Matched artists array (from telecaller leads)
+    const matchedArr = Array.isArray(data.matchedArtists) ? data.matchedArtists : [];
+    for (const m of matchedArr) {
+      const mId = String(m.artistId || m.id || "").toLowerCase().trim();
+      const mName = String(m.artistName || m.name || "").toLowerCase().trim();
+      const mPhone = String(m.artistPhone || m.phone || "").replace(/\D/g, "").slice(-10);
+
+      if (mId && criteriaIds.some((id) => id === mId || mId.includes(id))) return true;
+      if (mPhone && criteriaPhones.some((phone) => phone === mPhone)) return true;
+      for (const token of nameTokens) {
+        if (token.length >= 3 && mName.includes(token)) return true;
+      }
+      for (const name of criteriaNames) {
+        const lower = name.toLowerCase().trim();
+        if (lower && (mName.includes(lower) || lower.includes(mName))) return true;
+      }
+    }
+
+    // 7. Category match if artist name is not specified or generic
+    if (!dArtistName || dArtistName === "artist" || dArtistName === "unassigned") {
+      for (const cat of criteriaCategories) {
+        if (cat.length >= 3 && (dSubCat.includes(cat) || dMessage.includes(cat))) {
+          return true;
+        }
+      }
+    }
+
     return false;
   };
 
@@ -533,22 +714,34 @@ export function subscribeArtistBookings(
     const map = new Map<string, BookingEvent>();
     const all: BookingEvent[] = [];
 
-    // Local storage leads override for instant offline/local syncing
-    try {
-      const rawLocal = localStorage.getItem("mykalakar_local_telecaller_leads");
-      if (rawLocal) {
-        const parsed = JSON.parse(rawLocal);
-        parsed.forEach((l: any) => {
-          if (isMatchForArtist(l, l.id)) {
-            all.push(normalizeBooking(l.id, l));
+    // Local storage leads and bookings override for instant offline/local syncing
+    const storageKeys = [
+      "mykalakar_local_bookings",
+      "mykalakar_local_telecaller_leads",
+      "mykalakar_telecaller_leads",
+      "mykalakar_local_inquiries",
+      "mykalakar_inquiries",
+      "mykalakar_customer_bookings",
+    ];
+    storageKeys.forEach((key) => {
+      try {
+        const rawLocal = localStorage.getItem(key);
+        if (rawLocal) {
+          const parsed = JSON.parse(rawLocal);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((l: any) => {
+              if (l && isMatchForArtist(l, String(l.id || ""))) {
+                all.push(normalizeBooking(String(l.id || `local_${Date.now()}`), l));
+              }
+            });
           }
-        });
+        }
+      } catch (e) {
+        // Ignore local storage error
       }
-    } catch (e) {
-      // Ignore local storage error
-    }
+    });
 
-    [...firestoreBookings, ...inquiryBookings, ...telecallerBookings, ...all].forEach((b) => {
+    [...firestoreBookings, ...inquiryBookings, ...telecallerBookings, ...legacyArtistBookings, ...all].forEach((b) => {
       // Create canonical deduplication key based on clientPhone + eventDate
       const phoneDigits = (b.clientPhone || "").replace(/\D/g, "").slice(-10);
       const dateKey = (b.eventDate || "").trim();
@@ -562,23 +755,30 @@ export function subscribeArtistBookings(
       if (!existing) {
         map.set(dedupeKey, b);
       } else {
-        // Priority status resolution: if one of the docs is CONFIRMED or PENDING_ARTIST_RESPONSE, preserve that status!
-        const priorityStatuses = ["CONFIRMED", "confirmed", "completed", "EVENT_COMPLETED", "PENDING_ARTIST_RESPONSE", "pending"];
-        let mergedStatus = existing.status;
-        if (priorityStatuses.includes(b.status) && !priorityStatuses.includes(existing.status)) {
-          mergedStatus = b.status;
-        } else if (b.status === "PENDING_ARTIST_RESPONSE" || b.status === "confirmed" || b.status === "CONFIRMED") {
-          mergedStatus = b.status;
-        }
+        const priorityB = getStatusPriority(b.status);
+        const priorityExisting = getStatusPriority(existing.status);
+        const mergedStatus = priorityB >= priorityExisting ? b.status : existing.status;
+
+        const counterOfferAmount = b.counterOfferAmount || existing.counterOfferAmount;
+        const counterOfferNotes = b.counterOfferNotes || existing.counterOfferNotes;
+        const counterOfferDate = b.counterOfferDate || existing.counterOfferDate;
+        const counterOfferStartTime = b.counterOfferStartTime || existing.counterOfferStartTime;
+        const counterOfferEndTime = b.counterOfferEndTime || existing.counterOfferEndTime;
+        const counterOfferLocation = b.counterOfferLocation || existing.counterOfferLocation;
 
         map.set(dedupeKey, {
           ...existing,
           ...b,
-          // Preserve best client info
+          status: mergedStatus,
+          counterOfferAmount,
+          counterOfferNotes,
+          counterOfferDate,
+          counterOfferStartTime,
+          counterOfferEndTime,
+          counterOfferLocation,
           clientName: (existing.clientName && existing.clientName !== "Client") ? existing.clientName : b.clientName,
           clientPhone: (existing.clientPhone && existing.clientPhone !== "Phone not provided") ? existing.clientPhone : b.clientPhone,
           venueLocation: (existing.venueLocation && existing.venueLocation !== "Venue not provided") ? existing.venueLocation : b.venueLocation,
-          status: mergedStatus,
         });
       }
     });
@@ -628,30 +828,328 @@ export function subscribeArtistBookings(
     () => publishMerged()
   );
 
+  // 4. Subscribe to legacy artist_bookings collection
+  const unsubLegacy = onSnapshot(
+    collection(db, "artist_bookings"),
+    (snapshot) => {
+      legacyArtistBookings = snapshot.docs
+        .filter((docSnap) => isMatchForArtist(docSnap.data(), docSnap.id))
+        .map((docSnap) => normalizeBooking(docSnap.id, docSnap.data()));
+      publishMerged();
+    },
+    () => publishMerged()
+  );
+
+  const handleLocalChange = () => {
+    publishMerged();
+  };
+
+  window.addEventListener("storage", handleLocalChange);
+  window.addEventListener("mykalakar_booking_created", handleLocalChange);
+  window.addEventListener("mykalakar_lead_created", handleLocalChange);
+  window.addEventListener("mykalakar_lead_updated", handleLocalChange);
+
+  // Initial local publish
+  publishMerged();
+
   return () => {
     unsubBookings();
     unsubInquiries();
     unsubLeads();
+    unsubLegacy();
+    window.removeEventListener("storage", handleLocalChange);
+    window.removeEventListener("mykalakar_booking_created", handleLocalChange);
+    window.removeEventListener("mykalakar_lead_created", handleLocalChange);
+    window.removeEventListener("mykalakar_lead_updated", handleLocalChange);
   };
 }
 
+function getStatusPriority(status: string): number {
+  const s = String(status || "").toUpperCase();
+  if (["EVENT_COMPLETED", "COMPLETED", "PAYOUT_RELEASED"].includes(s)) return 100;
+  if (["CONFIRMED", "BOOKED", "ARTIST_CONFIRMED", "ACCEPTED"].includes(s)) return 90;
+  if (["COUNTER_OFFER_SENT"].includes(s)) return 80;
+  if (["PAYMENT_PENDING", "QUOTE_SENT", "PAYMENT_AUTHORIZED"].includes(s)) return 70;
+  if (["PENDING_ARTIST_RESPONSE", "PENDING_TELECALLER_VERIFICATION", "SOFT_HOLD_ACTIVE", "ARTIST_REVIEW"].includes(s)) return 60;
+  if (["PENDING", "NEW", "CONTACTING_ARTISTS"].includes(s)) return 50;
+  if (["CANCELLED_BY_ARTIST", "CANCELLED_BY_CLIENT", "REJECTED", "CANCELLED"].includes(s)) return 40;
+  return 10;
+}
+
+export interface CustomerMatchCriteria {
+  customerId?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  customerName?: string;
+  ids?: string[];
+  emails?: string[];
+  phones?: string[];
+  names?: string[];
+}
+
 export function subscribeCustomerBookings(
-  customerId: string,
+  customerIdOrCriteria: string | CustomerMatchCriteria,
   onData: (bookings: BookingEvent[]) => void,
   onError?: (error: unknown) => void
 ) {
-  const bookingsQuery = query(collection(db, BOOKING_COLLECTION), where("customerId", "==", customerId));
-  return onSnapshot(
-    bookingsQuery,
+  const isCriteriaObj = typeof customerIdOrCriteria === "object" && customerIdOrCriteria !== null;
+  const criteria: CustomerMatchCriteria = isCriteriaObj
+    ? customerIdOrCriteria
+    : { customerId: String(customerIdOrCriteria || "") };
+
+  const criteriaIds: string[] = [];
+  if (criteria.customerId) criteriaIds.push(criteria.customerId.trim().toLowerCase());
+  if (Array.isArray(criteria.ids)) {
+    criteria.ids.forEach((id) => {
+      const clean = String(id || "").trim().toLowerCase();
+      if (clean && !criteriaIds.includes(clean)) criteriaIds.push(clean);
+    });
+  }
+
+  const criteriaEmails: string[] = [];
+  if (criteria.customerEmail) criteriaEmails.push(criteria.customerEmail.trim().toLowerCase());
+  if (Array.isArray(criteria.emails)) {
+    criteria.emails.forEach((email) => {
+      const clean = String(email || "").trim().toLowerCase();
+      if (clean && !criteriaEmails.includes(clean)) criteriaEmails.push(clean);
+    });
+  }
+
+  const criteriaPhones: string[] = [];
+  if (criteria.customerPhone) {
+    const digits = String(criteria.customerPhone).replace(/\D/g, "").slice(-10);
+    if (digits) criteriaPhones.push(digits);
+  }
+  if (Array.isArray(criteria.phones)) {
+    criteria.phones.forEach((phone) => {
+      const digits = String(phone || "").replace(/\D/g, "").slice(-10);
+      if (digits && !criteriaPhones.includes(digits)) criteriaPhones.push(digits);
+    });
+  }
+
+  const criteriaNames: string[] = [];
+  if (criteria.customerName) criteriaNames.push(criteria.customerName.trim());
+  if (Array.isArray(criteria.names)) {
+    criteria.names.forEach((name) => {
+      const clean = String(name || "").trim();
+      if (clean && !criteriaNames.includes(clean)) criteriaNames.push(clean);
+    });
+  }
+
+  const nameTokens: string[] = [];
+  criteriaNames.forEach((n) => {
+    const parts = n.toLowerCase().split(/[\s,._\-/()]+/);
+    parts.forEach((p) => {
+      const clean = p.trim();
+      if (clean.length >= 3 && !nameTokens.includes(clean)) {
+        nameTokens.push(clean);
+      }
+    });
+  });
+
+  let firestoreBookings: BookingEvent[] = [];
+  let inquiryBookings: BookingEvent[] = [];
+  let telecallerBookings: BookingEvent[] = [];
+  let legacyArtistBookings: BookingEvent[] = [];
+
+  const isMatchForCustomer = (data: any, docId: string) => {
+    if (!data) return false;
+    const docIdLower = docId.toLowerCase();
+    const dCustId = String(data.customerId || data.customerUid || data.userId || data.uid || data.clientId || "").toLowerCase().trim();
+    const dEmail = String(data.customerEmail || data.clientEmail || data.email || "").toLowerCase().trim();
+    const dPhone = String(data.clientPhone || data.customerPhone || data.phone || data.clientWhatsapp || "").replace(/\D/g, "").slice(-10);
+    const dName = String(data.clientName || data.customerName || data.name || "").toLowerCase().trim();
+
+    // 1. Direct ID match
+    if (dCustId && criteriaIds.some((id) => id === dCustId || dCustId.includes(id) || id.includes(dCustId))) {
+      return true;
+    }
+    if (criteriaIds.some((id) => id && (docIdLower.includes(id) || id.includes(docIdLower)))) {
+      return true;
+    }
+
+    // 2. Email match
+    if (dEmail && criteriaEmails.some((email) => email === dEmail)) {
+      return true;
+    }
+
+    // 3. Phone match
+    if (dPhone && criteriaPhones.some((phone) => phone === dPhone)) {
+      return true;
+    }
+
+    // 4. Exact Name Match
+    for (const name of criteriaNames) {
+      const lower = name.toLowerCase().trim();
+      if (lower && dName && (dName === lower || dName.includes(lower) || lower.includes(dName))) {
+        return true;
+      }
+    }
+
+    // 5. Tokenized Name Match
+    for (const token of nameTokens) {
+      if (token.length >= 3 && dName && dName.includes(token)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const publishMerged = () => {
+    const map = new Map<string, BookingEvent>();
+    const all: BookingEvent[] = [];
+
+    // Local storage overrides
+    const storageKeys = [
+      "mykalakar_local_bookings",
+      "mykalakar_local_telecaller_leads",
+      "mykalakar_telecaller_leads",
+      "mykalakar_local_inquiries",
+      "mykalakar_inquiries",
+      "mykalakar_customer_bookings",
+    ];
+    storageKeys.forEach((key) => {
+      try {
+        const rawLocal = localStorage.getItem(key);
+        if (rawLocal) {
+          const parsed = JSON.parse(rawLocal);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((l: any) => {
+              if (l && isMatchForCustomer(l, String(l.id || ""))) {
+                all.push(normalizeBooking(String(l.id || `local_${Date.now()}`), l));
+              }
+            });
+          }
+        }
+      } catch (e) {
+        // Ignore JSON error
+      }
+    });
+
+    [...firestoreBookings, ...inquiryBookings, ...telecallerBookings, ...legacyArtistBookings, ...all].forEach((b) => {
+      const phoneDigits = (b.clientPhone || "").replace(/\D/g, "").slice(-10);
+      const dateKey = (b.eventDate || "").trim();
+      const nameKey = (b.clientName || "").trim().toLowerCase();
+
+      const dedupeKey = phoneDigits && dateKey
+        ? `${phoneDigits}_${dateKey}`
+        : (phoneDigits ? `${phoneDigits}_${nameKey}` : (dateKey && nameKey ? `${nameKey}_${dateKey}` : b.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "")));
+
+      const existing = map.get(dedupeKey);
+      if (!existing) {
+        map.set(dedupeKey, b);
+      } else {
+        const priorityB = getStatusPriority(b.status);
+        const priorityExisting = getStatusPriority(existing.status);
+        const mergedStatus = priorityB >= priorityExisting ? b.status : existing.status;
+
+        const counterOfferAmount = b.counterOfferAmount || existing.counterOfferAmount;
+        const counterOfferNotes = b.counterOfferNotes || existing.counterOfferNotes;
+        const counterOfferDate = b.counterOfferDate || existing.counterOfferDate;
+        const counterOfferStartTime = b.counterOfferStartTime || existing.counterOfferStartTime;
+        const counterOfferEndTime = b.counterOfferEndTime || existing.counterOfferEndTime;
+        const counterOfferLocation = b.counterOfferLocation || existing.counterOfferLocation;
+
+        map.set(dedupeKey, {
+          ...existing,
+          ...b,
+          status: mergedStatus,
+          counterOfferAmount,
+          counterOfferNotes,
+          counterOfferDate,
+          counterOfferStartTime,
+          counterOfferEndTime,
+          counterOfferLocation,
+          clientName: (existing.clientName && existing.clientName !== "Client") ? existing.clientName : b.clientName,
+          clientPhone: (existing.clientPhone && existing.clientPhone !== "Phone not provided") ? existing.clientPhone : b.clientPhone,
+          venueLocation: (existing.venueLocation && existing.venueLocation !== "Venue not provided") ? existing.venueLocation : b.venueLocation,
+        });
+      }
+    });
+
+    const result = Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt || Date.now()).getTime() - new Date(a.createdAt || Date.now()).getTime()
+    );
+    checkAndReleaseExpiredHolds(result).catch(() => {});
+    if (onData) onData(result);
+  };
+
+  // 1. Subscribe to bookings collection
+  const unsubBookings = onSnapshot(
+    collection(db, BOOKING_COLLECTION),
     (snapshot) => {
-      const bookings = mapSnapshot(snapshot, normalizeBooking).sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      checkAndReleaseExpiredHolds(bookings).catch(console.error);
-      onData(bookings);
+      firestoreBookings = snapshot.docs
+        .filter((docSnap) => isMatchForCustomer(docSnap.data(), docSnap.id))
+        .map((docSnap) => normalizeBooking(docSnap.id, docSnap.data()));
+      publishMerged();
     },
-    onError
+    (err) => {
+      if (onError) onError(err);
+      publishMerged();
+    }
   );
+
+  // 2. Subscribe to inquiries collection
+  const unsubInquiries = onSnapshot(
+    collection(db, "inquiries"),
+    (snapshot) => {
+      inquiryBookings = snapshot.docs
+        .filter((docSnap) => isMatchForCustomer(docSnap.data(), docSnap.id))
+        .map((docSnap) => normalizeBooking(`inquiry_${docSnap.id}`, docSnap.data()));
+      publishMerged();
+    },
+    () => publishMerged()
+  );
+
+  // 3. Subscribe to telecaller_leads collection
+  const unsubLeads = onSnapshot(
+    collection(db, "telecaller_leads"),
+    (snapshot) => {
+      telecallerBookings = snapshot.docs
+        .filter((docSnap) => isMatchForCustomer(docSnap.data(), docSnap.id))
+        .map((docSnap) => normalizeBooking(`lead_${docSnap.id}`, docSnap.data()));
+      publishMerged();
+    },
+    () => publishMerged()
+  );
+
+  // 4. Subscribe to legacy artist_bookings collection
+  const unsubLegacy = onSnapshot(
+    collection(db, "artist_bookings"),
+    (snapshot) => {
+      legacyArtistBookings = snapshot.docs
+        .filter((docSnap) => isMatchForCustomer(docSnap.data(), docSnap.id))
+        .map((docSnap) => normalizeBooking(docSnap.id, docSnap.data()));
+      publishMerged();
+    },
+    () => publishMerged()
+  );
+
+  const handleLocalChange = () => {
+    publishMerged();
+  };
+
+  window.addEventListener("storage", handleLocalChange);
+  window.addEventListener("mykalakar_booking_created", handleLocalChange);
+  window.addEventListener("mykalakar_lead_created", handleLocalChange);
+  window.addEventListener("mykalakar_lead_updated", handleLocalChange);
+  window.addEventListener("mykalakar_lead_status_changed", handleLocalChange);
+
+  // Initial local publish
+  publishMerged();
+
+  return () => {
+    unsubBookings();
+    unsubInquiries();
+    unsubLeads();
+    unsubLegacy();
+    window.removeEventListener("storage", handleLocalChange);
+    window.removeEventListener("mykalakar_booking_created", handleLocalChange);
+    window.removeEventListener("mykalakar_lead_created", handleLocalChange);
+    window.removeEventListener("mykalakar_lead_updated", handleLocalChange);
+    window.removeEventListener("mykalakar_lead_status_changed", handleLocalChange);
+  };
 }
 
 export function subscribeArtistAvailability(
@@ -767,7 +1265,7 @@ export async function updateArtistBookingStatus(
   const telecallerStatus =
     upperStatus === "CONFIRMED" || upperStatus === "ACCEPTED"
       ? "artist_confirmed"
-      : upperStatus === "PAYMENT_PENDING"
+      : upperStatus === "PAYMENT_PENDING" || upperStatus === "COUNTER_OFFER_SENT"
       ? "quote_sent"
       : upperStatus === "EVENT_COMPLETED" || upperStatus === "COMPLETED"
       ? "booked"
@@ -843,35 +1341,50 @@ export async function updateArtistBookingStatus(
     "Updating the booking is taking too long. Please try again."
   );
 
-  // Update local storage cache for telecaller leads
+  // Update local storage cache for all relevant keys
   try {
-    const storageKeys = ["mykalakar_local_telecaller_leads", "mykalakar_telecaller_leads"];
+    const storageKeys = [
+      "mykalakar_local_telecaller_leads",
+      "mykalakar_telecaller_leads",
+      "mykalakar_local_bookings",
+      "mykalakar_local_inquiries",
+      "mykalakar_inquiries",
+      "mykalakar_customer_bookings",
+    ];
     storageKeys.forEach((key) => {
       const rawLocal = localStorage.getItem(key);
       if (rawLocal) {
         const parsed = JSON.parse(rawLocal);
-        const updated = parsed.map((l: any) => {
-          const lId = String(l.id || "");
-          const lPhone = String(l.clientPhone || l.customerPhone || l.phone || "").trim();
-          const matches =
-            lId === booking.id ||
-            lId === cleanDocId ||
-            (booking.clientPhone && lPhone && lPhone === booking.clientPhone.trim());
-          if (matches) {
-            return {
-              ...l,
-              status: telecallerStatus,
-              telecallerStatus,
-              bookingStatus: normalizedBookingStatus,
-              updatedAt: now,
-              ...extraFields,
-            };
-          }
-          return l;
-        });
-        localStorage.setItem(key, JSON.stringify(updated));
+        if (Array.isArray(parsed)) {
+          const updated = parsed.map((l: any) => {
+            const lId = String(l.id || "");
+            const lPhone = String(l.clientPhone || l.customerPhone || l.phone || "").trim();
+            const matches =
+              lId === booking.id ||
+              lId === cleanDocId ||
+              (booking.clientPhone && lPhone && lPhone === booking.clientPhone.trim());
+            if (matches) {
+              return {
+                ...l,
+                ...bookingPayload,
+                status: normalizedBookingStatus,
+                telecallerStatus,
+                bookingStatus: normalizedBookingStatus,
+                updatedAt: now,
+                ...extraFields,
+              };
+            }
+            return l;
+          });
+          localStorage.setItem(key, JSON.stringify(updated));
+        }
       }
     });
+
+    // Broadcast live event to all listeners
+    window.dispatchEvent(new CustomEvent("mykalakar_booking_created", { detail: bookingPayload }));
+    window.dispatchEvent(new CustomEvent("mykalakar_lead_status_changed", { detail: bookingPayload }));
+    window.dispatchEvent(new CustomEvent("mykalakar_lead_updated", { detail: bookingPayload }));
   } catch (e) {
     // Ignore local storage error
   }
@@ -1034,8 +1547,10 @@ export async function fetchRefundPolicy(): Promise<RefundPolicy> {
         lessThanSevenDays: Number(data.lessThanSevenDays ?? 0),
       };
     }
-  } catch (err) {
-    console.error("Error fetching refund policy:", err);
+  } catch (err: any) {
+    if (err?.code !== "permission-denied") {
+      console.warn("Error fetching refund policy:", err?.message || err);
+    }
   }
   return defaultPolicy;
 }

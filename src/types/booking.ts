@@ -55,6 +55,9 @@ export interface BookingEvent {
   paymentGateway?: "stripe" | "razorpay" | "paypal" | "adyen";
   authorizedAmount?: number;
   confirmedPrice?: number;
+  quotedPrice?: number;
+  amount?: number;
+  budget?: number;
   telecallerStatus?: string;
   isEscrowReleased?: boolean;
   selectedService?: string;
