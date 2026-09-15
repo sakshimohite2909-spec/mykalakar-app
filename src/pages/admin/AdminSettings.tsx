@@ -361,6 +361,23 @@ export default function AdminSettings() {
     }
   };
 
+  const handleSavePolicy = async () => {
+    setSavingPolicy(true);
+    try {
+      await saveRefundPolicy(policy);
+      await logAdminActivity(
+        "admin@mykalakar.com",
+        "SAVE_REFUND_POLICY",
+        `Refund policy updated: 30d/${policy.thirtyPlusDays}%, 15-30d/${policy.fifteenToThirtyDays}%, 7-14d/${policy.sevenToFourteenDays}%, <7d/${policy.lessThanSevenDays}%`
+      );
+      toast({ title: "Refund Policy Saved", description: "Cancellation policy rules updated globally." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Failed to save policy", description: "Could not write to platform settings." });
+    } finally {
+      setSavingPolicy(false);
+    }
+  };
+
   const updatePolicyField = (field: keyof RefundPolicy, val: string) => {
     const num = Number(val);
     if (!isNaN(num)) {
