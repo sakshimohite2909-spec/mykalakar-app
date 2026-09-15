@@ -3,6 +3,47 @@ import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "firebase/fires
 
 export type CommissionSplitType = "margin_percentage" | "total_booking_percentage";
 
+export interface BudgetSlab {
+  id: string;
+  minBudget: number;
+  maxBudget?: number; // e.g. 25000 or 99999999 for infinity
+  marginPct: number;  // e.g. 20 (20%)
+  commissionPct: number; // e.g. 20 (20% on Gross Margin)
+  isActive: boolean;
+  slabName?: string;
+  notes?: string;
+}
+
+export const DEFAULT_BUDGET_SLABS: BudgetSlab[] = [
+  {
+    id: "slab-1",
+    minBudget: 0,
+    maxBudget: 25000,
+    marginPct: 20,
+    commissionPct: 20,
+    isActive: true,
+    slabName: "Slab 1 (₹0 – ₹25,000)",
+  },
+  {
+    id: "slab-2",
+    minBudget: 25001,
+    maxBudget: 50000,
+    marginPct: 20,
+    commissionPct: 20,
+    isActive: true,
+    slabName: "Slab 2 (₹25,001 – ₹50,000)",
+  },
+  {
+    id: "slab-3",
+    minBudget: 50001,
+    maxBudget: 99999999,
+    marginPct: 30,
+    commissionPct: 20,
+    isActive: true,
+    slabName: "Slab 3 (₹50,001+)",
+  },
+];
+
 export interface IncentiveTier {
   minBookings: number;
   maxBookings?: number; // undefined or 999 for infinity
@@ -47,6 +88,7 @@ export interface CommissionConfig {
   minimumBookingThreshold: number;// Minimum booking amount to trigger commission
   enableTieredIncentives?: boolean; // Enable monthly volume-based tiered incentives
   incentiveTiers?: IncentiveTier[]; // Monthly volume slabs
+  budgetSlabs?: BudgetSlab[];     // Budget-wise Margin & Commission Slabs
   notes?: string;
   updatedAt?: string | Date;
   updatedBy?: string;
@@ -62,6 +104,10 @@ export interface CommissionCalculationResult {
   telecallerCommission: number;
   ownerProfit: number;
   flatBonus: number;
+  matchedSlab?: BudgetSlab;
+  marginPct?: number;
+  commissionPct?: number;
+  netMargin?: number;
 }
 
 export interface TelecallerMonthlyStats {
@@ -89,7 +135,8 @@ export const DEFAULT_COMMISSION_CONFIG: CommissionConfig = {
   minimumBookingThreshold: 1000,
   enableTieredIncentives: true,
   incentiveTiers: DEFAULT_INCENTIVE_TIERS,
-  notes: "डिफॉल्ट कमिशन: नफ्याच्या (मार्जिन) २०% टेलिकॉलरला आणि मासिक टार्गेट इन्सेंटिव्ह (३० वर १०%, ५० वर २०%).",
+  budgetSlabs: DEFAULT_BUDGET_SLABS,
+  notes: "बजेट स्लॅब आणि मार्जिन कमिशन नियम: ₹०-२५k (मार्जिन २०%, कमिशन २०%), ₹२५-५०k (मार्जिन २०%, कमिशन २०%), ₹५०k+ (मार्जिन ३०%, कमिशन २०%).",
 };
 
 export function getLocalCommissionConfig(): CommissionConfig {
@@ -208,44 +255,123 @@ export function subscribeCommissionConfig(callback: (config: CommissionConfig) =
 }
 
 /**
+ * Finds the applicable budget slab for a given customer budget
+ */
+export function findMatchingBudgetSlab(
+  budget: number,
+  slabs?: BudgetSlab[]
+): BudgetSlab | null {
+  const allSlabs = slabs && slabs.length > 0 ? slabs : (getLocalCommissionConfig().budgetSlabs || DEFAULT_BUDGET_SLABS);
+  const activeSlabs = allSlabs.filter((s) => s.isActive !== false);
+  const safeBudget = Math.max(0, Number(budget) || 0);
+
+  const matched = activeSlabs.find((slab) => {
+    const min = Number(slab.minBudget) || 0;
+    const max = typeof slab.maxBudget === "number" && slab.maxBudget > 0 ? Number(slab.maxBudget) : Infinity;
+    return safeBudget >= min && safeBudget <= max;
+  });
+
+  return matched || null;
+}
+
+/**
+ * Validates budget slabs for negative numbers, min > max, and overlapping ranges
+ */
+export function validateBudgetSlabs(slabs: BudgetSlab[]): { isValid: boolean; error?: string } {
+  if (!slabs || slabs.length === 0) {
+    return { isValid: false, error: "किमान एक बजेट स्लॅब असणे आवश्यक आहे." };
+  }
+
+  for (let i = 0; i < slabs.length; i++) {
+    const s = slabs[i];
+    const min = Number(s.minBudget) || 0;
+    const max = typeof s.maxBudget === "number" && s.maxBudget > 0 ? Number(s.maxBudget) : Infinity;
+
+    if (min < 0) {
+      return { isValid: false, error: `स्लॅब ${i + 1}: किमान बजेट ० पेक्षा कमी असू शकत नाही.` };
+    }
+    if (min > max) {
+      return {
+        isValid: false,
+        error: `स्लॅब ${i + 1}: किमान बजेट (₹${min.toLocaleString("en-IN")}) हे कमाल बजेट (₹${max.toLocaleString("en-IN")}) पेक्षा मोठे असू शकत नाही.`,
+      };
+    }
+    if (s.marginPct < 0 || s.marginPct > 100) {
+      return { isValid: false, error: `स्लॅब ${i + 1}: मार्जिन % हे ० ते १०० दरम्यान असावे.` };
+    }
+    if (s.commissionPct < 0 || s.commissionPct > 100) {
+      return { isValid: false, error: `स्लॅब ${i + 1}: कमिशन % हे ० ते १०० दरम्यान असावे.` };
+    }
+  }
+
+  // Check for overlapping ranges among active slabs
+  const activeSlabs = slabs.filter((s) => s.isActive !== false);
+  for (let i = 0; i < activeSlabs.length; i++) {
+    for (let j = i + 1; j < activeSlabs.length; j++) {
+      const s1 = activeSlabs[i];
+      const s2 = activeSlabs[j];
+      const min1 = Number(s1.minBudget) || 0;
+      const max1 = typeof s1.maxBudget === "number" && s1.maxBudget > 0 ? Number(s1.maxBudget) : Infinity;
+      const min2 = Number(s2.minBudget) || 0;
+      const max2 = typeof s2.maxBudget === "number" && s2.maxBudget > 0 ? Number(s2.maxBudget) : Infinity;
+
+      // Overlap condition: max(min1, min2) <= min(max1, max2)
+      if (Math.max(min1, min2) <= Math.min(max1, max2)) {
+        return {
+          isValid: false,
+          error: `बजेट स्लॅब ओव्हरलॅप होत आहेत: (${s1.slabName || `₹${min1.toLocaleString("en-IN")}-₹${max1.toLocaleString("en-IN")}`}) आणि (${s2.slabName || `₹${min2.toLocaleString("en-IN")}-₹${max2.toLocaleString("en-IN")}`}). कृपया रेंज तपासा.`,
+        };
+      }
+    }
+  }
+
+  return { isValid: true };
+}
+
+/**
  * Calculates the exact split for Telecaller commission vs MyKalakar owner profit
+ * IMPORTANT: Commission is strictly calculated on the Gross Margin (Customer Budget - Artist Payout)
  */
 export function calculateCommissionSplit(
   bookingAmount: number,
-  artistPayout: number,
+  artistPayout?: number,
   config?: CommissionConfig
 ): CommissionCalculationResult {
   const cfg = config || getLocalCommissionConfig();
   const safeBooking = Math.max(0, Number(bookingAmount) || 0);
-  const safeArtist = Math.max(0, Number(artistPayout) || 0);
+  const matchedSlab = findMatchingBudgetSlab(safeBooking, cfg.budgetSlabs);
+
+  const marginPct = matchedSlab ? matchedSlab.marginPct : 20;
+  const commissionPct = matchedSlab ? matchedSlab.commissionPct : (cfg.telecallerPercentage || 20);
+
+  // If artistPayout is not explicitly given, derive from Margin %
+  const defaultArtistPayout = safeBooking > 0 ? Math.round(safeBooking * (1 - marginPct / 100)) : 0;
+  const safeArtist = typeof artistPayout === "number" && artistPayout > 0 ? Number(artistPayout) : defaultArtistPayout;
+
+  // 1. Gross Margin = Customer Budget - Artist Payout
   const grossMargin = Math.max(0, safeBooking - safeArtist);
   const flatBonus = Number(cfg.flatBonusPerBooking) || 0;
 
-  let telecallerCommission = 0;
-  let ownerProfit = 0;
+  // 2. Commission Amount = Gross Margin * Commission % / 100
+  const telecallerCommission = Math.round((grossMargin * commissionPct) / 100) + flatBonus;
 
-  if (cfg.splitType === "margin_percentage") {
-    // Model 1: Percentage of the Platform Margin (Booking - Artist)
-    const baseCommission = Math.round((grossMargin * (cfg.telecallerPercentage || 0)) / 100);
-    telecallerCommission = baseCommission + flatBonus;
-    ownerProfit = Math.max(0, grossMargin - telecallerCommission);
-  } else {
-    // Model 2: Percentage of Total Booking Amount
-    const baseCommission = Math.round((safeBooking * (cfg.telecallerPercentage || 0)) / 100);
-    telecallerCommission = baseCommission + flatBonus;
-    ownerProfit = Math.max(0, safeBooking - safeArtist - telecallerCommission);
-  }
+  // 3. Net Margin (Owner Profit) = Gross Margin - Commission Amount
+  const ownerProfit = Math.max(0, grossMargin - telecallerCommission);
 
   return {
     bookingAmount: safeBooking,
     artistPayout: safeArtist,
     grossMargin,
-    splitType: cfg.splitType,
-    telecallerCommissionPct: cfg.telecallerPercentage,
-    ownerProfitPct: cfg.ownerPercentage,
+    splitType: "margin_percentage",
+    telecallerCommissionPct: commissionPct,
+    ownerProfitPct: Math.max(0, 100 - commissionPct),
     telecallerCommission,
     ownerProfit,
     flatBonus,
+    matchedSlab: matchedSlab || undefined,
+    marginPct,
+    commissionPct,
+    netMargin: ownerProfit,
   };
 }
 

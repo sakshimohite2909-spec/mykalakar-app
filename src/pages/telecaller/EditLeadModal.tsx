@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone, Calendar, Clock, MapPin, IndianRupee, Sparkles, Loader2, Volume2, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { updateLeadDetails, type TelecallerLead, type LeadStatus } from "@/services/telecallerService";
-import { calculateCommissionSplit } from "@/services/commissionSettingsService";
+import { calculateCommissionSplit, findMatchingBudgetSlab } from "@/services/commissionSettingsService";
 import { toast } from "@/hooks/use-toast";
 
 type Props = {
@@ -241,43 +241,86 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
             />
           </div>
 
-          {/* Budgets (Customer vs Artist Offer) */}
-          <div className="bg-stone-50 border border-stone-200/90 rounded-2xl p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs font-bold text-stone-800 flex items-center gap-1">
-                <IndianRupee className="h-3.5 w-3.5 text-emerald-600" /> Customer Budget (Max)
-              </Label>
-              <Input
-                type="number"
-                value={budget || ""}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setBudget(val);
-                  if (!artistOfferBudget || artistOfferBudget === Math.round(budget * 0.8)) {
-                    setArtistOfferBudget(Math.round(val * 0.8));
-                  }
-                }}
-                className="h-9 text-xs font-black text-emerald-700 bg-white rounded-xl mt-1"
-                placeholder="उदा. ₹15000"
-              />
-              <span className="text-[10px] text-stone-500 font-medium">What customer agreed to pay</span>
+          {/* Budgets (Customer vs Artist Offer with Slab Detection) */}
+          <div className="bg-stone-50 border border-stone-200/90 rounded-2xl p-3.5 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold text-stone-800 flex items-center gap-1">
+                  <IndianRupee className="h-3.5 w-3.5 text-emerald-600" /> Customer Budget (Max)
+                </Label>
+                <Input
+                  type="number"
+                  value={budget || ""}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) || 0;
+                    setBudget(val);
+                    const matched = findMatchingBudgetSlab(val);
+                    const margin = matched ? matched.marginPct : 20;
+                    setArtistOfferBudget(val > 0 ? Math.round(val * (1 - margin / 100)) : 0);
+                  }}
+                  className="h-9 text-xs font-black text-emerald-700 bg-white rounded-xl mt-1"
+                  placeholder="उदा. ₹30000"
+                  required
+                />
+                <span className="text-[10px] text-stone-500 font-medium">What customer agreed to pay</span>
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold text-stone-800 flex items-center gap-1">
+                  <IndianRupee className="h-3.5 w-3.5 text-orange-600" /> Offer to Artist (Payout)
+                </Label>
+                <Input
+                  type="number"
+                  value={artistOfferBudget || ""}
+                  onChange={(e) => setArtistOfferBudget(Number(e.target.value) || 0)}
+                  className="h-9 text-xs font-black text-orange-600 bg-white rounded-xl mt-1"
+                  placeholder="₹24000"
+                />
+                <span className="text-[10px] text-stone-500 font-medium">
+                  Margin / Fee: ₹{Math.max(0, (budget || 0) - (artistOfferBudget || 0)).toLocaleString("en-IN")}
+                </span>
+              </div>
             </div>
 
-            <div>
-              <Label className="text-xs font-bold text-stone-800 flex items-center gap-1">
-                <IndianRupee className="h-3.5 w-3.5 text-orange-600" /> Offer to Artist (Payout)
-              </Label>
-              <Input
-                type="number"
-                value={artistOfferBudget || ""}
-                onChange={(e) => setArtistOfferBudget(Number(e.target.value))}
-                className="h-9 text-xs font-black text-orange-600 bg-white rounded-xl mt-1"
-                placeholder="₹12000"
-              />
-              <span className="text-[10px] text-stone-500 font-medium">
-                Margin / Fee: ₹{Math.max(0, (budget || 0) - (artistOfferBudget || 0))}
-              </span>
-            </div>
+            {/* Live Slab Detection & Breakdown Box */}
+            {(() => {
+              const safeBudget = budget || 0;
+              const matchedSlab = findMatchingBudgetSlab(safeBudget);
+              const marginPct = matchedSlab ? matchedSlab.marginPct : 20;
+              const commPct = matchedSlab ? matchedSlab.commissionPct : 20;
+              const safeArtist = artistOfferBudget > 0 ? artistOfferBudget : (safeBudget > 0 ? Math.round(safeBudget * (1 - marginPct / 100)) : 0);
+              const grossMargin = Math.max(0, safeBudget - safeArtist);
+              const commAmt = Math.round((grossMargin * commPct) / 100);
+              const netMargin = Math.max(0, grossMargin - commAmt);
+
+              return (
+                <div className="pt-2 border-t border-stone-200/80 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs bg-orange-100/60 p-2 rounded-xl border border-orange-200">
+                    <span className="font-bold text-orange-950">Applicable Budget Slab:</span>
+                    <span className="font-black text-orange-800 bg-white px-2 py-0.5 rounded-md shadow-2xs">
+                      {matchedSlab ? (matchedSlab.slabName || `₹${matchedSlab.minBudget.toLocaleString("en-IN")} – ${matchedSlab.maxBudget ? `₹${matchedSlab.maxBudget.toLocaleString("en-IN")}` : "+"}`) : "Default Slab (20%)"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                    <div className="p-2 rounded-xl bg-white border border-stone-200">
+                      <span className="block text-[10px] text-stone-400 font-bold uppercase">Margin ({marginPct}%)</span>
+                      <span className="font-black text-emerald-700">₹{grossMargin.toLocaleString("en-IN")}</span>
+                    </div>
+
+                    <div className="p-2 rounded-xl bg-white border border-stone-200">
+                      <span className="block text-[10px] text-blue-500 font-bold uppercase">Commission ({commPct}%)</span>
+                      <span className="font-black text-blue-700">₹{commAmt.toLocaleString("en-IN")}</span>
+                    </div>
+
+                    <div className="p-2 rounded-xl bg-white border border-stone-200 col-span-2 sm:col-span-1">
+                      <span className="block text-[10px] text-stone-500 font-bold uppercase">Net Margin (Owner)</span>
+                      <span className="font-black text-stone-900">₹{netMargin.toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Sound & Technical Requirements */}

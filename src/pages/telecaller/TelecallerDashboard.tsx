@@ -738,10 +738,10 @@ export default function TelecallerDashboard() {
 
               {/* Active Tier Badge */}
               <span className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-sm border ${monthlyStats.appliedIncentivePct >= 20
-                  ? "bg-amber-400 text-amber-950 border-amber-300"
-                  : monthlyStats.appliedIncentivePct >= 10
-                    ? "bg-sky-400 text-sky-950 border-sky-300"
-                    : "bg-slate-200 text-slate-900 border-slate-300"
+                ? "bg-amber-400 text-amber-950 border-amber-300"
+                : monthlyStats.appliedIncentivePct >= 10
+                  ? "bg-sky-400 text-sky-950 border-sky-300"
+                  : "bg-slate-200 text-slate-900 border-slate-300"
                 }`}>
                 {monthlyStats.appliedIncentivePct >= 20 ? (
                   <Trophy className="h-3.5 w-3.5 text-amber-900" />
@@ -842,8 +842,8 @@ export default function TelecallerDashboard() {
             <button
               onClick={() => setMobileTab("leads")}
               className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${mobileTab === "leads"
-                  ? "bg-white text-stone-950 shadow-sm"
-                  : "text-stone-600 hover:text-stone-900"
+                ? "bg-white text-stone-950 shadow-sm"
+                : "text-stone-600 hover:text-stone-900"
                 }`}
             >
               <FileText className="h-4 w-4 text-orange-600" />
@@ -852,8 +852,8 @@ export default function TelecallerDashboard() {
             <button
               onClick={() => setMobileTab("workbench")}
               className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${mobileTab === "workbench"
-                  ? "bg-orange-600 text-white shadow-sm"
-                  : "text-stone-600 hover:text-stone-900"
+                ? "bg-orange-600 text-white shadow-sm"
+                : "text-stone-600 hover:text-stone-900"
                 }`}
             >
               <PhoneCall className="h-4 w-4" />
@@ -873,8 +873,8 @@ export default function TelecallerDashboard() {
                     setStatusFilter("all");
                   }}
                   className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 ${leadTypeFilter === "all" && statusFilter === "all"
-                      ? "bg-white text-stone-900 shadow-2xs"
-                      : "text-stone-600 hover:text-stone-900"
+                    ? "bg-white text-stone-900 shadow-2xs"
+                    : "text-stone-600 hover:text-stone-900"
                     }`}
                 >
                   सर्व ({leads.length})
@@ -882,8 +882,8 @@ export default function TelecallerDashboard() {
                 <button
                   onClick={() => setStatusFilter("new")}
                   className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 ${statusFilter === "new"
-                      ? "bg-amber-500 text-white shadow-2xs"
-                      : "text-amber-800 hover:bg-amber-100/60"
+                    ? "bg-amber-500 text-white shadow-2xs"
+                    : "text-amber-800 hover:bg-amber-100/60"
                     }`}
                 >
                   नवीन ({leads.filter((l) => l.status === "new").length})
@@ -894,8 +894,8 @@ export default function TelecallerDashboard() {
                     setStatusFilter("all");
                   }}
                   className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 flex items-center gap-1 ${leadTypeFilter === "book_artist"
-                      ? "bg-purple-600 text-white shadow-2xs"
-                      : "text-purple-800 hover:bg-purple-100/60"
+                    ? "bg-purple-600 text-white shadow-2xs"
+                    : "text-purple-800 hover:bg-purple-100/60"
                     }`}
                 >
                   <UserCheck className="h-3 w-3" />
@@ -907,8 +907,8 @@ export default function TelecallerDashboard() {
                     setStatusFilter("all");
                   }}
                   className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 flex items-center gap-1 ${leadTypeFilter === "post_requirement"
-                      ? "bg-stone-800 text-white shadow-2xs"
-                      : "text-stone-700 hover:bg-stone-200"
+                    ? "bg-stone-800 text-white shadow-2xs"
+                    : "text-stone-700 hover:bg-stone-200"
                     }`}
                 >
                   रिक्वायरमेंट ({leads.filter((l) => l.leadType === "post_requirement").length})
@@ -953,18 +953,18 @@ export default function TelecallerDashboard() {
                           setMobileTab("workbench");
                         }}
                         className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${isSelected
-                            ? "bg-orange-50/90 border-orange-400 shadow-sm ring-2 ring-orange-200"
-                            : "bg-white border-stone-200/90 hover:border-orange-300 hover:bg-stone-50/60 shadow-2xs"
+                          ? "bg-orange-50/90 border-orange-400 shadow-sm ring-2 ring-orange-200"
+                          : "bg-white border-stone-200/90 hover:border-orange-300 hover:bg-stone-50/60 shadow-2xs"
                           }`}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span
                               className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${lead.status === "new"
-                                  ? "bg-amber-100 text-amber-900 border-amber-300"
-                                  : lead.status === "artist_confirmed" || lead.status === "booked"
-                                    ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                                    : "bg-sky-100 text-sky-900 border-sky-300"
+                                ? "bg-amber-100 text-amber-900 border-amber-300"
+                                : lead.status === "artist_confirmed" || lead.status === "booked"
+                                  ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                                  : "bg-sky-100 text-sky-900 border-sky-300"
                                 }`}
                             >
                               {lead.status === "new"
@@ -1073,8 +1073,8 @@ export default function TelecallerDashboard() {
                         type="button"
                         onClick={() => handleStatusChange(activeLead.id, "new")}
                         className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${activeLead.status === "new"
-                            ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
-                            : "bg-black/25 text-white/90 hover:bg-black/40"
+                          ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
+                          : "bg-black/25 text-white/90 hover:bg-black/40"
                           }`}
                       >
                         <Phone className="h-3.5 w-3.5 mb-0.5" />
@@ -1086,8 +1086,8 @@ export default function TelecallerDashboard() {
                         type="button"
                         onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
                         className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${activeLead.status === "contacting_artists"
-                            ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
-                            : "bg-black/25 text-white/90 hover:bg-black/40"
+                          ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
+                          : "bg-black/25 text-white/90 hover:bg-black/40"
                           }`}
                       >
                         <MessageCircle className="h-3.5 w-3.5 mb-0.5 text-emerald-400" />
@@ -1099,8 +1099,8 @@ export default function TelecallerDashboard() {
                         type="button"
                         onClick={() => handleStatusChange(activeLead.id, "artist_confirmed")}
                         className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${activeLead.status === "artist_confirmed"
-                            ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
-                            : "bg-black/25 text-white/90 hover:bg-black/40"
+                          ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
+                          : "bg-black/25 text-white/90 hover:bg-black/40"
                           }`}
                       >
                         <CheckCircle2 className="h-3.5 w-3.5 mb-0.5 text-emerald-400" />
@@ -1112,8 +1112,8 @@ export default function TelecallerDashboard() {
                         type="button"
                         onClick={() => handleStatusChange(activeLead.id, "booked")}
                         className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${activeLead.status === "booked"
-                            ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
-                            : "bg-black/25 text-white/90 hover:bg-black/40"
+                          ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
+                          : "bg-black/25 text-white/90 hover:bg-black/40"
                           }`}
                       >
                         <Wallet className="h-3.5 w-3.5 mb-0.5 text-emerald-400" />
@@ -1325,8 +1325,8 @@ export default function TelecallerDashboard() {
                           <div
                             key={artist.name}
                             className={`p-3 sm:p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${isConfirmed
-                                ? "bg-emerald-50/90 border-emerald-400 shadow-sm ring-1 ring-emerald-200"
-                                : "bg-stone-50/80 border-stone-200 hover:border-orange-300"
+                              ? "bg-emerald-50/90 border-emerald-400 shadow-sm ring-1 ring-emerald-200"
+                              : "bg-stone-50/80 border-stone-200 hover:border-orange-300"
                               }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -1393,8 +1393,8 @@ export default function TelecallerDashboard() {
                                   });
                                 }}
                                 className={`h-9 px-3.5 rounded-xl text-xs font-black shadow-2xs ${isConfirmed
-                                    ? "bg-emerald-700 text-white ring-2 ring-emerald-300"
-                                    : "bg-stone-900 hover:bg-stone-800 text-white"
+                                  ? "bg-emerald-700 text-white ring-2 ring-emerald-300"
+                                  : "bg-stone-900 hover:bg-stone-800 text-white"
                                   }`}
                               >
                                 {isConfirmed ? "✓ नक्की झाले" : "नक्की करा"}
@@ -1516,10 +1516,10 @@ export default function TelecallerDashboard() {
                     <h3 className="text-sm font-black text-stone-950">{lead.customerName}</h3>
                     <span
                       className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${lead.status === "new"
-                          ? "bg-amber-100 text-amber-800"
-                          : lead.status === "artist_confirmed"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-sky-100 text-sky-800"
+                        ? "bg-amber-100 text-amber-800"
+                        : lead.status === "artist_confirmed"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-sky-100 text-sky-800"
                         }`}
                     >
                       {lead.status}

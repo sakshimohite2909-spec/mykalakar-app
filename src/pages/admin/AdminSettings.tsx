@@ -1,10 +1,33 @@
 import { useEffect, useState } from "react";
-import { Check, Loader2, Settings, ShieldCheck, X, Save, HelpCircle, Percent, DollarSign, Wallet, ArrowRight, Sparkles, Sliders } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  Settings,
+  ShieldCheck,
+  X,
+  Save,
+  HelpCircle,
+  Percent,
+  DollarSign,
+  Wallet,
+  ArrowRight,
+  Sparkles,
+  Sliders,
+  Plus,
+  Trash2,
+  Edit3,
+  AlertTriangle,
+  CheckCircle2,
+  Power,
+  Layers,
+  RotateCcw,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { approveAdminRequest, rejectAdminRequest } from "@/lib/adminQueries";
 import { firebaseErrorMessage, toastForFirestoreError } from "@/lib/firebaseSafe";
@@ -16,8 +39,12 @@ import {
   fetchCommissionConfig,
   updateCommissionConfig,
   calculateCommissionSplit,
+  findMatchingBudgetSlab,
+  validateBudgetSlabs,
+  DEFAULT_BUDGET_SLABS,
   type CommissionConfig,
   type CommissionSplitType,
+  type BudgetSlab,
 } from "@/services/commissionSettingsService";
 
 export default function AdminSettings() {
@@ -42,14 +69,29 @@ export default function AdminSettings() {
     ownerPercentage: 80,
     flatBonusPerBooking: 0,
     minimumBookingThreshold: 1000,
+    budgetSlabs: DEFAULT_BUDGET_SLABS,
     notes: "डिफॉल्ट कमिशन: नफ्याच्या (मार्जिन) २०% टेलिकॉलरला आणि ८०% मायकलाकार ओनरकडे.",
   });
+  const [budgetSlabs, setBudgetSlabs] = useState<BudgetSlab[]>(DEFAULT_BUDGET_SLABS);
   const [loadingCommission, setLoadingCommission] = useState(true);
   const [savingCommission, setSavingCommission] = useState(false);
 
+  // Budget Slab CRUD state
+  const [editingSlabId, setEditingSlabId] = useState<string | null>(null);
+  const [isAddingSlab, setIsAddingSlab] = useState(false);
+  const [slabForm, setSlabForm] = useState<Partial<BudgetSlab>>({
+    minBudget: 0,
+    maxBudget: 25000,
+    marginPct: 20,
+    commissionPct: 20,
+    isActive: true,
+    slabName: "",
+  });
+  const [slabValidationWarning, setSlabValidationWarning] = useState<string | null>(null);
+
   // Live Simulator sandbox state
-  const [simBudget, setSimBudget] = useState<number>(10000);
-  const [simArtistOffer, setSimArtistOffer] = useState<number>(8000);
+  const [simBudget, setSimBudget] = useState<number>(30000);
+  const [simArtistOffer, setSimArtistOffer] = useState<number>(24000);
 
   useEffect(() => {
     let unsub = () => {};
@@ -108,6 +150,11 @@ export default function AdminSettings() {
       try {
         const cfg = await fetchCommissionConfig();
         setCommissionConfig(cfg);
+        if (cfg.budgetSlabs && cfg.budgetSlabs.length > 0) {
+          setBudgetSlabs(cfg.budgetSlabs);
+        } else {
+          setBudgetSlabs(DEFAULT_BUDGET_SLABS);
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -146,35 +193,162 @@ export default function AdminSettings() {
     }
   };
 
-  const handleSavePolicy = async () => {
-    setSavingPolicy(true);
+  // Slab CRUD handlers
+  const handleStartAddSlab = () => {
+    const nextMin = budgetSlabs.length > 0
+      ? Math.max(...budgetSlabs.map((s) => (typeof s.maxBudget === "number" && s.maxBudget > 0 ? s.maxBudget : s.minBudget))) + 1
+      : 0;
+    setSlabForm({
+      id: `slab-${Date.now()}`,
+      minBudget: nextMin,
+      maxBudget: nextMin + 25000,
+      marginPct: 20,
+      commissionPct: 20,
+      isActive: true,
+      slabName: `Slab ${budgetSlabs.length + 1}`,
+    });
+    setEditingSlabId(null);
+    setIsAddingSlab(true);
+    setSlabValidationWarning(null);
+  };
+
+  const handleStartEditSlab = (slab: BudgetSlab) => {
+    setSlabForm({ ...slab });
+    setEditingSlabId(slab.id);
+    setIsAddingSlab(false);
+    setSlabValidationWarning(null);
+  };
+
+  const handleSaveSlabForm = () => {
+    const min = Number(slabForm.minBudget) || 0;
+    const max = typeof slabForm.maxBudget === "number" && slabForm.maxBudget > 0 ? Number(slabForm.maxBudget) : undefined;
+    const margin = Number(slabForm.marginPct) || 0;
+    const comm = Number(slabForm.commissionPct) || 0;
+
+    if (min < 0) {
+      setSlabValidationWarning("किमान बजेट ० पेक्षा कमी असू शकत नाही.");
+      return;
+    }
+    if (typeof max === "number" && min > max) {
+      setSlabValidationWarning(`किमान बजेट (₹${min.toLocaleString("en-IN")}) हे कमाल बजेट (₹${max.toLocaleString("en-IN")}) पेक्षा मोठे असू शकत नाही.`);
+      return;
+    }
+    if (margin < 0 || margin > 100) {
+      setSlabValidationWarning("मार्जिन % ० ते १०० दरम्यान असावे.");
+      return;
+    }
+    if (comm < 0 || comm > 100) {
+      setSlabValidationWarning("कमिशन % ० ते १०० दरम्यान असावे.");
+      return;
+    }
+
+    const newSlab: BudgetSlab = {
+      id: slabForm.id || `slab-${Date.now()}`,
+      minBudget: min,
+      maxBudget: max,
+      marginPct: margin,
+      commissionPct: comm,
+      isActive: slabForm.isActive !== false,
+      slabName: slabForm.slabName || (max ? `₹${min.toLocaleString("en-IN")} – ₹${max.toLocaleString("en-IN")}` : `₹${min.toLocaleString("en-IN")}+`),
+      notes: slabForm.notes,
+    };
+
+    let updatedList: BudgetSlab[] = [];
+    if (editingSlabId) {
+      updatedList = budgetSlabs.map((s) => (s.id === editingSlabId ? newSlab : s));
+    } else {
+      updatedList = [...budgetSlabs, newSlab];
+    }
+
+    // Sort by minBudget ascending
+    updatedList.sort((a, b) => a.minBudget - b.minBudget);
+
+    const validation = validateBudgetSlabs(updatedList);
+    if (!validation.isValid) {
+      setSlabValidationWarning(validation.error || "Overlap detected.");
+      return;
+    }
+
+    setBudgetSlabs(updatedList);
+    setIsAddingSlab(false);
+    setEditingSlabId(null);
+    setSlabValidationWarning(null);
+    toast({
+      title: "स्लॅब तयार/अपडेट झाला! ✅",
+      description: `${newSlab.slabName} नियमांमध्ये जोडला. सेव्ह करण्यासाठी खाली 'Save Settings' दाबा.`,
+    });
+  };
+
+  const handleDeleteSlab = (id: string) => {
+    if (budgetSlabs.length <= 1) {
+      toast({
+        variant: "destructive",
+        title: "कमीत कमी १ स्लॅब आवश्यक आहे",
+        description: "तुम्ही सर्व स्लॅब्स हटवू शकत नाही.",
+      });
+      return;
+    }
+    const updated = budgetSlabs.filter((s) => s.id !== id);
+    setBudgetSlabs(updated);
+    if (editingSlabId === id) {
+      setEditingSlabId(null);
+      setIsAddingSlab(false);
+    }
+    toast({ title: "स्लॅब हटवला 🗑️", description: "स्लॅब यादीतून काढण्यात आला." });
+  };
+
+  const handleToggleSlabActive = (id: string) => {
+    const updated = budgetSlabs.map((s) => (s.id === id ? { ...s, isActive: !s.isActive } : s));
+    setBudgetSlabs(updated);
+  };
+
+  const handleCancelSlabForm = () => {
+    setIsAddingSlab(false);
+    setEditingSlabId(null);
+    setSlabValidationWarning(null);
+  };
+
+  const handleCancelAllChanges = async () => {
     try {
-      await saveRefundPolicy(policy);
-      await logAdminActivity(
-        "admin@mykalakar.com",
-        "SAVE_REFUND_POLICY",
-        `Refund policy updated: 30d/${policy.thirtyPlusDays}%, 15-30d/${policy.fifteenToThirtyDays}%, 7-14d/${policy.sevenToFourteenDays}%, <7d/${policy.lessThanSevenDays}%`
-      );
-      toast({ title: "Refund Policy Saved", description: "Cancellation policy rules updated globally." });
-    } catch (err) {
-      toast({ variant: "destructive", title: "Failed to save policy", description: "Could not write to platform settings." });
-    } finally {
-      setSavingPolicy(false);
+      const cfg = await fetchCommissionConfig();
+      setCommissionConfig(cfg);
+      setBudgetSlabs(cfg.budgetSlabs || DEFAULT_BUDGET_SLABS);
+      setIsAddingSlab(false);
+      setEditingSlabId(null);
+      setSlabValidationWarning(null);
+      toast({ title: "बदल रद्द केले 🔄", description: "मूळ सेव्ह केलेले नियम पुन्हा लोड केले." });
+    } catch {
+      setBudgetSlabs(DEFAULT_BUDGET_SLABS);
     }
   };
 
   const handleSaveCommission = async () => {
+    // Validate budget slabs
+    const validation = validateBudgetSlabs(budgetSlabs);
+    if (!validation.isValid) {
+      toast({
+        variant: "destructive",
+        title: "बजेट स्लॅब त्रुटी (Validation Warning) ⚠️",
+        description: validation.error,
+      });
+      return;
+    }
+
     setSavingCommission(true);
     try {
-      const updated = await updateCommissionConfig(commissionConfig);
+      const payload: Partial<CommissionConfig> = {
+        ...commissionConfig,
+        budgetSlabs,
+      };
+      const updated = await updateCommissionConfig(payload);
       await logAdminActivity(
         "admin@mykalakar.com",
         "SAVE_COMMISSION_CONFIG",
-        `Commission updated: Type=${updated.splitType}, Telecaller=${updated.telecallerPercentage}%, Owner=${updated.ownerPercentage}%, Bonus=₹${updated.flatBonusPerBooking}`
+        `Budget Slabs & Commission updated: ${budgetSlabs.length} slabs configured.`
       );
       toast({
-        title: "कमिशन नियम सेव्ह केले! 💰",
-        description: `टेलिकॉलर: ${updated.telecallerPercentage}% | मायकलाकार ओनर: ${updated.ownerPercentage}% यशस्वीरित्या लागू केले.`,
+        title: "बजेट व कमिशन नियम सेव्ह केले! 💰",
+        description: `${budgetSlabs.length} बजेट स्लॅब्स आणि मार्जिन-कमिशन सूत्र यशस्वीरीत्या लागू केले.`,
       });
     } catch (err) {
       toast({
@@ -228,26 +402,28 @@ export default function AdminSettings() {
         </Badge>
       </div>
 
-      {/* ── NEW: Telecaller & MyKalakar Commission & Profit Authority ── */}
+      {/* ── Budget & Commission Settings Module ── */}
       <Card className="border-2 border-orange-500/20 shadow-md overflow-hidden bg-gradient-to-br from-white via-orange-50/20 to-amber-50/20 dark:from-slate-900 dark:to-slate-800">
         <CardHeader className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-transparent border-b pb-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <div className="p-2.5 bg-[#FF6B00] text-white rounded-xl shadow-sm">
-                <Wallet className="h-5 w-5" />
+                <Layers className="h-5 w-5" />
               </div>
               <div>
                 <CardTitle className="text-lg font-bold">
-                  टेलिकॉलर व मायकलाकार ओनर कमिशन वाटप (Commission & Profit Authority)
+                  Budget & Commission Settings (बजेट स्लॅब व कमिशन नियम)
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  येथे ठरवा की प्रत्येक बुकिंगवर टेलिकॉलरला किती टक्के (%) कमिशन द्यायचे आणि मायकलाकारकडे किती नफा राहायचा.
+                  ग्राहकाच्या बजेटनुसार मार्जिन %, आर्टिस्ट मानधन, टेलिकॉलर कमिशन (Gross Margin वर) आणि मायकलाकार नफा ठरवा.
                 </p>
               </div>
             </div>
-            <Badge className="bg-orange-600 text-white font-bold px-3 py-1 w-fit">
-              👑 Admin Only
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge className="bg-orange-600 text-white font-bold px-3 py-1 w-fit">
+                👑 Admin Control
+              </Badge>
+            </div>
           </div>
         </CardHeader>
 
@@ -258,219 +434,289 @@ export default function AdminSettings() {
             </div>
           ) : (
             <div className="grid gap-6 lg:grid-cols-12">
-              {/* Left Column: Model & Percentage Configuration */}
+              {/* Left Column: Budget Slabs Table & Management */}
               <div className="lg:col-span-7 space-y-5">
-                {/* 1. Split Model Selection */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                    १. कमिशन मोजण्याची पद्धत (Commission Calculation Model)
-                  </Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setCommissionConfig(prev => ({ ...prev, splitType: "margin_percentage" }))}
-                      className={`p-3.5 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
-                        commissionConfig.splitType === "margin_percentage"
-                          ? "border-[#FF6B00] bg-orange-50/70 dark:bg-orange-950/30 text-slate-900 dark:text-white shadow-sm ring-2 ring-orange-500/20"
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-300 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="font-bold text-sm text-[#FF6B00]">📈 नफ्यावरील % (Margin Split)</span>
-                        {commissionConfig.splitType === "margin_percentage" && <Check className="h-4 w-4 text-[#FF6B00]" />}
-                      </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        (ग्राहक बजेट - आर्टिस्ट मानधन) = प्लॅटफॉर्म नफा. या नफ्यावरून टेलिकॉलरला टक्केवारी दिली जाते. <strong className="text-orange-600 font-semibold">[शिफारस]</strong>
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setCommissionConfig(prev => ({ ...prev, splitType: "total_booking_percentage" }))}
-                      className={`p-3.5 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
-                        commissionConfig.splitType === "total_booking_percentage"
-                          ? "border-[#FF6B00] bg-orange-50/70 dark:bg-orange-950/30 text-slate-900 dark:text-white shadow-sm ring-2 ring-orange-500/20"
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-300 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="font-bold text-sm text-[#FF6B00]">📊 एकूण बुकिंग % (Total Value)</span>
-                        {commissionConfig.splitType === "total_booking_percentage" && <Check className="h-4 w-4 text-[#FF6B00]" />}
-                      </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        थेट संपूर्ण डील व्हॅल्यूच्या (Total Booking Amount) ठरावीक % टेलिकॉलरला कमिशन दिले जाते.
-                      </p>
-                    </button>
-                  </div>
-                </div>
-
-                {/* 2. Percentage Controls */}
-                <div className="space-y-4 pt-2">
-                  <Label className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                    २. टक्केवारी वाटप (Percentage Distribution)
-                  </Label>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Telecaller % */}
-                    <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-bold text-blue-900 dark:text-blue-300">
-                          📞 Telecaller Commission %
-                        </Label>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-200 dark:bg-blue-800 text-blue-900 dark:text-blue-100 font-bold">
-                          {commissionConfig.telecallerPercentage}%
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={commissionConfig.telecallerPercentage}
-                          onChange={(e) => handleTelecallerPctChange(e.target.value)}
-                          className="font-bold text-lg text-center h-11 bg-white dark:bg-slate-900"
-                        />
-                        <span className="font-bold text-slate-500">%</span>
-                      </div>
-                      <p className="text-[11px] text-blue-700 dark:text-blue-400">
-                        प्रत्येक डील क्लोज केल्यावर टेलिकॉलरला जाणारा हिस्सा.
-                      </p>
-                    </div>
-
-                    {/* MyKalakar Owner % */}
-                    <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-bold text-emerald-900 dark:text-emerald-300">
-                          🏢 MyKalakar Owner Share %
-                        </Label>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-100 font-bold">
-                          {commissionConfig.ownerPercentage}%
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={commissionConfig.ownerPercentage}
-                          onChange={(e) => handleOwnerPctChange(e.target.value)}
-                          className="font-bold text-lg text-center h-11 bg-white dark:bg-slate-900"
-                        />
-                        <span className="font-bold text-slate-500">%</span>
-                      </div>
-                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
-                        प्लॅटफॉर्म आणि ओनरकडे शिल्लक राहणारा निव्वळ हिस्सा.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Optional Flat Bonus */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border space-y-1.5">
-                      <Label className="text-xs font-semibold">अतिरिक्त फ्लॅट बोनस (Flat Incentive per Lead)</Label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-500">₹</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={commissionConfig.flatBonusPerBooking}
-                          onChange={(e) => setCommissionConfig(prev => ({ ...prev, flatBonusPerBooking: Number(e.target.value) || 0 }))}
-                          className="h-9 font-semibold text-center"
-                          placeholder="0"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border space-y-1.5">
-                      <Label className="text-xs font-semibold">किमान बुकिंग मर्यादा (Min Threshold)</Label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-500">₹</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={commissionConfig.minimumBookingThreshold}
-                          onChange={(e) => setCommissionConfig(prev => ({ ...prev, minimumBookingThreshold: Number(e.target.value) || 0 }))}
-                          className="h-9 font-semibold text-center"
-                          placeholder="1000"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3. Monthly Volume-Based Tiered Incentives (टार्गेटनुसार इन्सेंटिव्ह) */}
-                  <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-[#FF6B00]" />
-                        <Label className="text-xs font-black uppercase tracking-wider text-amber-950 dark:text-amber-300">
-                          ३. मासिक टार्गेट इन्सेंटिव्ह स्लॅब्स (Monthly Volume Tiers)
-                        </Label>
-                      </div>
-                      <Badge className="bg-amber-500 text-white font-bold text-[10px]">
-                        Active Rules
-                      </Badge>
-                    </div>
-
-                    <p className="text-xs text-amber-900/80 dark:text-amber-400">
-                      महिनाभरातील यशस्वी बुकिंग्सच्या संख्येनुसार Telecaller ला मिळणारी इन्सेंटिव्ह टक्केवारी:
+                {/* 1. Slabs Header & Add Button */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <Label className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <Sliders className="h-4 w-4 text-[#FF6B00]" />
+                      बजेट स्लॅब्स यादी (Budget-wise Margin & Commission Rules)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      प्रत्येक स्लॅबसाठी किमान बजेट, कमाल बजेट, मार्जिन % आणि कमिशन % ठरवा.
                     </p>
+                  </div>
+                  {!isAddingSlab && !editingSlabId && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleStartAddSlab}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl h-8.5 px-3.5 shadow-2xs flex items-center gap-1 shrink-0"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      नवीन स्लॅब जोडा (Add Slab)
+                    </Button>
+                  )}
+                </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                      {/* Tier 1: Base */}
-                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-slate-500">Base Tier</span>
-                          <Badge variant="outline" className="text-[10px] font-black text-slate-700">० - २९ डील्स</Badge>
+                {/* Validation Warning Alert if any */}
+                {slabValidationWarning && (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-start gap-2 shadow-2xs">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="font-bold">बजेट स्लॅब व्हॅलिडेशन चेतावणी (Validation Alert)</p>
+                      <p>{slabValidationWarning}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Inline Add / Edit Slab Form */}
+                {(isAddingSlab || editingSlabId) && (
+                  <div className="p-4 rounded-2xl bg-orange-50/70 border-2 border-orange-300 dark:bg-slate-900 dark:border-orange-700 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between border-b border-orange-200 pb-2">
+                      <span className="text-xs font-black uppercase tracking-wider text-orange-900 dark:text-orange-300 flex items-center gap-1.5">
+                        <Edit3 className="h-3.5 w-3.5" />
+                        {editingSlabId ? "स्लॅब एडिट करा (Edit Budget Slab)" : "नवीन बजेट स्लॅब (Create New Slab)"}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCancelSlabForm}
+                        className="h-6 w-6 p-0 text-slate-400 hover:text-slate-600 rounded-full"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          किमान बजेट (Min Budget ₹) *
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={slabForm.minBudget ?? ""}
+                          onChange={(e) => setSlabForm({ ...slabForm, minBudget: Number(e.target.value) || 0 })}
+                          placeholder="उदा. 0 किंवा 25001"
+                          className="h-9 text-xs font-bold bg-white mt-1 rounded-xl"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          कमाल बजेट (Max Budget ₹) (रिक्त = ५०,००१+)
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={slabForm.maxBudget && slabForm.maxBudget < 99999999 ? slabForm.maxBudget : ""}
+                          onChange={(e) => {
+                            const val = e.target.value ? Number(e.target.value) : undefined;
+                            setSlabForm({ ...slabForm, maxBudget: val });
+                          }}
+                          placeholder="उदा. 25000 (किंवा अमर्यादसाठी रिक्त)"
+                          className="h-9 text-xs font-bold bg-white mt-1 rounded-xl"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+                          मार्जिन % (Margin %) *
+                        </Label>
+                        <div className="relative mt-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={slabForm.marginPct ?? ""}
+                            onChange={(e) => setSlabForm({ ...slabForm, marginPct: Number(e.target.value) || 0 })}
+                            placeholder="20"
+                            className="h-9 text-xs font-black text-emerald-700 pr-7 bg-white rounded-xl"
+                            required
+                          />
+                          <span className="absolute right-2.5 top-2.5 text-xs font-bold text-slate-400">%</span>
                         </div>
-                        <div className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-1">
-                          <span>५%</span>
-                          <span className="text-[10px] font-normal text-slate-500">इन्सेंटिव्ह</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500">प्रारंभिक स्लॅब (Base)</p>
+                        <span className="text-[10px] text-muted-foreground">ग्राहक बजेटमधून मायकलाकारचा नफा</span>
                       </div>
 
-                      {/* Tier 2: Silver */}
-                      <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 shadow-2xs space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-sky-700 dark:text-sky-300">Silver Tier</span>
-                          <Badge className="bg-sky-600 text-white text-[10px] font-black">३० - ४९ डील्स</Badge>
+                      <div>
+                        <Label className="text-[11px] font-bold text-blue-800 dark:text-blue-300">
+                          कमिशन % (Commission on Gross Margin) *
+                        </Label>
+                        <div className="relative mt-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={slabForm.commissionPct ?? ""}
+                            onChange={(e) => setSlabForm({ ...slabForm, commissionPct: Number(e.target.value) || 0 })}
+                            placeholder="20"
+                            className="h-9 text-xs font-black text-blue-700 pr-7 bg-white rounded-xl"
+                            required
+                          />
+                          <span className="absolute right-2.5 top-2.5 text-xs font-bold text-slate-400">%</span>
                         </div>
-                        <div className="text-lg font-black text-sky-900 dark:text-sky-200 flex items-center gap-1">
-                          <span>१०%</span>
-                          <span className="text-[10px] font-normal text-sky-600">इन्सेंटिव्ह</span>
-                        </div>
-                        <p className="text-[10px] text-sky-700 dark:text-sky-400">टार्गेट १ पूर्ण झाल्यावर</p>
+                        <span className="text-[10px] text-muted-foreground">ग्रॉस मार्जिनमधून टेलिकॉलरला हिस्सा</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={slabForm.isActive !== false}
+                          onCheckedChange={(checked) => setSlabForm({ ...slabForm, isActive: checked })}
+                          id="slab-active-switch"
+                        />
+                        <Label htmlFor="slab-active-switch" className="text-xs font-bold text-slate-700 cursor-pointer">
+                          {slabForm.isActive !== false ? "सक्रिय (Active Slab)" : "निष्क्रिय (Inactive Slab)"}
+                        </Label>
                       </div>
 
-                      {/* Tier 3: Gold */}
-                      <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 shadow-2xs space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300">Gold Super Tier</span>
-                          <Badge className="bg-amber-600 text-white text-[10px] font-black">५०+ डील्स</Badge>
-                        </div>
-                        <div className="text-lg font-black text-amber-950 dark:text-amber-100 flex items-center gap-1">
-                          <span>२०%</span>
-                          <span className="text-[10px] font-normal text-amber-700">इन्सेंटिव्ह</span>
-                        </div>
-                        <p className="text-[10px] text-amber-800 dark:text-amber-400">कमाल सुपर टार्गेट</p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCancelSlabForm}
+                          className="h-8 px-3 text-xs rounded-xl"
+                        >
+                          रद्द करा (Cancel)
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleSaveSlabForm}
+                          className="h-8 px-4 text-xs font-black rounded-xl bg-orange-600 hover:bg-orange-700 text-white shadow-2xs"
+                        >
+                          <Check className="h-3.5 w-3.5 mr-1" />
+                          स्लॅब सेव्ह करा (Save Slab)
+                        </Button>
                       </div>
                     </div>
                   </div>
+                )}
+
+                {/* Slabs Table */}
+                <div className="rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-stone-50/90 dark:bg-slate-800/80 border-b border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold uppercase tracking-wider text-[10px]">
+                          <th className="py-3 px-3.5">बजेट स्लॅब (Range)</th>
+                          <th className="py-3 px-3 text-center">मार्जिन %</th>
+                          <th className="py-3 px-3 text-center">कमिशन % (Gross Margin)</th>
+                          <th className="py-3 px-3 text-center">स्थिती (Status)</th>
+                          <th className="py-3 px-3.5 text-right">कृती (Actions)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100 dark:divide-slate-800">
+                        {budgetSlabs.map((slab, idx) => {
+                          const isMaxInf = !slab.maxBudget || slab.maxBudget >= 99999999;
+                          const rangeLabel = isMaxInf
+                            ? `₹${slab.minBudget.toLocaleString("en-IN")}+`
+                            : `₹${slab.minBudget.toLocaleString("en-IN")} – ₹${slab.maxBudget?.toLocaleString("en-IN")}`;
+
+                          return (
+                            <tr
+                              key={slab.id || idx}
+                              className={`transition hover:bg-orange-50/40 dark:hover:bg-slate-800/50 ${
+                                !slab.isActive ? "opacity-50 bg-stone-50/40" : ""
+                              }`}
+                            >
+                              <td className="py-3 px-3.5 font-bold text-stone-900 dark:text-stone-100">
+                                <div className="flex items-center gap-2">
+                                  <span className="h-2 w-2 rounded-full bg-[#FF6B00]"></span>
+                                  <span>{slab.slabName || `Slab ${idx + 1}`}:</span>
+                                  <span className="text-orange-950 dark:text-orange-300 font-black">{rangeLabel}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <span className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-black">
+                                  {slab.marginPct}%
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <span className="inline-block px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 font-black">
+                                  {slab.commissionPct}%
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleSlabActive(slab.id)}
+                                  className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full transition cursor-pointer ${
+                                    slab.isActive
+                                      ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                                      : "bg-stone-200 text-stone-600 hover:bg-stone-300"
+                                  }`}
+                                >
+                                  <span className={`h-1.5 w-1.5 rounded-full ${slab.isActive ? "bg-emerald-600" : "bg-stone-500"}`}></span>
+                                  {slab.isActive ? "Active" : "Inactive"}
+                                </button>
+                              </td>
+                              <td className="py-3 px-3.5 text-right">
+                                <div className="inline-flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleStartEditSlab(slab)}
+                                    className="h-7 w-7 p-0 text-stone-600 hover:text-stone-900 rounded-lg"
+                                    title="Edit Slab"
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteSlab(slab.id)}
+                                    disabled={budgetSlabs.length <= 1}
+                                    className="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg disabled:opacity-30"
+                                    title="Delete Slab"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
-                {/* Save Button */}
-                <Button
-                  onClick={handleSaveCommission}
-                  disabled={savingCommission}
-                  className="w-full bg-[#FF6B00] hover:bg-[#e86100] text-white py-3 h-12 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md shadow-orange-500/20"
-                >
-                  {savingCommission ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-                  कमिशन नियम सेव्ह करा (Save Commission Settings)
-                </Button>
+                {/* Action Buttons: Save Settings & Cancel */}
+                <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                  <Button
+                    type="button"
+                    onClick={handleSaveCommission}
+                    disabled={savingCommission}
+                    className="flex-1 w-full bg-[#FF6B00] hover:bg-[#e86100] text-white py-3 h-11 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md shadow-orange-500/20"
+                  >
+                    {savingCommission ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    बजेट व कमिशन नियम सेव्ह करा (Save Settings)
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancelAllChanges}
+                    className="w-full sm:w-auto h-11 px-4 rounded-xl border-stone-200 text-stone-600 font-bold flex items-center justify-center gap-1.5"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    रद्द करा (Cancel Changes)
+                  </Button>
+                </div>
               </div>
 
               {/* Right Column: Interactive Live Simulation Box */}
-              <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-5 rounded-2xl border-2 border-orange-200/60 dark:border-slate-700 shadow-sm space-y-4">
+              <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-5 rounded-2xl border-2 border-orange-200/80 dark:border-slate-700 shadow-sm space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b">
                   <div className="flex items-center gap-1.5">
                     <Sparkles className="h-4 w-4 text-[#FF6B00]" />
@@ -478,87 +724,93 @@ export default function AdminSettings() {
                       लाईव्ह हिशोब पडताळणी (Live Simulator)
                     </span>
                   </div>
-                  <Badge variant="outline" className="text-[10px] uppercase font-bold text-orange-600 bg-orange-50">
-                    Preview
+                  <Badge variant="outline" className="text-[10px] uppercase font-black text-orange-600 bg-orange-50">
+                    Auto-Detected Slabs
                   </Badge>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">ग्राहक बजेट (Deal Budget)</Label>
-                    <div className="relative mt-1">
-                      <span className="absolute left-2.5 top-2 text-xs font-bold text-slate-400">₹</span>
-                      <Input
-                        type="number"
-                        value={simBudget}
-                        onChange={(e) => setSimBudget(Number(e.target.value) || 0)}
-                        className="pl-6 h-8 text-xs font-bold"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">आर्टिस्ट मानधन (Artist Offer)</Label>
-                    <div className="relative mt-1">
-                      <span className="absolute left-2.5 top-2 text-xs font-bold text-slate-400">₹</span>
-                      <Input
-                        type="number"
-                        value={simArtistOffer}
-                        onChange={(e) => setSimArtistOffer(Number(e.target.value) || 0)}
-                        className="pl-6 h-8 text-xs font-bold"
-                      />
-                    </div>
+                {/* Input: Customer Budget */}
+                <div>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    ग्राहक बजेट (Customer Budget)
+                  </Label>
+                  <div className="relative mt-1">
+                    <span className="absolute left-3 top-2.5 text-xs font-black text-emerald-600">₹</span>
+                    <Input
+                      type="number"
+                      value={simBudget || ""}
+                      onChange={(e) => {
+                        const val = Number(e.target.value) || 0;
+                        setSimBudget(val);
+                        const matched = findMatchingBudgetSlab(val, budgetSlabs);
+                        const m = matched ? matched.marginPct : 20;
+                        setSimArtistOffer(val > 0 ? Math.round(val * (1 - m / 100)) : 0);
+                      }}
+                      className="pl-7 h-9 text-xs font-black text-emerald-800 bg-emerald-50/40 border-emerald-200 rounded-xl"
+                      placeholder="30000"
+                    />
                   </div>
                 </div>
 
-                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl space-y-2 border text-xs">
-                  <div className="flex justify-between items-center text-slate-600 dark:text-slate-400">
-                    <span>प्लॅटफॉर्म मार्जिन / Gross Profit:</span>
-                    <span className="font-bold text-slate-900 dark:text-white">
-                      ₹{liveSplit.grossMargin.toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-slate-600 dark:text-slate-400">
-                    <span>वापरलेली पद्धत:</span>
-                    <span className="font-semibold text-orange-600">
-                      {liveSplit.splitType === "margin_percentage" ? "Margin %" : "Total Booking %"}
-                    </span>
-                  </div>
-                </div>
+                {/* Simulation Breakdown Details */}
+                {(() => {
+                  const matched = findMatchingBudgetSlab(simBudget, budgetSlabs);
+                  const marginPct = matched ? matched.marginPct : 20;
+                  const commPct = matched ? matched.commissionPct : 20;
+                  const safeBudget = simBudget || 0;
+                  const safeArtist = simArtistOffer > 0 ? simArtistOffer : (safeBudget > 0 ? Math.round(safeBudget * (1 - marginPct / 100)) : 0);
+                  const grossMargin = Math.max(0, safeBudget - safeArtist);
+                  const commAmt = Math.round((grossMargin * commPct) / 100);
+                  const netMargin = Math.max(0, grossMargin - commAmt);
 
-                {/* Final Split Result Cards */}
-                <div className="space-y-2.5">
-                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20 border border-blue-200 dark:border-blue-800 flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-bold text-blue-700 dark:text-blue-300">
-                        📞 Telecaller Earnings
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        ({liveSplit.telecallerCommissionPct}% {liveSplit.splitType === "margin_percentage" ? "of margin" : "of deal"} {liveSplit.flatBonus > 0 ? `+ ₹${liveSplit.flatBonus} bonus` : ""})
-                      </p>
+                  return (
+                    <div className="space-y-3">
+                      {/* Applicable Slab Pill */}
+                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-orange-100/70 to-amber-100/70 border border-orange-200 flex items-center justify-between text-xs">
+                        <span className="font-bold text-orange-950">Applicable Budget Slab:</span>
+                        <span className="font-black text-orange-800 bg-white/90 px-2.5 py-0.5 rounded-full shadow-2xs">
+                          {matched ? (matched.slabName || `₹${matched.minBudget.toLocaleString("en-IN")} – ${matched.maxBudget ? `₹${matched.maxBudget.toLocaleString("en-IN")}` : "+"}`) : "No Active Slab (Default 20%)"}
+                        </span>
+                      </div>
+
+                      {/* 6-Field Detailed Breakdown Grid */}
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border space-y-2 text-xs">
+                        <div className="flex justify-between items-center text-slate-600 dark:text-slate-400">
+                          <span>Customer Budget</span>
+                          <span className="font-black text-emerald-700 text-sm">₹{safeBudget.toLocaleString("en-IN")}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center text-slate-600 dark:text-slate-400">
+                          <span>Margin ({marginPct}%)</span>
+                          <span className="font-bold text-emerald-800">₹{grossMargin.toLocaleString("en-IN")}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center text-slate-600 dark:text-slate-400 pt-1 border-t border-dashed">
+                          <span>Artist Payout</span>
+                          <span className="font-black text-stone-900 dark:text-white">₹{safeArtist.toLocaleString("en-IN")}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center text-blue-700 dark:text-blue-300 pt-1 border-t border-dashed">
+                          <span>Commission ({commPct}% of Gross Margin)</span>
+                          <span className="font-black text-blue-800 dark:text-blue-200 text-sm">₹{commAmt.toLocaleString("en-IN")}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center text-emerald-900 dark:text-emerald-200 pt-1 border-t-2 border-emerald-300 font-black">
+                          <span>Net Margin (MyKalakar Profit)</span>
+                          <span className="font-black text-emerald-800 text-sm">₹{netMargin.toLocaleString("en-IN")}</span>
+                        </div>
+                      </div>
+
+                      {/* Formula explanation */}
+                      <div className="p-3 rounded-xl bg-amber-50/50 border border-amber-200/80 text-[10px] text-amber-950 space-y-1">
+                        <p className="font-bold">📐 सूत्र (Business Logic):</p>
+                        <p>• Gross Margin = Customer Budget (₹{safeBudget.toLocaleString("en-IN")}) - Artist Payout (₹{safeArtist.toLocaleString("en-IN")}) = <strong>₹{grossMargin.toLocaleString("en-IN")}</strong></p>
+                        <p>• Commission = Gross Margin (₹{grossMargin.toLocaleString("en-IN")}) × {commPct}% = <strong>₹{commAmt.toLocaleString("en-IN")}</strong></p>
+                        <p>• Net Margin = Gross Margin (₹{grossMargin.toLocaleString("en-IN")}) - Commission (₹{commAmt.toLocaleString("en-IN")}) = <strong>₹{netMargin.toLocaleString("en-IN")}</strong></p>
+                      </div>
                     </div>
-                    <span className="text-lg font-black text-blue-800 dark:text-blue-200">
-                      ₹{liveSplit.telecallerCommission.toLocaleString("en-IN")}
-                    </span>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
-                        🏢 MyKalakar Owner Profit
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        (प्लॅटफॉर्मकडे निव्वळ नफा)
-                      </p>
-                    </div>
-                    <span className="text-lg font-black text-emerald-800 dark:text-emerald-200">
-                      ₹{liveSplit.ownerProfit.toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-muted-foreground text-center italic">
-                  💡 टेलिकॉलरने डील बुक केली की सिस्टीम वरील सूत्रानुसार त्वरित कमिशन नोंदवेल.
-                </p>
+                  );
+                })()}
               </div>
             </div>
           )}
