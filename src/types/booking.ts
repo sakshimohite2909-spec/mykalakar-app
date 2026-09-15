@@ -84,11 +84,15 @@ export interface BookingEvent {
   disputeEvidenceUrl?: string;
   splitRefundAmount?: number;
 
-  // Phase 3 SLA deadlines:
+  // Phase 3 SLA deadlines & payouts:
   slaStartTime?: string;
   slaDeadlineTime?: string;
   refundPolicy?: RefundPolicy;
   refundAmount?: number;
+  artistPayoutStatus?: "pending" | "processing" | "paid";
+  artistPayoutUtr?: string;
+  payoutStatus?: string;
+  commissionPayoutStatus?: "pending" | "paid";
 }
 
 export interface RefundPolicy {

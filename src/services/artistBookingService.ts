@@ -186,6 +186,10 @@ export function normalizeBooking(id: string, data: DocumentData): BookingEvent {
     splitRefundAmount: data.splitRefundAmount ? Number(data.splitRefundAmount) : undefined,
     slaStartTime: data.slaStartTime ? String(data.slaStartTime) : undefined,
     slaDeadlineTime: data.slaDeadlineTime ? String(data.slaDeadlineTime) : undefined,
+    artistPayoutStatus: data.artistPayoutStatus || (data.isEscrowReleased ? "paid" : undefined),
+    artistPayoutUtr: data.artistPayoutUtr ? String(data.artistPayoutUtr) : undefined,
+    payoutStatus: data.payoutStatus || (data.isEscrowReleased || data.artistPayoutStatus === "paid" ? "PAID" : "PROCESSING"),
+    commissionPayoutStatus: data.commissionPayoutStatus || undefined,
   };
 }
 
