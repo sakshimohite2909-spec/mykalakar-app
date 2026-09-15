@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Phone, Calendar, Clock, MapPin, IndianRupee, Sparkles, Loader2, Volume2, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { updateLeadDetails, type TelecallerLead, type LeadStatus } from "@/services/telecallerService";
 import { calculateCommissionSplit, findMatchingBudgetSlab } from "@/services/commissionSettingsService";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
 type Props = {
@@ -18,6 +19,7 @@ type Props = {
 };
 
 export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated }: Props) {
+  const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -241,7 +243,7 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
             />
           </div>
 
-          {/* Budgets (Customer vs Artist Offer with Slab Detection) */}
+          {/* Budgets (Customer vs Artist Offer with Role-Based Visibility) */}
           <div className="bg-stone-50 border border-stone-200/90 rounded-2xl p-3.5 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -276,18 +278,20 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
                   className="h-9 text-xs font-black text-orange-600 bg-white rounded-xl mt-1"
                   placeholder="₹24000"
                 />
-                <span className="text-[10px] text-stone-500 font-medium">
-                  Margin / Fee: ₹{Math.max(0, (budget || 0) - (artistOfferBudget || 0)).toLocaleString("en-IN")}
-                </span>
+                {isAdmin && (
+                  <span className="text-[10px] text-stone-500 font-medium">
+                    Gross Margin: ₹{Math.max(0, (budget || 0) - (artistOfferBudget || 0)).toLocaleString("en-IN")}
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Live Slab Detection & Breakdown Box */}
+            {/* Role-Based Slab & Commission Breakdown Box */}
             {(() => {
               const safeBudget = budget || 0;
               const matchedSlab = findMatchingBudgetSlab(safeBudget);
               const marginPct = matchedSlab ? matchedSlab.marginPct : 20;
-              const commPct = matchedSlab ? matchedSlab.commissionPct : 20;
+              const commPct = matchedSlab ? matchedSlab.commissionPct : 10;
               const safeArtist = artistOfferBudget > 0 ? artistOfferBudget : (safeBudget > 0 ? Math.round(safeBudget * (1 - marginPct / 100)) : 0);
               const grossMargin = Math.max(0, safeBudget - safeArtist);
               const commAmt = Math.round((grossMargin * commPct) / 100);
@@ -298,26 +302,49 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
                   <div className="flex items-center justify-between text-xs bg-orange-100/60 p-2 rounded-xl border border-orange-200">
                     <span className="font-bold text-orange-950">Applicable Budget Slab:</span>
                     <span className="font-black text-orange-800 bg-white px-2 py-0.5 rounded-md shadow-2xs">
-                      {matchedSlab ? (matchedSlab.slabName || `₹${matchedSlab.minBudget.toLocaleString("en-IN")} – ${matchedSlab.maxBudget ? `₹${matchedSlab.maxBudget.toLocaleString("en-IN")}` : "+"}`) : "Default Slab (20%)"}
+                      {matchedSlab ? (matchedSlab.slabName || `₹${matchedSlab.minBudget.toLocaleString("en-IN")} – ${matchedSlab.maxBudget ? `₹${matchedSlab.maxBudget.toLocaleString("en-IN")}` : "+"}`) : "Default Slab"}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                    <div className="p-2 rounded-xl bg-white border border-stone-200">
-                      <span className="block text-[10px] text-stone-400 font-bold uppercase">Margin ({marginPct}%)</span>
-                      <span className="font-black text-emerald-700">₹{grossMargin.toLocaleString("en-IN")}</span>
-                    </div>
+                  {isAdmin ? (
+                    /* 👑 ADMIN FULL FINANCIAL BREAKDOWN */
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="p-2 rounded-xl bg-white border border-stone-200">
+                        <span className="block text-[10px] text-stone-400 font-bold uppercase">Owner Margin ({marginPct}%)</span>
+                        <span className="font-black text-emerald-700">₹{grossMargin.toLocaleString("en-IN")}</span>
+                      </div>
 
-                    <div className="p-2 rounded-xl bg-white border border-stone-200">
-                      <span className="block text-[10px] text-blue-500 font-bold uppercase">Commission ({commPct}%)</span>
-                      <span className="font-black text-blue-700">₹{commAmt.toLocaleString("en-IN")}</span>
-                    </div>
+                      <div className="p-2 rounded-xl bg-white border border-stone-200">
+                        <span className="block text-[10px] text-stone-400 font-bold uppercase">Artist Payout</span>
+                        <span className="font-black text-stone-800">₹{safeArtist.toLocaleString("en-IN")}</span>
+                      </div>
 
-                    <div className="p-2 rounded-xl bg-white border border-stone-200 col-span-2 sm:col-span-1">
-                      <span className="block text-[10px] text-stone-500 font-bold uppercase">Net Margin (Owner)</span>
-                      <span className="font-black text-stone-900">₹{netMargin.toLocaleString("en-IN")}</span>
+                      <div className="p-2 rounded-xl bg-white border border-stone-200">
+                        <span className="block text-[10px] text-blue-500 font-bold uppercase">Telecaller Comm ({commPct}%)</span>
+                        <span className="font-black text-blue-700">₹{commAmt.toLocaleString("en-IN")}</span>
+                      </div>
+
+                      <div className="p-2 rounded-xl bg-white border border-stone-200">
+                        <span className="block text-[10px] text-stone-500 font-bold uppercase">Owner Net Margin</span>
+                        <span className="font-black text-stone-900">₹{netMargin.toLocaleString("en-IN")}</span>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* 📞 TELECALLER VISIBILITY: ONLY YOUR COMMISSION (NO GROSS OR NET MARGIN SHOWN) */
+                    <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/80 flex items-center justify-between text-xs">
+                      <div className="space-y-0.5">
+                        <span className="text-blue-900 font-bold block flex items-center gap-1">
+                          📞 तुमचे कमिशन (Your Commission)
+                        </span>
+                        <span className="text-[10px] text-blue-600">
+                          (डील्स यशस्वीरीत्या पूर्ण झाल्यावर मिळणारे कमिशन)
+                        </span>
+                      </div>
+                      <span className="text-base font-black text-blue-800 bg-white px-3 py-1 rounded-lg border border-blue-200 shadow-2xs">
+                        ₹{commAmt.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             })()}
