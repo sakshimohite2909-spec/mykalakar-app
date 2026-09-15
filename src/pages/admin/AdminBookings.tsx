@@ -90,6 +90,13 @@ export default function AdminBookings() {
   const [payoutMode, setPayoutMode] = useState<string>("UPI / GPay");
   const [savingArtistPayout, setSavingArtistPayout] = useState(false);
 
+  // Telecaller Payout Dialog State
+  const [tcPayoutLead, setTcPayoutLead] = useState<TelecallerLead | null>(null);
+  const [tcPayoutUtr, setTcPayoutUtr] = useState<string>("");
+  const [tcPayoutUpiId, setTcPayoutUpiId] = useState<string>("");
+  const [tcPayoutMode, setTcPayoutMode] = useState<string>("UPI / GPay");
+  const [savingTcPayout, setSavingTcPayout] = useState(false);
+
   // Dispute dialogue review
   const [selectedDispute, setSelectedDispute] = useState<BookingEvent | null>(null);
   const [resolving, setResolving] = useState<BookingStatus | null>(null);
@@ -408,6 +415,64 @@ export default function AdminBookings() {
     }
   };
 
+  const handleOpenTcPayoutDialog = (lead: TelecallerLead) => {
+    setTcPayoutLead(lead);
+    const defaultUpi = (lead as any).telecallerUpiId || "telecaller@okaxis";
+    setTcPayoutUpiId(defaultUpi);
+    setTcPayoutUtr("");
+    setTcPayoutMode("UPI / GPay");
+  };
+
+  const handleConfirmTcPayout = async () => {
+    if (!tcPayoutLead) return;
+    setSavingTcPayout(true);
+    try {
+      const b = Number(tcPayoutLead.budget || tcPayoutLead.bookingAmount || 0);
+      const a = Number(
+        (typeof tcPayoutLead.artistPayout === "number" && tcPayoutLead.artistPayout > 0 ? tcPayoutLead.artistPayout : undefined) ||
+        (typeof tcPayoutLead.artistOfferBudget === "number" && tcPayoutLead.artistOfferBudget > 0 ? tcPayoutLead.artistOfferBudget : undefined) ||
+        (typeof tcPayoutLead.confirmedPrice === "number" && tcPayoutLead.confirmedPrice > 0 && tcPayoutLead.confirmedPrice < b ? tcPayoutLead.confirmedPrice : undefined) ||
+        (b > 0 ? Math.round(b * 0.8) : 0)
+      );
+      const split = calculateCommissionSplit(b, a, commissionConfig);
+      const comm = typeof tcPayoutLead.telecallerCommission === "number" ? tcPayoutLead.telecallerCommission : split.telecallerCommission;
+      const generatedUtr = tcPayoutUtr.trim() || `UPI${Date.now().toString().slice(-8)}`;
+
+      await settleLeadCommission(tcPayoutLead.id, "paid");
+      await logAdminActivity(
+        "admin@mykalakar.com",
+        "SETTLE_TC_COMMISSION",
+        `Paid telecaller commission ₹${comm} for lead ${tcPayoutLead.id} (${tcPayoutLead.assignedTelecallerName || "Telecaller"}) via ${tcPayoutMode} - UTR: ${generatedUtr}`
+      );
+
+      setTelecallerLeads((prev) =>
+        prev.map((l) =>
+          l.id === tcPayoutLead.id
+            ? {
+                ...l,
+                commissionPayoutStatus: "paid",
+                commissionSettledAt: new Date().toISOString(),
+              }
+            : l
+        )
+      );
+
+      toast({
+        title: "टेलिकॉलर कमिशन पेड झाले! 📞✅",
+        description: `₹${comm.toLocaleString("en-IN")} चे कमिशन ${tcPayoutLead.assignedTelecallerName || "टेलिकॉलर"} यांना मार्क झाले (UTR: ${generatedUtr}).`,
+      });
+      setTcPayoutLead(null);
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "त्रुटी",
+        description: e.message || "टेलिकॉलर कमिशन मार्क करता आले नाही.",
+      });
+    } finally {
+      setSavingTcPayout(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -613,7 +678,7 @@ export default function AdminBookings() {
                               <Button
                                 size="sm"
                                 disabled={settlingId === lead.id}
-                                onClick={() => handleToggleCommissionSettlement(lead)}
+                                onClick={() => (isTelecallerPaid ? handleToggleCommissionSettlement(lead) : handleOpenTcPayoutDialog(lead))}
                                 className={`h-7 px-2.5 rounded-lg text-xs font-bold shrink-0 ${
                                   isTelecallerPaid
                                     ? "bg-stone-100 hover:bg-stone-200 text-stone-700 border"
@@ -623,9 +688,9 @@ export default function AdminBookings() {
                                 {settlingId === lead.id ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 ) : isTelecallerPaid ? (
-                                  "Mark TC Pending"
+                                  "✓ TC Paid"
                                 ) : (
-                                  "Mark TC Paid ✅"
+                                  "💸 Pay TC"
                                 )}
                               </Button>
                             </div>
@@ -1190,6 +1255,129 @@ export default function AdminBookings() {
             >
               {savingArtistPayout ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
               ✓ Mark as Paid to Artist (पेमेंट पूर्ण झाले)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Telecaller Commission Payout Dialog */}
+      <Dialog open={!!tcPayoutLead} onOpenChange={(open) => !open && setTcPayoutLead(null)}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-stone-900">
+              <Wallet className="h-5 w-5 text-blue-600" />
+              टेलिकॉलर कमिशन पे-आऊट (Telecaller Commission Payout)
+            </DialogTitle>
+          </DialogHeader>
+
+          {tcPayoutLead && (() => {
+            const b = Number(tcPayoutLead.budget || tcPayoutLead.bookingAmount || 0);
+            const a = Number(
+              (typeof tcPayoutLead.artistPayout === "number" && tcPayoutLead.artistPayout > 0 ? tcPayoutLead.artistPayout : undefined) ||
+              (typeof tcPayoutLead.artistOfferBudget === "number" && tcPayoutLead.artistOfferBudget > 0 ? tcPayoutLead.artistOfferBudget : undefined) ||
+              (typeof tcPayoutLead.confirmedPrice === "number" && tcPayoutLead.confirmedPrice > 0 && tcPayoutLead.confirmedPrice < b ? tcPayoutLead.confirmedPrice : undefined) ||
+              (b > 0 ? Math.round(b * 0.8) : 0)
+            );
+            const split = calculateCommissionSplit(b, a, commissionConfig);
+            const comm = typeof tcPayoutLead.telecallerCommission === "number" ? tcPayoutLead.telecallerCommission : split.telecallerCommission;
+            const tcName = tcPayoutLead.assignedTelecallerName || "टेलिकॉलर टीम";
+            const upiUrl = `upi://pay?pa=${encodeURIComponent(tcPayoutUpiId)}&pn=${encodeURIComponent(tcName)}&am=${comm}&cu=INR&tn=${encodeURIComponent("MyKalakar Commission " + tcPayoutLead.customerName)}`;
+
+            return (
+              <div className="space-y-4 py-1 text-xs">
+                {/* Summary Box */}
+                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-stone-500 font-medium">टेलिकॉलर नाव</p>
+                      <p className="font-extrabold text-sm text-stone-900">{tcName}</p>
+                      <p className="text-[11px] text-stone-500">क्लायंट: {tcPayoutLead.customerName} ({tcPayoutLead.eventType})</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-stone-500 font-medium">देय कमिशन (Payable)</p>
+                      <p className="text-xl font-black text-blue-700">₹{comm.toLocaleString("en-IN")}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-blue-200/60 text-[11px]">
+                    <p><span className="text-stone-500">प्लॅटफॉर्म मार्जिन:</span> <span className="font-bold text-purple-700">₹{Math.max(0, b - a).toLocaleString("en-IN")}</span></p>
+                    <p><span className="text-stone-500">कमिशन दर:</span> <span className="font-bold text-blue-700">{tcPayoutLead.telecallerCommissionPct || commissionConfig.telecallerPercentage}%</span></p>
+                  </div>
+                </div>
+
+                {/* UPI & Transfer Info */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-stone-800 flex items-center justify-between">
+                    <span>टेलिकॉलर UPI ID:</span>
+                    <span className="text-[10px] text-stone-400 font-normal">GPay / PhonePe / Paytm</span>
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={tcPayoutUpiId}
+                      onChange={(e) => setTcPayoutUpiId(e.target.value)}
+                      placeholder="e.g. telecaller@okaxis"
+                      className="h-9 text-xs font-bold bg-white border-stone-200"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (tcPayoutUpiId) {
+                          navigator.clipboard.writeText(tcPayoutUpiId);
+                          toast({ title: "UPI ID Copied! 📋", description: tcPayoutUpiId });
+                        }
+                      }}
+                      className="h-9 px-2.5 text-xs shrink-0"
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-1" /> Copy
+                    </Button>
+                  </div>
+
+                  {/* 1-Click Launch UPI App */}
+                  <div className="pt-1">
+                    <a
+                      href={upiUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      GPay / UPI ॲप उघडा (Pay ₹{comm.toLocaleString("en-IN")})
+                    </a>
+                  </div>
+                </div>
+
+                {/* Payment Reference / UTR */}
+                <div className="space-y-1.5 pt-1">
+                  <Label className="text-xs font-bold text-stone-800">
+                    बँक / UPI ट्रान्झॅक्शन नंबर (UTR Ref - Optional):
+                  </Label>
+                  <Input
+                    placeholder="उदा. UPI/83918291039 किंवा IMPS Ref"
+                    value={tcPayoutUtr}
+                    onChange={(e) => setTcPayoutUtr(e.target.value)}
+                    className="h-9 text-xs bg-white border-stone-200"
+                  />
+                  <p className="text-[10px] text-stone-400">
+                    पेमेंट झाल्यावर हा रेफरन्स सिस्टिम ॲक्टिव्हिटी लॉगमध्ये रेकॉर्ड होईल.
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
+          <DialogFooter className="flex gap-2 sm:justify-end border-t border-stone-100 pt-3">
+            <Button variant="outline" size="sm" onClick={() => setTcPayoutLead(null)}>
+              रद्द करा
+            </Button>
+            <Button
+              size="sm"
+              disabled={savingTcPayout}
+              onClick={handleConfirmTcPayout}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-black shadow-sm"
+            >
+              {savingTcPayout ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              ✓ Mark Commission as Paid (कमिशन दिले)
             </Button>
           </DialogFooter>
         </DialogContent>
