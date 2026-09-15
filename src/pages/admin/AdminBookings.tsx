@@ -535,25 +535,8 @@ export default function AdminBookings() {
                           <TableCell className="font-bold text-xs">
                             ₹{b.toLocaleString("en-IN")}
                           </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <p className="font-bold text-xs text-stone-800">
-                                ₹{a.toLocaleString("en-IN")}
-                              </p>
-                              {isArtistPaid ? (
-                                <Badge className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-[9px] px-1.5 py-0 h-4">
-                                  ✓ Paid
-                                </Badge>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenArtistPayoutDialog(lead)}
-                                  className="text-[10px] text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded font-bold flex items-center gap-1 transition"
-                                >
-                                  💸 Pay Artist
-                                </button>
-                              )}
-                            </div>
+                          <TableCell className="font-semibold text-xs text-stone-700">
+                            ₹{a.toLocaleString("en-IN")}
                           </TableCell>
                           <TableCell className="font-bold text-xs text-purple-700">
                             ₹{grossMargin.toLocaleString("en-IN")}
@@ -577,43 +560,43 @@ export default function AdminBookings() {
                           <TableCell className="font-black text-xs text-emerald-800">
                             ₹{profit.toLocaleString("en-IN")}
                           </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-1 text-[10px]">
-                                <span className="text-stone-400 font-medium">📞 TC:</span>
+                          <TableCell className="min-w-[140px]">
+                            <div className="space-y-1.5 py-0.5">
+                              <div className="flex items-center justify-between gap-1.5 bg-stone-50/90 border border-stone-200/80 rounded-md px-2 py-1">
+                                <span className="text-[10px] font-bold text-stone-600">📞 टेलिकॉलर:</span>
                                 {isTelecallerPaid ? (
-                                  <Badge className="bg-emerald-600 text-white font-bold text-[9px] px-1.5 py-0 h-4">
+                                  <span className="inline-flex items-center text-[10px] font-black text-emerald-700">
                                     ✓ Paid
-                                  </Badge>
+                                  </span>
                                 ) : (
-                                  <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 font-bold text-[9px] px-1.5 py-0 h-4">
+                                  <span className="inline-flex items-center text-[10px] font-bold text-amber-700">
                                     ⏳ Pending
-                                  </Badge>
+                                  </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1 text-[10px]">
-                                <span className="text-stone-400 font-medium">🎨 Art:</span>
+                              <div className="flex items-center justify-between gap-1.5 bg-stone-50/90 border border-stone-200/80 rounded-md px-2 py-1">
+                                <span className="text-[10px] font-bold text-stone-600">🎨 कलाकार:</span>
                                 {isArtistPaid ? (
-                                  <Badge className="bg-teal-600 text-white font-bold text-[9px] px-1.5 py-0 h-4">
+                                  <span className="inline-flex items-center text-[10px] font-black text-teal-700">
                                     ✓ Paid
-                                  </Badge>
+                                  </span>
                                 ) : (
-                                  <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 font-bold text-[9px] px-1.5 py-0 h-4">
+                                  <span className="inline-flex items-center text-[10px] font-bold text-amber-700">
                                     ⏳ Pending
-                                  </Badge>
+                                  </span>
                                 )}
                               </div>
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <div className="flex items-center justify-end gap-1.5 flex-nowrap">
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleOpenArtistPayoutDialog(lead)}
-                                className={`h-7 px-2 rounded-lg text-xs font-bold ${
+                                className={`h-7 px-2.5 rounded-lg text-xs font-bold shrink-0 ${
                                   isArtistPaid
-                                    ? "border-teal-200 text-teal-700 bg-teal-50/50 hover:bg-teal-100"
+                                    ? "border-teal-200 text-teal-700 bg-teal-50 hover:bg-teal-100"
                                     : "border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 shadow-2xs"
                                 }`}
                               >
@@ -623,7 +606,7 @@ export default function AdminBookings() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleOpenCommissionDialog(lead)}
-                                className="h-7 px-2 rounded-lg border-blue-200 text-blue-700 bg-blue-50/50 hover:bg-blue-100 text-xs font-bold"
+                                className="h-7 px-2 rounded-lg border-blue-200 text-blue-700 bg-blue-50/50 hover:bg-blue-100 text-xs font-bold shrink-0"
                               >
                                 ⚙️ कमिशन
                               </Button>
@@ -631,7 +614,7 @@ export default function AdminBookings() {
                                 size="sm"
                                 disabled={settlingId === lead.id}
                                 onClick={() => handleToggleCommissionSettlement(lead)}
-                                className={`h-7 px-2.5 rounded-lg text-xs font-bold ${
+                                className={`h-7 px-2.5 rounded-lg text-xs font-bold shrink-0 ${
                                   isTelecallerPaid
                                     ? "bg-stone-100 hover:bg-stone-200 text-stone-700 border"
                                     : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
@@ -640,7 +623,7 @@ export default function AdminBookings() {
                                 {settlingId === lead.id ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 ) : isTelecallerPaid ? (
-                                  "Mark Pending"
+                                  "Mark TC Pending"
                                 ) : (
                                   "Mark TC Paid ✅"
                                 )}
