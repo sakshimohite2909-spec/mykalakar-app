@@ -150,7 +150,7 @@ export default function ArtistEarnings() {
   }, [transactions, filter]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full min-w-0 overflow-x-hidden">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -162,7 +162,7 @@ export default function ArtistEarnings() {
               Track your lifetime revenues, active escrow holds, and completed bank payouts.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-black">
               <ShieldCheck className="h-4 w-4" /> 100% Escrow Protected
             </span>
@@ -171,7 +171,7 @@ export default function ArtistEarnings() {
       </motion.div>
 
       {/* 3 Main Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4 min-w-0">
         {/* Total Earnings */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
           <Card className="rounded-3xl border-stone-200 shadow-sm bg-gradient-to-br from-stone-900 to-stone-800 text-white overflow-hidden relative">

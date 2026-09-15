@@ -185,7 +185,7 @@ export default function ArtistLayout() {
             )}
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-h-screen">
+            <div className="flex-1 flex flex-col min-h-screen min-w-0 overflow-x-hidden">
                 {/* Top Bar */}
                 <header className="h-16 border-b border-border/50 bg-card/50 backdrop-blur-xl flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
                     <div className="flex items-center gap-3">
@@ -211,7 +211,7 @@ export default function ArtistLayout() {
                 </header>
 
                 {/* Page Content */}
-                <main className="flex-1 p-4 lg:p-8">
+                <main className="flex-1 p-4 lg:p-6 xl:p-8 min-w-0 max-w-full">
                     <Suspense fallback={<ArtistDashboardLoader />}>
                         <Outlet />
                     </Suspense>
