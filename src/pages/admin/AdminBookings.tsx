@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Check, X, Calendar, Loader2, MapPin, Home, MessageSquare, AlertTriangle, ShieldCheck, FileText, Scale, ArrowRight, UploadCloud, MessageCircle, Wallet, IndianRupee, Sparkles, CheckCircle2 } from "lucide-react";
+import { Check, X, Calendar, Loader2, MapPin, Home, MessageSquare, AlertTriangle, ShieldCheck, FileText, Scale, ArrowRight, UploadCloud, MessageCircle, Wallet, IndianRupee, Sparkles, CheckCircle2, Copy, ExternalLink, QrCode, CreditCard } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, doc } from "firebase/firestore";
@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   subscribeTelecallerLeads,
   settleLeadCommission,
+  settleArtistPayout,
   updateLeadCustomCommission,
   type TelecallerLead,
 } from "@/services/telecallerService";
@@ -81,6 +82,13 @@ export default function AdminBookings() {
   const [customArtistPayout, setCustomArtistPayout] = useState<number>(0);
   const [customNotes, setCustomNotes] = useState<string>("");
   const [savingCommission, setSavingCommission] = useState(false);
+
+  // Artist Payout Dialog State
+  const [artistPayoutLead, setArtistPayoutLead] = useState<TelecallerLead | null>(null);
+  const [payoutUtr, setPayoutUtr] = useState<string>("");
+  const [payoutUpiId, setPayoutUpiId] = useState<string>("");
+  const [payoutMode, setPayoutMode] = useState<string>("UPI / GPay");
+  const [savingArtistPayout, setSavingArtistPayout] = useState(false);
 
   // Dispute dialogue review
   const [selectedDispute, setSelectedDispute] = useState<BookingEvent | null>(null);
@@ -335,6 +343,71 @@ export default function AdminBookings() {
     }
   };
 
+  const handleOpenArtistPayoutDialog = (lead: TelecallerLead) => {
+    setArtistPayoutLead(lead);
+    const defaultUpi = lead.artistUpiId || (lead.artistPhone ? `${lead.artistPhone}@okaxis` : "64823469846@okaxis");
+    setPayoutUpiId(defaultUpi);
+    setPayoutUtr(lead.artistPayoutUtr || "");
+    setPayoutMode(lead.artistPayoutMode || "UPI / GPay");
+  };
+
+  const handleConfirmArtistPayout = async () => {
+    if (!artistPayoutLead) return;
+    setSavingArtistPayout(true);
+    try {
+      const b = Number(artistPayoutLead.budget || artistPayoutLead.bookingAmount || 0);
+      const a = Number(
+        (typeof artistPayoutLead.artistPayout === "number" && artistPayoutLead.artistPayout > 0 ? artistPayoutLead.artistPayout : undefined) ||
+        (typeof artistPayoutLead.artistOfferBudget === "number" && artistPayoutLead.artistOfferBudget > 0 ? artistPayoutLead.artistOfferBudget : undefined) ||
+        (typeof artistPayoutLead.confirmedPrice === "number" && artistPayoutLead.confirmedPrice > 0 && artistPayoutLead.confirmedPrice < b ? artistPayoutLead.confirmedPrice : undefined) ||
+        (b > 0 ? Math.round(b * 0.8) : 0)
+      );
+
+      const generatedUtr = payoutUtr.trim() || `UPI${Date.now().toString().slice(-8)}`;
+
+      await settleArtistPayout(artistPayoutLead.id, "paid", {
+        utr: generatedUtr,
+        artistUpiId: payoutUpiId.trim(),
+        paymentMode: payoutMode,
+        payoutAmount: a,
+      });
+
+      await logAdminActivity(
+        "admin@mykalakar.com",
+        "SETTLE_ARTIST_PAYOUT",
+        `Paid artist ₹${a} for lead ${artistPayoutLead.id} (${artistPayoutLead.confirmedArtistName || "Artist"}) via ${payoutMode} - UTR: ${generatedUtr}`
+      );
+
+      setTelecallerLeads((prev) =>
+        prev.map((l) =>
+          l.id === artistPayoutLead.id
+            ? {
+                ...l,
+                artistPayoutStatus: "paid",
+                artistPayoutUtr: generatedUtr,
+                artistUpiId: payoutUpiId.trim(),
+                artistPayoutSettledAt: new Date().toISOString(),
+              }
+            : l
+        )
+      );
+
+      toast({
+        title: "कलाकार मानधन पेड झाले! 💸✅",
+        description: `₹${a.toLocaleString("en-IN")} चे पेमेंट ${artistPayoutLead.confirmedArtistName || "कलाकार"} यांच्या खात्यात मार्क झाले (UTR: ${generatedUtr}).`,
+      });
+      setArtistPayoutLead(null);
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "त्रुटी",
+        description: e.message || "कलाकार पेमेंट मार्क करता आले नाही.",
+      });
+    } finally {
+      setSavingArtistPayout(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -445,7 +518,8 @@ export default function AdminBookings() {
                       const grossMargin = typeof lead.grossMargin === "number" && lead.grossMargin > 0 ? lead.grossMargin : split.grossMargin;
                       const comm = typeof lead.telecallerCommission === "number" ? lead.telecallerCommission : split.telecallerCommission;
                       const profit = typeof lead.ownerProfit === "number" ? lead.ownerProfit : split.ownerProfit;
-                      const isPaid = lead.commissionPayoutStatus === "paid";
+                      const isTelecallerPaid = lead.commissionPayoutStatus === "paid";
+                      const isArtistPaid = lead.artistPayoutStatus === "paid";
 
                       return (
                         <TableRow key={lead.id}>
@@ -461,8 +535,25 @@ export default function AdminBookings() {
                           <TableCell className="font-bold text-xs">
                             ₹{b.toLocaleString("en-IN")}
                           </TableCell>
-                          <TableCell className="text-xs font-semibold text-stone-600">
-                            ₹{a.toLocaleString("en-IN")}
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="font-bold text-xs text-stone-800">
+                                ₹{a.toLocaleString("en-IN")}
+                              </p>
+                              {isArtistPaid ? (
+                                <Badge className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-[9px] px-1.5 py-0 h-4">
+                                  ✓ Paid
+                                </Badge>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenArtistPayoutDialog(lead)}
+                                  className="text-[10px] text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded font-bold flex items-center gap-1 transition"
+                                >
+                                  💸 Pay Artist
+                                </button>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="font-bold text-xs text-purple-700">
                             ₹{grossMargin.toLocaleString("en-IN")}
@@ -487,18 +578,47 @@ export default function AdminBookings() {
                             ₹{profit.toLocaleString("en-IN")}
                           </TableCell>
                           <TableCell>
-                            {isPaid ? (
-                              <Badge className="bg-emerald-600 text-white font-bold text-[10px]">
-                                ✓ Paid
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 font-bold text-[10px]">
-                                ⏳ Pending
-                              </Badge>
-                            )}
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1 text-[10px]">
+                                <span className="text-stone-400 font-medium">📞 TC:</span>
+                                {isTelecallerPaid ? (
+                                  <Badge className="bg-emerald-600 text-white font-bold text-[9px] px-1.5 py-0 h-4">
+                                    ✓ Paid
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 font-bold text-[9px] px-1.5 py-0 h-4">
+                                    ⏳ Pending
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 text-[10px]">
+                                <span className="text-stone-400 font-medium">🎨 Art:</span>
+                                {isArtistPaid ? (
+                                  <Badge className="bg-teal-600 text-white font-bold text-[9px] px-1.5 py-0 h-4">
+                                    ✓ Paid
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 font-bold text-[9px] px-1.5 py-0 h-4">
+                                    ⏳ Pending
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenArtistPayoutDialog(lead)}
+                                className={`h-7 px-2 rounded-lg text-xs font-bold ${
+                                  isArtistPaid
+                                    ? "border-teal-200 text-teal-700 bg-teal-50/50 hover:bg-teal-100"
+                                    : "border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 shadow-2xs"
+                                }`}
+                              >
+                                {isArtistPaid ? "✓ Artist Paid" : "💸 Pay Artist"}
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -512,17 +632,17 @@ export default function AdminBookings() {
                                 disabled={settlingId === lead.id}
                                 onClick={() => handleToggleCommissionSettlement(lead)}
                                 className={`h-7 px-2.5 rounded-lg text-xs font-bold ${
-                                  isPaid
+                                  isTelecallerPaid
                                     ? "bg-stone-100 hover:bg-stone-200 text-stone-700 border"
                                     : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
                                 }`}
                               >
                                 {settlingId === lead.id ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : isPaid ? (
+                                ) : isTelecallerPaid ? (
                                   "Mark Pending"
                                 ) : (
-                                  "Mark as Paid ✅"
+                                  "Mark TC Paid ✅"
                                 )}
                               </Button>
                             </div>
@@ -966,6 +1086,127 @@ export default function AdminBookings() {
             >
               {savingCommission ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
               कमिशन लागू करा (Save Commission)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Artist Payout Settlement Dialog */}
+      <Dialog open={!!artistPayoutLead} onOpenChange={(open) => !open && setArtistPayoutLead(null)}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-stone-900">
+              <IndianRupee className="h-5 w-5 text-emerald-600" />
+              कलाकार मानधन पे-आऊट (Artist Payout)
+            </DialogTitle>
+          </DialogHeader>
+
+          {artistPayoutLead && (() => {
+            const b = Number(artistPayoutLead.budget || artistPayoutLead.bookingAmount || 0);
+            const a = Number(
+              (typeof artistPayoutLead.artistPayout === "number" && artistPayoutLead.artistPayout > 0 ? artistPayoutLead.artistPayout : undefined) ||
+              (typeof artistPayoutLead.artistOfferBudget === "number" && artistPayoutLead.artistOfferBudget > 0 ? artistPayoutLead.artistOfferBudget : undefined) ||
+              (typeof artistPayoutLead.confirmedPrice === "number" && artistPayoutLead.confirmedPrice > 0 && artistPayoutLead.confirmedPrice < b ? artistPayoutLead.confirmedPrice : undefined) ||
+              (b > 0 ? Math.round(b * 0.8) : 0)
+            );
+            const artistName = artistPayoutLead.confirmedArtistName || artistPayoutLead.requestedArtistName || "कलाकार";
+            const upiUrl = `upi://pay?pa=${encodeURIComponent(payoutUpiId)}&pn=${encodeURIComponent(artistName)}&am=${a}&cu=INR&tn=${encodeURIComponent("MyKalakar Payout " + artistPayoutLead.customerName)}`;
+
+            return (
+              <div className="space-y-4 py-1 text-xs">
+                {/* Summary Box */}
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-stone-500 font-medium">कलाकार नाव</p>
+                      <p className="font-extrabold text-sm text-stone-900">{artistName}</p>
+                      <p className="text-[11px] text-stone-500">{artistPayoutLead.eventType} • {artistPayoutLead.customerPhone}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-stone-500 font-medium">देय मानधन (Payable)</p>
+                      <p className="text-xl font-black text-emerald-700">₹{a.toLocaleString("en-IN")}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-emerald-200/60 text-[11px]">
+                    <p><span className="text-stone-500">ग्राहक बजेट:</span> <span className="font-bold">₹{b.toLocaleString("en-IN")}</span></p>
+                    <p><span className="text-stone-500">मायकलाकार मार्जिन:</span> <span className="font-bold text-purple-700">₹{Math.max(0, b - a).toLocaleString("en-IN")}</span></p>
+                  </div>
+                </div>
+
+                {/* UPI & Transfer Info */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-stone-800 flex items-center justify-between">
+                    <span>कलाकार UPI ID:</span>
+                    <span className="text-[10px] text-stone-400 font-normal">GPay / PhonePe / Paytm</span>
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={payoutUpiId}
+                      onChange={(e) => setPayoutUpiId(e.target.value)}
+                      placeholder="e.g. 9822123456@okaxis"
+                      className="h-9 text-xs font-bold bg-white border-stone-200"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (payoutUpiId) {
+                          navigator.clipboard.writeText(payoutUpiId);
+                          toast({ title: "UPI ID Copied! 📋", description: payoutUpiId });
+                        }
+                      }}
+                      className="h-9 px-2.5 text-xs shrink-0"
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-1" /> Copy
+                    </Button>
+                  </div>
+
+                  {/* 1-Click Launch UPI App */}
+                  <div className="pt-1">
+                    <a
+                      href={upiUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      GPay / UPI ॲप उघडा (Pay ₹{a.toLocaleString("en-IN")})
+                    </a>
+                  </div>
+                </div>
+
+                {/* Payment Reference / UTR */}
+                <div className="space-y-1.5 pt-1">
+                  <Label className="text-xs font-bold text-stone-800">
+                    बँक / UPI ट्रान्झॅक्शन नंबर (UTR Ref - Optional):
+                  </Label>
+                  <Input
+                    placeholder="उदा. UPI/428193819283 किंवा IMPS Ref"
+                    value={payoutUtr}
+                    onChange={(e) => setPayoutUtr(e.target.value)}
+                    className="h-9 text-xs bg-white border-stone-200"
+                  />
+                  <p className="text-[10px] text-stone-400">
+                    पेमेंट पूर्ण झाल्यावर हा UTR नंबर कलाकाराच्या डॅशबोर्डवर दिसेल.
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
+          <DialogFooter className="flex gap-2 sm:justify-end border-t border-stone-100 pt-3">
+            <Button variant="outline" size="sm" onClick={() => setArtistPayoutLead(null)}>
+              रद्द करा
+            </Button>
+            <Button
+              size="sm"
+              disabled={savingArtistPayout}
+              onClick={handleConfirmArtistPayout}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-sm"
+            >
+              {savingArtistPayout ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              ✓ Mark as Paid to Artist (पेमेंट पूर्ण झाले)
             </Button>
           </DialogFooter>
         </DialogContent>

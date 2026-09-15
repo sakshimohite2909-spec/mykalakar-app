@@ -97,6 +97,11 @@ export type TelecallerLead = {
   commissionSplitType?: CommissionSplitType;
   commissionPayoutStatus?: "pending" | "paid" | "cancelled";
   commissionSettledAt?: string;
+  artistPayoutStatus?: "pending" | "paid" | "cancelled";
+  artistPayoutSettledAt?: string;
+  artistPayoutUtr?: string;
+  artistPayoutMode?: string;
+  artistUpiId?: string;
   customCommissionOverride?: boolean;
   adminCommissionNotes?: string;
   deleted?: boolean;
@@ -1571,5 +1576,99 @@ export async function updateLeadCustomCommission(
     console.warn("Firestore custom commission error:", e);
   }
 }
+
+export async function settleArtistPayout(
+  leadId: string,
+  status: "pending" | "paid",
+  payoutData?: {
+    utr?: string;
+    notes?: string;
+    payoutAmount?: number;
+    paymentMode?: string;
+    artistUpiId?: string;
+  }
+): Promise<void> {
+  const localList = getLocalLeads();
+  const realDocId = cleanId(leadId);
+  const settledAt = status === "paid" ? new Date().toISOString() : undefined;
+
+  localList.forEach((lead) => {
+    if (lead.id === leadId || cleanId(lead.id) === realDocId) {
+      lead.artistPayoutStatus = status;
+      if (settledAt) lead.artistPayoutSettledAt = settledAt;
+      if (payoutData?.utr) lead.artistPayoutUtr = payoutData.utr;
+      if (payoutData?.artistUpiId) lead.artistUpiId = payoutData.artistUpiId;
+    }
+  });
+
+  try {
+    localStorage.setItem(LOCAL_LEADS_KEY, JSON.stringify(localList.slice(0, 100)));
+  } catch (e) {
+    console.warn("Local storage artist payout update warning:", e);
+  }
+
+  const updatePayload: Record<string, any> = {
+    artistPayoutStatus: status,
+    artistPayoutSettledAt: settledAt || null,
+    isEscrowReleased: status === "paid" ? true : undefined,
+    escrowState: status === "paid" ? "RELEASED" : undefined,
+    artistPayoutUtr: payoutData?.utr || null,
+    artistUpiId: payoutData?.artistUpiId || null,
+    artistPayoutMode: payoutData?.paymentMode || "UPI",
+    updatedAt: serverTimestamp(),
+  };
+
+  try {
+    await setDoc(doc(db, LEADS_COLLECTION, realDocId), updatePayload, { merge: true });
+    await setDoc(doc(db, LEADS_COLLECTION, leadId), updatePayload, { merge: true });
+    if (leadId.startsWith("booking_")) {
+      await setDoc(doc(db, "bookings", realDocId), updatePayload, { merge: true });
+    } else if (leadId.startsWith("brief_")) {
+      await setDoc(doc(db, "eventBriefs", realDocId), updatePayload, { merge: true });
+    } else {
+      await setDoc(doc(db, "inquiries", realDocId), updatePayload, { merge: true });
+    }
+  } catch (e) {
+    console.warn("Firestore artist payout settlement error:", e);
+  }
+
+  // Also sync in local bookings caches
+  try {
+    const bookingKeys = ["mykalakar_local_bookings", "mykalakar_customer_bookings", "mykalakar_artist_bookings"];
+    bookingKeys.forEach((key) => {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          let updated = false;
+          arr.forEach((b: any) => {
+            if (b.id === leadId || b.id === realDocId || b.bookingId === leadId) {
+              b.artistPayoutStatus = status;
+              b.isEscrowReleased = status === "paid";
+              b.payoutStatus = status === "paid" ? "PAID" : "PROCESSING";
+              b.artistPayoutUtr = payoutData?.utr;
+              updated = true;
+            }
+          });
+          if (updated) {
+            localStorage.setItem(key, JSON.stringify(arr));
+          }
+        }
+      }
+    });
+  } catch (e) {
+    // Ignore
+  }
+
+  // Dispatch window event
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("mykalakar_booking_updated", {
+        detail: { leadId, realDocId, status, payoutData },
+      })
+    );
+  }
+}
+
 
 
