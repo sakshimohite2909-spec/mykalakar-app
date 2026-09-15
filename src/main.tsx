@@ -26,6 +26,18 @@ if (typeof window !== "undefined") {
     }
     return originalInsertBefore.call(this, newNode, referenceNode) as T;
   };
+
+  // --- VITE DYNAMIC CHUNK UPDATE AUTO-RELOAD ---
+  // When a new Vercel deployment happens, older client sessions auto-reload on chunk hash mismatch.
+  window.addEventListener("vite:preloadError", (event) => {
+    console.warn("Vite preload chunk mismatch detected, reloading to fetch latest bundle...", event);
+    const lastReload = sessionStorage.getItem("last_chunk_reload");
+    const now = Date.now();
+    if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
+      sessionStorage.setItem("last_chunk_reload", now.toString());
+      window.location.reload();
+    }
+  });
 }
 // ------------------------------------------
 
