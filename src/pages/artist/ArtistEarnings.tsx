@@ -121,6 +121,7 @@ export default function ArtistEarnings() {
           (b.authorizedAmount ? Math.round(b.authorizedAmount * 0.8) : 0) ||
           (b.budget ? Math.round(b.budget * 0.8) : 0) ||
           0
+        );
         const isPaidOut =
           b.status === "PAYOUT_RELEASED" ||
           Boolean(b.isEscrowReleased) ||
