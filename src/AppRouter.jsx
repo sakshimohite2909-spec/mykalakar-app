@@ -5,6 +5,7 @@ import MainLayout from "@/MainLayout";
 import ArtistProtectedRoute from "@/components/ArtistProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import TelecallerProtectedRoute from "@/components/TelecallerProtectedRoute";
 import RouteErrorBoundary from "@/components/RouteErrorBoundary";
 import { ROUTES } from "@/constants/routes.constants";
 
@@ -53,7 +54,6 @@ const ArtistSettings = lazy(() => import("./pages/artist/ArtistSettings"));
 const PendingReview = lazy(() => import("./pages/PendingReview"));
 const SchoolTemplate = lazy(() => import("./components/SchoolTemplate"));
 const ArtistBookingResponsePage = lazy(() => import("./pages/ArtistBookingResponsePage"));
-const TelecallerProtectedRoute = lazy(() => import("./components/TelecallerProtectedRoute"));
 const TelecallerLayout = lazy(() => import("./pages/telecaller/TelecallerLayout"));
 const TelecallerDashboard = lazy(() => import("./pages/telecaller/TelecallerDashboard"));
 const TelecallerLogin = lazy(() => import("./pages/telecaller/TelecallerLogin"));
