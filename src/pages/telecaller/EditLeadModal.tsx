@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone, Calendar, Clock, MapPin, IndianRupee, Sparkles, Loader2, Volume2, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { updateLeadDetails, type TelecallerLead, type LeadStatus } from "@/services/telecallerService";
+import { calculateCommissionSplit } from "@/services/commissionSettingsService";
 import { toast } from "@/hooks/use-toast";
 
 type Props = {
@@ -47,7 +48,7 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
       setEventLocation(lead.eventLocation || "");
       setVenueAddress(lead.venueAddress || "");
       setBudget(lead.budget ?? 0);
-      setArtistOfferBudget(lead.artistOfferBudget ?? (lead.budget ? Math.round(lead.budget * 0.8) : 0));
+      setArtistOfferBudget(lead.artistOfferBudget ?? (lead.artistPayout || (lead.budget ? Math.round(lead.budget * 0.8) : 0)));
       setSoundRequired(
         lead.soundRequired === true ? "artist_bring" : lead.soundRequired === false ? "not_needed" : "venue_provided"
       );
@@ -64,6 +65,9 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
 
     try {
       const soundBool = soundRequired === "artist_bring" ? true : soundRequired === "not_needed" ? false : undefined;
+      const bgt = Number(budget) || 0;
+      const artistOffer = Number(artistOfferBudget) || 0;
+      const split = calculateCommissionSplit(bgt, artistOffer);
 
       const updatedPayload: Partial<TelecallerLead> = {
         customerName,
@@ -76,8 +80,12 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
         eventTime,
         eventLocation,
         venueAddress,
-        budget: Number(budget) || 0,
-        artistOfferBudget: Number(artistOfferBudget) || 0,
+        budget: bgt,
+        artistOfferBudget: artistOffer,
+        artistPayout: artistOffer,
+        grossMargin: split.grossMargin,
+        telecallerCommission: split.telecallerCommission,
+        ownerProfit: split.ownerProfit,
         soundRequired: soundBool,
         telecallerNotes,
         status,

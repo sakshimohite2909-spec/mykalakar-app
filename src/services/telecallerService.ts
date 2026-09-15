@@ -1264,13 +1264,52 @@ export async function updateLeadDetails(
 ): Promise<void> {
   const cid = cleanId(leadId);
 
-  // 1. Immediately update local storage cache
+  // 1. Calculate live commission split & artist payout
   const localList = getLocalLeads();
+  const existingLead = localList.find((l) => cleanId(l.id) === cid || l.id === leadId);
+
+  const finalBudget = Number(
+    (typeof updatedData.budget === "number" && updatedData.budget > 0 ? updatedData.budget : undefined) ||
+    existingLead?.budget ||
+    0
+  );
+
+  const finalArtistPayout = Number(
+    (typeof updatedData.artistOfferBudget === "number" && updatedData.artistOfferBudget > 0 ? updatedData.artistOfferBudget : undefined) ||
+    (typeof updatedData.artistPayout === "number" && updatedData.artistPayout > 0 ? updatedData.artistPayout : undefined) ||
+    existingLead?.artistOfferBudget ||
+    existingLead?.artistPayout ||
+    (finalBudget > 0 ? Math.round(finalBudget * 0.8) : 0)
+  );
+
+  let splitData: Partial<TelecallerLead> = {};
+  if (finalBudget > 0) {
+    const split = calculateCommissionSplit(finalBudget, finalArtistPayout);
+    splitData = {
+      bookingAmount: split.bookingAmount,
+      artistPayout: split.artistPayout,
+      grossMargin: split.grossMargin,
+      telecallerCommission: split.telecallerCommission,
+      telecallerCommissionPct: split.telecallerCommissionPct,
+      ownerProfit: split.ownerProfit,
+      ownerProfitPct: split.ownerProfitPct,
+      commissionSplitType: split.splitType,
+    };
+  }
+
+  const mergedData: Partial<TelecallerLead> = {
+    ...splitData,
+    ...updatedData,
+    artistOfferBudget: finalArtistPayout,
+    artistPayout: finalArtistPayout,
+    isVerifiedByTelecaller: true,
+  };
+
+  // 2. Immediately update local storage cache
   let found = false;
   localList.forEach((l) => {
     if (cleanId(l.id) === cid || l.id === leadId) {
-      Object.assign(l, updatedData);
-      l.isVerifiedByTelecaller = true;
+      Object.assign(l, mergedData);
       found = true;
     }
   });
@@ -1278,8 +1317,7 @@ export async function updateLeadDetails(
   if (!found) {
     localList.push({
       id: leadId,
-      ...updatedData,
-      isVerifiedByTelecaller: true,
+      ...mergedData,
     } as any);
   }
 
@@ -1289,10 +1327,9 @@ export async function updateLeadDetails(
     console.warn("Local storage update warning:", e);
   }
 
-  // 2. Write to Firestore
+  // 3. Write to Firestore
   const updatePayload: Record<string, any> = {
-    ...updatedData,
-    isVerifiedByTelecaller: true,
+    ...mergedData,
     updatedAt: serverTimestamp(),
   };
 

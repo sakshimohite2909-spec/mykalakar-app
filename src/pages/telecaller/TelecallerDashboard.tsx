@@ -634,7 +634,13 @@ export default function TelecallerDashboard() {
       let comm = l.telecallerCommission;
       if (typeof comm !== "number") {
         const b = l.budget || 0;
-        const a = l.confirmedPrice || l.artistOfferBudget || (b > 0 ? Math.round(b * 0.8) : 0);
+        const a = (l.artistOfferBudget && l.artistOfferBudget > 0)
+          ? l.artistOfferBudget
+          : (l.artistPayout && l.artistPayout > 0)
+            ? l.artistPayout
+            : (l.confirmedPrice && l.confirmedPrice < b)
+              ? l.confirmedPrice
+              : (b > 0 ? Math.round(b * 0.8) : 0);
         const split = calculateCommissionSplit(b, a, commissionConfig);
         comm = split.telecallerCommission;
       }
@@ -1402,10 +1408,16 @@ export default function TelecallerDashboard() {
 
                   {/* CARD 4: ESCROW & PAYOUT RELEASE */}
                   {(() => {
-                    const bookingAmt = activeLead.budget || 0;
-                    const artistAmt = activeLead.confirmedPrice || activeLead.artistOfferBudget || (bookingAmt > 0 ? Math.round(bookingAmt * 0.8) : 0);
+                    const bookingAmt = activeLead.budget || (activeLead.confirmedPrice && activeLead.confirmedPrice > (activeLead.artistOfferBudget || 0) ? activeLead.confirmedPrice : 0) || 0;
+                    const artistAmt = (activeLead.artistOfferBudget && activeLead.artistOfferBudget > 0)
+                      ? activeLead.artistOfferBudget
+                      : (activeLead.artistPayout && activeLead.artistPayout > 0)
+                        ? activeLead.artistPayout
+                        : (activeLead.confirmedPrice && activeLead.confirmedPrice < bookingAmt)
+                          ? activeLead.confirmedPrice
+                          : (bookingAmt > 0 ? Math.round(bookingAmt * 0.8) : 0);
                     const split = calculateCommissionSplit(bookingAmt, artistAmt, commissionConfig);
-                    const myComm = typeof activeLead.telecallerCommission === "number" ? activeLead.telecallerCommission : split.telecallerCommission;
+                    const myComm = split.telecallerCommission;
 
                     return (
                       <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-50/80 via-white to-blue-50/80 border border-orange-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
