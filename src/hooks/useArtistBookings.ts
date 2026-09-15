@@ -304,9 +304,19 @@ export function useArtistBookings() {
         (b.budget ? Math.round(b.budget * 0.8) : 0) ||
         0
       );
-      if (["EVENT_COMPLETED", "PAYOUT_RELEASED", "completed"].includes(b.status)) {
+
+      const isPaidOut =
+        b.status === "PAYOUT_RELEASED" ||
+        Boolean(b.isEscrowReleased) ||
+        (b as any).escrowState === "RELEASED" ||
+        (b as any).artistPayoutStatus === "paid" ||
+        (b as any).payoutSettledByAdmin === true;
+
+      const isCancelled = ["CANCELLED_BY_ARTIST", "CANCELLED_BY_CLIENT", "REJECTED", "cancelled"].includes(b.status);
+
+      if (isPaidOut) {
         paid += amt;
-      } else if (!["CANCELLED_BY_ARTIST", "CANCELLED_BY_CLIENT", "REJECTED", "cancelled"].includes(b.status)) {
+      } else if (!isCancelled) {
         pending += amt;
       }
       total += amt;

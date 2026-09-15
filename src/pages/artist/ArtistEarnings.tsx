@@ -121,14 +121,23 @@ export default function ArtistEarnings() {
           (b.authorizedAmount ? Math.round(b.authorizedAmount * 0.8) : 0) ||
           (b.budget ? Math.round(b.budget * 0.8) : 0) ||
           0
-        );
-        const isPaid = ["EVENT_COMPLETED", "PAYOUT_RELEASED", "completed"].includes(b.status);
-        const isPending = ["CONFIRMED", "confirmed", "booked", "artist_confirmed", "SOFT_HOLD_ACTIVE", "PAYMENT_AUTHORIZED", "PENDING_ARTIST_RESPONSE"].includes(b.status);
+        const isPaidOut =
+          b.status === "PAYOUT_RELEASED" ||
+          Boolean(b.isEscrowReleased) ||
+          (b as any).escrowState === "RELEASED" ||
+          (b as any).artistPayoutStatus === "paid" ||
+          (b as any).payoutSettledByAdmin === true;
+
+        const isApprovedByTelecaller =
+          !isPaidOut && (b.status === "booked" || b.status === "EVENT_COMPLETED" || b.status === "completed" || (b as any).telecallerStatus === "booked");
+
+        const isPending = !isPaidOut && !["CANCELLED_BY_ARTIST", "CANCELLED_BY_CLIENT", "REJECTED", "cancelled"].includes(b.status);
 
         return {
           ...b,
           calculatedAmount: amount,
-          payoutStatus: isPaid ? "PAID" : isPending ? "PENDING" : "UNCONFIRMED",
+          payoutStatus: isPaidOut ? "PAID" : isPending ? "PENDING" : "UNCONFIRMED",
+          detailedPayoutState: isPaidOut ? "PAID" : isApprovedByTelecaller ? "APPROVED" : isPending ? "ESCROW_HOLD" : "UNCONFIRMED",
         };
       })
       .sort((a, b) => new Date(b.eventDate || 0).getTime() - new Date(a.eventDate || 0).getTime());
@@ -399,13 +408,17 @@ export default function ArtistEarnings() {
                         {formatCurrency(t.calculatedAmount)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {t.payoutStatus === "PAID" ? (
+                        {t.detailedPayoutState === "PAID" ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black text-[10px]">
-                            <CheckCircle2 className="h-3 w-3" /> Paid to Bank
+                            <CheckCircle2 className="h-3 w-3" /> Paid to Bank (बँकेत जमा)
                           </span>
-                        ) : t.payoutStatus === "PENDING" ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-black text-[10px]">
-                            <Clock className="h-3 w-3" /> Escrow Hold
+                        ) : t.detailedPayoutState === "APPROVED" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-black text-[10px] border border-blue-200">
+                            <Clock className="h-3 w-3 text-blue-600" /> Payout In Processing (मंजूर / प्रक्रियेत)
+                          </span>
+                        ) : t.detailedPayoutState === "ESCROW_HOLD" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-black text-[10px] border border-amber-200">
+                            <Clock className="h-3 w-3 text-amber-600" /> Escrow Hold (एस्क्रोमध्ये सुरक्षित)
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-stone-100 text-stone-600 font-bold text-[10px]">
