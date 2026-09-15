@@ -246,7 +246,16 @@ function getLocalLeads(): TelecallerLead[] {
         const existingIdx = result.findIndex((r) => (getLeadDedupKey(r) || cleanId(r.id)) === deduplicationId);
         if (existingIdx >= 0) {
           result[existingIdx].budget = Math.max(Number(result[existingIdx].budget || 0), Number(sanitized.budget || 0));
-          result[existingIdx].artistOfferBudget = Math.max(Number(result[existingIdx].artistOfferBudget || 0), Number(sanitized.artistOfferBudget || 0)) || (result[existingIdx].budget ? Math.round(result[existingIdx].budget * 0.8) : undefined);
+          
+          // Preserve explicit/verified artistOfferBudget instead of Math.max
+          if (typeof sanitized.artistOfferBudget === "number" && sanitized.artistOfferBudget > 0 && sanitized.isVerifiedByTelecaller) {
+            result[existingIdx].artistOfferBudget = sanitized.artistOfferBudget;
+            result[existingIdx].artistPayout = sanitized.artistOfferBudget;
+          } else if (typeof result[existingIdx].artistOfferBudget !== "number" || result[existingIdx].artistOfferBudget === 0) {
+            result[existingIdx].artistOfferBudget = sanitized.artistOfferBudget || (result[existingIdx].budget ? Math.round(result[existingIdx].budget * 0.8) : undefined);
+            result[existingIdx].artistPayout = result[existingIdx].artistOfferBudget;
+          }
+
           if (!result[existingIdx].customerPhone && sanitized.customerPhone) result[existingIdx].customerPhone = sanitized.customerPhone;
           if (!result[existingIdx].customerEmail && sanitized.customerEmail) result[existingIdx].customerEmail = sanitized.customerEmail;
           if (!result[existingIdx].requestedArtistName && sanitized.requestedArtistName && sanitized.requestedArtistName !== "कलाकार") result[existingIdx].requestedArtistName = sanitized.requestedArtistName;
@@ -666,7 +675,21 @@ export function subscribeTelecallerLeads(callback: (leads: TelecallerLead[]) => 
           : existing.status;
 
         const bestBudget = Math.max(Number(l.budget || 0), Number(existing.budget || 0));
-        const bestArtistOffer = Math.max(Number(l.artistOfferBudget || 0), Number(existing.artistOfferBudget || 0)) || (bestBudget > 0 ? Math.round(bestBudget * 0.8) : undefined);
+        
+        // Preserve explicit/verified artistOfferBudget
+        const bestArtistOffer = (typeof l.artistOfferBudget === "number" && l.artistOfferBudget > 0 && l.isVerifiedByTelecaller)
+          ? l.artistOfferBudget
+          : (typeof existing.artistOfferBudget === "number" && existing.artistOfferBudget > 0 && existing.isVerifiedByTelecaller)
+          ? existing.artistOfferBudget
+          : (typeof l.artistOfferBudget === "number" && l.artistOfferBudget > 0 && l.artistOfferBudget < bestBudget)
+          ? l.artistOfferBudget
+          : (typeof existing.artistOfferBudget === "number" && existing.artistOfferBudget > 0 && existing.artistOfferBudget < bestBudget)
+          ? existing.artistOfferBudget
+          : (typeof l.artistOfferBudget === "number" && l.artistOfferBudget > 0)
+          ? l.artistOfferBudget
+          : (typeof existing.artistOfferBudget === "number" && existing.artistOfferBudget > 0)
+          ? existing.artistOfferBudget
+          : (bestBudget > 0 ? Math.round(bestBudget * 0.8) : undefined);
         const bestPhone = (l.customerPhone && l.customerPhone.replace(/\D/g, "").length >= 10) ? l.customerPhone : (existing.customerPhone || l.customerPhone);
         const bestEmail = l.customerEmail || existing.customerEmail;
         const bestDate = (l.eventDate && l.eventDate !== "तारीख TBD" && l.eventDate !== "तारीख चर्चाधीन") ? l.eventDate : existing.eventDate;

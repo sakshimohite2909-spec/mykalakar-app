@@ -48,9 +48,16 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
       setEventDate(lead.eventDate || "");
       setEventTime(lead.eventTime || "06:00 PM - 09:00 PM");
       setEventLocation(lead.eventLocation || "");
-      setVenueAddress(lead.venueAddress || "");
-      setBudget(lead.budget ?? 0);
-      setArtistOfferBudget(lead.artistOfferBudget ?? (lead.artistPayout || (lead.budget ? Math.round(lead.budget * 0.8) : 0)));
+      const bgt = lead.budget ?? 0;
+      setBudget(bgt);
+      const offer = (typeof lead.artistOfferBudget === "number" && lead.artistOfferBudget > 0)
+        ? lead.artistOfferBudget
+        : (typeof lead.artistPayout === "number" && lead.artistPayout > 0)
+        ? lead.artistPayout
+        : (typeof lead.confirmedPrice === "number" && lead.confirmedPrice > 0 && lead.confirmedPrice < bgt)
+        ? lead.confirmedPrice
+        : (bgt > 0 ? Math.round(bgt * 0.8) : 0);
+      setArtistOfferBudget(offer);
       setSoundRequired(
         lead.soundRequired === true ? "artist_bring" : lead.soundRequired === false ? "not_needed" : "venue_provided"
       );
