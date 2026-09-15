@@ -73,12 +73,56 @@ interface Props {
   }>;
 }
 
-function parsePriceToNumber(rawPrice: string | number | undefined): number {
-  if (typeof rawPrice === "number") return Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : 15000;
-  if (!rawPrice) return 15000;
-  const digitsOnly = String(rawPrice).replace(/\D/g, "");
-  const parsed = parseInt(digitsOnly, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 15000;
+export function parsePriceToNumber(rawPrice: string | number | undefined): number {
+  if (typeof rawPrice === "number") {
+    if (Number.isFinite(rawPrice) && rawPrice > 0) {
+      // If someone previously passed/saved a concatenated number like 2000065000
+      if (rawPrice > 10000000) {
+        const s = String(rawPrice);
+        const half = parseInt(s.slice(0, Math.ceil(s.length / 2)), 10);
+        return Number.isFinite(half) && half > 0 ? half : 0;
+      }
+      return rawPrice;
+    }
+    return 0;
+  }
+  if (!rawPrice) return 0;
+
+  const str = String(rawPrice).trim();
+
+  // If it's a range like "20,000 - 65,000" or "₹20,000 to ₹65,000" or "20k - 50k"
+  const parts = str.split(/[-–—/]|(?:\s+(?:to|ते)\s+)/i);
+  if (parts.length > 0) {
+    const firstPart = parts[0].trim();
+    if (/(\d+(?:\.\d+)?)\s*k/i.test(firstPart)) {
+      const match = firstPart.match(/(\d+(?:\.\d+)?)\s*k/i);
+      if (match) return Math.round(parseFloat(match[1]) * 1000);
+    }
+    const digits = firstPart.replace(/\D/g, "");
+    if (digits) {
+      const num = parseInt(digits, 10);
+      if (Number.isFinite(num) && num > 0) {
+        if (num > 10000000) {
+          const s = String(num);
+          const half = parseInt(s.slice(0, 5), 10);
+          return Number.isFinite(half) && half > 0 ? half : 0;
+        }
+        return num;
+      }
+    }
+  }
+
+  // Fallback match first sequence of digits
+  const match = str.match(/\d[\d,]*/);
+  if (match) {
+    const digits = match[0].replace(/\D/g, "");
+    const num = parseInt(digits, 10);
+    if (Number.isFinite(num) && num > 0) {
+      return num;
+    }
+  }
+
+  return 0;
 }
 
 export default function BookingModal({
@@ -101,7 +145,7 @@ export default function BookingModal({
   const [sameAsMobile, setSameAsMobile] = useState(false);
   const [selectedService, setSelectedService] = useState<string>("");
 
-  // Form states
+  // Form states - only Name and Phone are auto-fetched from profile
   const [formData, setFormData] = useState({
     customerName: "",
     customerEmail: "",
@@ -115,7 +159,7 @@ export default function BookingModal({
     eventType: "Wedding",
     message: "",
     specialRequirements: "",
-    authorizedAmount: "15000",
+    authorizedAmount: "",
   });
 
   // Availability validation state
@@ -144,7 +188,7 @@ export default function BookingModal({
     }
   }, [open, services]);
 
-  // Reset wizard & prefill customer details on open/close
+  // Reset wizard & prefill ONLY customer name and phone details on open/close
   useEffect(() => {
     if (open) {
       setStep(1);
@@ -195,25 +239,27 @@ export default function BookingModal({
         cvv: "",
       });
 
-      const initialBudget = startingPrice ? String(parsePriceToNumber(startingPrice)) : "15000";
-
       setFormData({
         customerName: authName || "",
         customerEmail: authEmail || "",
         customerPhone: authPhone || "",
         clientWhatsapp: authWhatsapp || authPhone || "",
-        customerAddress: String(userProfile?.address || userProfile?.location || ""),
-        eventLocation: String(userProfile?.city || userProfile?.district || ""),
+        customerAddress: "",
+        eventLocation: "",
         eventDate: preselectedDate || "",
-        eventStartTime: "",
-        eventEndTime: "",
-        eventType: "",
+        eventStartTime: "18:00",
+        eventEndTime: "22:00",
+        eventType: "Wedding",
         message: "",
         specialRequirements: "",
-        authorizedAmount: initialBudget,
+        authorizedAmount: "",
       });
     }
-  }, [open]);
+  }, [open, currentUser, userProfile]);
+
+  const handleSelectChange = (value: string) => {
+    setFormData((prev) => ({ ...prev, eventType: value }));
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -256,10 +302,6 @@ export default function BookingModal({
     }
   };
 
-  const handleSelectChange = (value: string) => {
-    setFormData((prev) => ({ ...prev, eventType: value }));
-  };
-
   const handleAuthCheck = () => {
     if (!currentUser) {
       toast({
@@ -284,8 +326,26 @@ export default function BookingModal({
     if (!formData.customerName || !formData.eventDate || !formData.eventType) {
       toast({
         variant: "destructive",
-        title: "Required Fields Missing",
-        description: "Please fill in your name, event date, and performance type.",
+        title: "माहिती अपूर्ण आहे (Missing Fields)",
+        description: "कृपया तुमचे नाव, कार्यक्रमाची तारीख आणि प्रकार निवडा.",
+      });
+      return;
+    }
+
+    if (!formData.eventLocation) {
+      toast({
+        variant: "destructive",
+        title: "ठिकाण आवश्यक आहे (Location Required)",
+        description: "कृपया कार्यक्रमाचे शहर/ठिकाण प्रविष्ट करा.",
+      });
+      return;
+    }
+
+    if (!formData.authorizedAmount || Number(formData.authorizedAmount) <= 0) {
+      toast({
+        variant: "destructive",
+        title: "बजेट आवश्यक आहे (Budget Required)",
+        description: "कृपया तुमचे बजेट / ऑफर रक्कम (Budget ₹) प्रविष्ट करा.",
       });
       return;
     }
@@ -295,7 +355,7 @@ export default function BookingModal({
       toast({
         variant: "destructive",
         title: t("common.error"),
-        description: "Please enter a valid 10-digit mobile number.",
+        description: "कृपया वैध १०-अंकी मोबाईल नंबर प्रविष्ट करा.",
       });
       return;
     }
@@ -305,7 +365,7 @@ export default function BookingModal({
       if (artistId && formData.eventDate) {
         await checkArtistAvailability(artistId, formData.eventDate);
       }
-      setStep(2); // Proceed to Razorpay Gateway Step
+      setStep(2); // Proceed to Review Step
     } catch (err) {
       console.warn("Availability check bypassed", err);
       setStep(2);
@@ -324,6 +384,7 @@ export default function BookingModal({
         (s) => (s.subcategory || s.artForm || s.category) === selectedService
       );
       const effectiveService = selectedService || formData.eventType || "Performance";
+      const finalBudget = Number(formData.authorizedAmount) || 0;
 
       // 1. Create booking in Firestore with status PENDING_TELECALLER_VERIFICATION
       const booking = await createArtistBooking({
@@ -341,7 +402,10 @@ export default function BookingModal({
         eventStartTime: formData.eventStartTime,
         eventEndTime: formData.eventEndTime,
         specialRequirements: formData.specialRequirements,
-        authorizedAmount: Number(formData.authorizedAmount || 15000),
+        authorizedAmount: finalBudget,
+        budget: finalBudget,
+        amount: finalBudget,
+        confirmedPrice: finalBudget,
         status: "PENDING_TELECALLER_VERIFICATION",
         paymentGateway: "razorpay",
         paymentStatus: "deferred_payment",
@@ -361,8 +425,17 @@ export default function BookingModal({
         serviceCategory: matchedService?.category,
         serviceEvent: matchedService?.event,
         eventDate: formData.eventDate,
+        eventStartTime: formData.eventStartTime,
+        eventEndTime: formData.eventEndTime,
         eventLocation: formData.eventLocation,
+        customerAddress: formData.customerAddress,
+        venueAddress: formData.customerAddress,
+        budget: finalBudget,
+        amount: finalBudget,
+        authorizedAmount: finalBudget,
+        price: finalBudget,
         message: formData.message,
+        specialRequirements: formData.specialRequirements,
         artistName,
         artistId,
         artistUid: artistId,
@@ -396,8 +469,11 @@ export default function BookingModal({
           serviceCategory: matchedService?.category,
           serviceEvent: matchedService?.event,
           eventDate: formData.eventDate,
+          eventTime: `${formData.eventStartTime || "18:00"} - ${formData.eventEndTime || "22:00"}`,
           eventLocation: formData.eventLocation,
-          budget: Number(formData.authorizedAmount || 15000),
+          venueAddress: formData.customerAddress,
+          budget: finalBudget,
+          artistOfferBudget: Math.round(finalBudget * 0.8),
           message: formData.message || formData.specialRequirements || "",
           artistId,
           artistName,
@@ -758,7 +834,7 @@ export default function BookingModal({
                 </div>
                 <div className="flex justify-between pt-1 text-sm font-extrabold">
                   <span className="text-stone-800">{t("booking.estimatedBudget") || "Estimated Budget Offer:"}</span>
-                  <span className="text-orange-600">₹{Number(formData.authorizedAmount || 15000).toLocaleString("en-IN")}</span>
+                  <span className="text-orange-600">₹{Number(formData.authorizedAmount || 0).toLocaleString("en-IN")}</span>
                 </div>
               </div>
 

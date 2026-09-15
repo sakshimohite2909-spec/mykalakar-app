@@ -49,6 +49,9 @@ export interface CreateBookingInput {
   holdExpiryTime?: string;
   paymentGateway?: "stripe" | "razorpay" | "paypal" | "adyen";
   authorizedAmount?: number;
+  budget?: number;
+  amount?: number;
+  confirmedPrice?: number;
   status?: BookingStatus;
   paymentStatus?: string;
   selectedService?: string;
@@ -86,13 +89,21 @@ function normalizeStatus(status: unknown): BookingStatus {
   if (typeof status !== "string") return "PENDING_TELECALLER_VERIFICATION";
   const upper = status.toUpperCase();
   if (upper === "PENDING_TELECALLER_VERIFICATION") return "PENDING_TELECALLER_VERIFICATION";
-  if (upper === "PAYMENT_PENDING") return "PAYMENT_PENDING";
-  if (upper === "PENDING" || upper === "PENDING_ARTIST_RESPONSE") return "PENDING_ARTIST_RESPONSE";
-  if (upper === "CONFIRMED") return "CONFIRMED";
+  if (
+    upper === "PAYMENT_PENDING" ||
+    upper === "COUNTER_OFFER_SENT" ||
+    upper === "ARTIST_CONFIRMED" ||
+    upper === "QUOTE_SENT"
+  ) {
+    return "PAYMENT_PENDING";
+  }
+  if (upper === "CONFIRMED" || upper === "BOOKED" || upper === "ACCEPTED") return "CONFIRMED";
   if (upper === "COMPLETED" || upper === "EVENT_COMPLETED") return "EVENT_COMPLETED";
-  if (upper === "CANCELLED" || upper === "CANCELLED_BY_ARTIST") return "CANCELLED_BY_ARTIST";
-  if (upper === "ACCEPTED") return "CONFIRMED";
+  if (upper === "CANCELLED" || upper === "CANCELLED_BY_ARTIST" || upper === "CANCELLED_BY_CLIENT") return "CANCELLED_BY_CLIENT";
   if (upper === "DECLINED" || upper === "REJECTED") return "REJECTED";
+  if (upper === "NEW" || upper === "CONTACTING_ARTISTS" || upper === "PENDING" || upper === "PENDING_ARTIST_RESPONSE") {
+    return "PENDING_TELECALLER_VERIFICATION";
+  }
   return upper as BookingStatus;
 }
 
@@ -101,10 +112,26 @@ function mapSnapshot<T>(snapshot: QuerySnapshot<DocumentData>, mapper: (id: stri
 }
 
 export function normalizeBooking(id: string, data: DocumentData): BookingEvent {
-  const status = normalizeStatus(data.status);
+  const status = normalizeStatus(data.bookingStatus || data.status);
   const eventDate = normalizeDateOnly(String(data.eventDate || ""));
   const createdDate = dateToIso(data.createdAt || data.date);
   const updatedDate = dateToIso(data.updatedAt) || createdDate;
+  const rawBudget = Number(
+    data.budget ??
+    data.amount ??
+    data.bookingAmount ??
+    data.authorizedAmount ??
+    data.totalBudget ??
+    data.price ??
+    data.fee ??
+    data.confirmedPrice ??
+    data.counterOfferAmount ??
+    data.originalAmount ??
+    0
+  );
+  const budgetNum = rawBudget > 0 ? rawBudget : undefined;
+  const rawConfirmed = Number(data.confirmedPrice ?? data.counterOfferAmount ?? budgetNum ?? 0);
+  const confirmedPriceNum = rawConfirmed > 0 ? rawConfirmed : budgetNum;
 
   return {
     id,
@@ -121,16 +148,19 @@ export function normalizeBooking(id: string, data: DocumentData): BookingEvent {
     updatedAt: updatedDate,
     customerId: data.customerId ? String(data.customerId) : undefined,
     customerEmail: data.customerEmail ? String(data.customerEmail) : undefined,
-    artistName: data.artistName ? String(data.artistName) : undefined,
+    artistName: data.artistName || data.confirmedArtistName || data.requestedArtistName || undefined,
     inquiryId: data.inquiryId ? String(data.inquiryId) : undefined,
     clientWhatsapp: data.clientWhatsapp ? String(data.clientWhatsapp) : undefined,
-    eventStartTime: data.eventStartTime ? String(data.eventStartTime) : undefined,
-    eventEndTime: data.eventEndTime ? String(data.eventEndTime) : undefined,
+    eventStartTime: data.eventStartTime || (typeof data.eventTime === "string" ? data.eventTime.split("-")[0]?.trim() : undefined),
+    eventEndTime: data.eventEndTime || (typeof data.eventTime === "string" ? data.eventTime.split("-")[1]?.trim() : undefined),
     specialRequirements: data.specialRequirements ? String(data.specialRequirements) : undefined,
     holdExpiryTime: data.holdExpiryTime ? String(data.holdExpiryTime) : undefined,
     paymentGateway: data.paymentGateway || undefined,
-    authorizedAmount: data.authorizedAmount ? Number(data.authorizedAmount) : undefined,
-    confirmedPrice: data.confirmedPrice ? Number(data.confirmedPrice) : undefined,
+    authorizedAmount: budgetNum,
+    confirmedPrice: confirmedPriceNum,
+    budget: budgetNum,
+    amount: budgetNum,
+    quotedPrice: data.quotedPrice ? Number(data.quotedPrice) : (data.artistOfferBudget ? Number(data.artistOfferBudget) : undefined),
     telecallerStatus: data.telecallerStatus ? String(data.telecallerStatus) : undefined,
     isEscrowReleased: Boolean(data.isEscrowReleased),
     selectedService: data.selectedService ? String(data.selectedService) : undefined,
@@ -184,6 +214,10 @@ export function normalizeNotification(id: string, data: DocumentData): BookingNo
 
 export function buildBookingPayload(input: CreateBookingInput): BookingEvent {
   const now = new Date().toISOString();
+  const rawBudget = Number(input.budget ?? input.amount ?? input.authorizedAmount ?? input.confirmedPrice ?? 0);
+  const budgetNum = Number.isFinite(rawBudget) && rawBudget > 0 ? rawBudget : undefined;
+  const confirmedNum = Number(input.confirmedPrice ?? budgetNum ?? 0) || undefined;
+
   return {
     id: generatedId(),
     artistId: input.artistId,
@@ -206,7 +240,10 @@ export function buildBookingPayload(input: CreateBookingInput): BookingEvent {
     specialRequirements: input.specialRequirements,
     holdExpiryTime: input.holdExpiryTime,
     paymentGateway: input.paymentGateway,
-    authorizedAmount: input.authorizedAmount,
+    authorizedAmount: budgetNum,
+    budget: budgetNum,
+    amount: budgetNum,
+    confirmedPrice: confirmedNum,
     selectedService: input.selectedService,
     serviceCategory: input.serviceCategory,
     serviceEvent: input.serviceEvent,
@@ -1051,9 +1088,29 @@ export function subscribeCustomerBookings(
         const counterOfferEndTime = b.counterOfferEndTime || existing.counterOfferEndTime;
         const counterOfferLocation = b.counterOfferLocation || existing.counterOfferLocation;
 
+        const bestBudget = Math.max(
+          Number(b.budget || 0),
+          Number(existing.budget || 0),
+          Number(b.amount || 0),
+          Number(existing.amount || 0),
+          Number(b.authorizedAmount || 0),
+          Number(existing.authorizedAmount || 0)
+        );
+        const bestConfirmedPrice = Math.max(
+          Number(b.confirmedPrice || 0),
+          Number(existing.confirmedPrice || 0),
+          Number(b.counterOfferAmount || 0),
+          Number(existing.counterOfferAmount || 0),
+          bestBudget
+        );
+
         map.set(dedupeKey, {
           ...existing,
           ...b,
+          budget: bestBudget > 0 ? bestBudget : (existing.budget || b.budget),
+          amount: bestBudget > 0 ? bestBudget : (existing.amount || b.amount),
+          authorizedAmount: bestBudget > 0 ? bestBudget : (existing.authorizedAmount || b.authorizedAmount),
+          confirmedPrice: bestConfirmedPrice > 0 ? bestConfirmedPrice : (existing.confirmedPrice || b.confirmedPrice),
           status: mergedStatus,
           counterOfferAmount,
           counterOfferNotes,
@@ -1061,9 +1118,9 @@ export function subscribeCustomerBookings(
           counterOfferStartTime,
           counterOfferEndTime,
           counterOfferLocation,
-          clientName: (existing.clientName && existing.clientName !== "Client") ? existing.clientName : b.clientName,
+          clientName: (existing.clientName && existing.clientName !== "Client" && existing.clientName !== "Customer") ? existing.clientName : b.clientName,
           clientPhone: (existing.clientPhone && existing.clientPhone !== "Phone not provided") ? existing.clientPhone : b.clientPhone,
-          venueLocation: (existing.venueLocation && existing.venueLocation !== "Venue not provided") ? existing.venueLocation : b.venueLocation,
+          venueLocation: (existing.venueLocation && existing.venueLocation !== "Venue not provided" && existing.venueLocation !== "Location not provided") ? existing.venueLocation : b.venueLocation,
         });
       }
     });

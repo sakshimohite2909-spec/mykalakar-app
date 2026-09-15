@@ -24,6 +24,7 @@ import {
   BookmarkX,
   QrCode,
   Copy,
+  Trash2,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -38,10 +39,11 @@ import { db } from "@/lib/firebase";
 import { addDoc, collection, doc, limit, onSnapshot, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { uploadImageFile } from "@/lib/uploadService";
 import { FIREBASE_WRITE_TIMEOUT_MS, firebaseErrorMessage, withTimeout } from "@/lib/firebaseSafe";
-import { subscribeCustomerBookings, updateArtistBookingStatus, fetchRefundPolicy, calculateRefundPercentage } from "@/services/artistBookingService";
+import { subscribeCustomerBookings, updateArtistBookingStatus, fetchRefundPolicy, calculateRefundPercentage, deleteArtistBooking } from "@/services/artistBookingService";
+import { deleteLead } from "@/services/telecallerService";
 import { BookingStatusBadge } from "@/components/artist-bookings/BookingStatusBadge";
 import type { BookingEvent, RefundPolicy } from "@/types/booking";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { getSavedArtistIds, fetchSavedArtistProfiles } from "@/services/savedArtistService";
 import { ArtistCard } from "@/components/FeaturedArtists";
@@ -315,6 +317,10 @@ export default function UserProfile() {
   const [disputeBooking, setDisputeBooking] = useState<BookingEvent | null>(null);
   const [disputeText, setDisputeText] = useState("");
   const [disputeCategory, setDisputeCategory] = useState("service_mismatch");
+
+  // Booking deletion state
+  const [bookingToDelete, setBookingToDelete] = useState<BookingEvent | null>(null);
+  const [deletingBooking, setDeletingBooking] = useState(false);
 
   // Cancellation and Refund policy states
   const [cancelBookingTarget, setCancelBookingTarget] = useState<BookingEvent | null>(null);
@@ -612,7 +618,8 @@ export default function UserProfile() {
         checkoutBooking.confirmedPrice ||
         checkoutBooking.counterOfferAmount ||
         checkoutBooking.authorizedAmount ||
-        15000;
+        checkoutBooking.budget ||
+        0;
       await updateArtistBookingStatus(checkoutBooking, "CONFIRMED", {
         isPaymentCaptured: true,
         escrowState: "HELD",
@@ -684,6 +691,36 @@ export default function UserProfile() {
       toast({ variant: "destructive", title: t("profile.bookings.toast.cancelFailed"), description: "Could not cancel request." });
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const confirmDeleteBooking = async () => {
+    if (!bookingToDelete) return;
+    const target = bookingToDelete;
+    const targetId = target.id;
+    setDeletingBooking(true);
+    try {
+      // 1. Optimistically remove from state
+      setBookings((prev) => prev.filter((b) => b.id !== targetId));
+
+      // 2. Perform deep deletion across Firestore collections and local storage
+      await deleteArtistBooking(targetId, target);
+      await deleteLead(targetId);
+
+      toast({
+        title: "बुकिंग कायमची हटवली! 🗑️",
+        description: `"${target.performanceType || "Event"} with ${target.artistName || "Artist"}" बुकिंग हटवण्यात आली आहे.`,
+      });
+      setBookingToDelete(null);
+    } catch (err) {
+      console.error("Delete booking error:", err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "बुकिंग डिलीट करता आली नाही. कृपया पुन्हा प्रयत्न करा.",
+      });
+    } finally {
+      setDeletingBooking(false);
     }
   };
 
@@ -949,15 +986,74 @@ export default function UserProfile() {
                     ) : (
                       <div className="space-y-4">
                         {bookings.map((booking) => {
-                          const isPending = ["SOFT_HOLD_ACTIVE", "PAYMENT_AUTHORIZED", "PENDING_ARTIST_RESPONSE", "PENDING_TELECALLER_VERIFICATION", "COUNTER_OFFER_SENT", "PAYMENT_PENDING"].includes(booking.status);
-                          const finalAgreedPrice = booking.confirmedPrice || booking.counterOfferAmount || booking.authorizedAmount || 0;
+                          const isPending = ["SOFT_HOLD_ACTIVE", "PAYMENT_AUTHORIZED", "PENDING_ARTIST_RESPONSE", "PENDING_TELECALLER_VERIFICATION", "COUNTER_OFFER_SENT", "PAYMENT_PENDING", "pending", "new", "contacting_artists"].includes(booking.status);
+                          
+                          const getBookingEffectivePrice = (b: BookingEvent): number => {
+                            const direct = Number(
+                              b.confirmedPrice ||
+                              b.counterOfferAmount ||
+                              b.budget ||
+                              b.amount ||
+                              b.authorizedAmount ||
+                              b.quotedPrice ||
+                              b.originalAmount ||
+                              0
+                            );
+                            if (direct > 0) return direct;
+
+                            try {
+                              const keys = [
+                                "mykalakar_local_bookings",
+                                "mykalakar_local_telecaller_leads",
+                                "mykalakar_telecaller_leads",
+                                "mykalakar_local_inquiries",
+                                "mykalakar_inquiries",
+                                "mykalakar_customer_bookings",
+                              ];
+                              for (const k of keys) {
+                                const raw = localStorage.getItem(k);
+                                if (raw) {
+                                  const list = JSON.parse(raw);
+                                  if (Array.isArray(list)) {
+                                    const match = list.find((item: any) => {
+                                      if (!item) return false;
+                                      const bCleanId = b.id ? b.id.replace(/^(booking_|lead_|inquiry_|brief_)/, "") : "";
+                                      const itemCleanId = item.id ? String(item.id).replace(/^(booking_|lead_|inquiry_|brief_)/, "") : "";
+                                      const itemBookingId = item.bookingId ? String(item.bookingId).replace(/^(booking_|lead_|inquiry_|brief_)/, "") : "";
+                                      const idMatch = bCleanId && (itemCleanId === bCleanId || itemBookingId === bCleanId);
+                                      const phoneMatch = b.clientPhone && (item.clientPhone === b.clientPhone || item.customerPhone === b.clientPhone);
+                                      const dateMatch = b.eventDate && (item.eventDate === b.eventDate || item.date === b.eventDate);
+                                      return idMatch || (phoneMatch && dateMatch);
+                                    });
+                                    if (match) {
+                                      const foundBudget = Number(
+                                        match.confirmedPrice ||
+                                        match.budget ||
+                                        match.amount ||
+                                        match.authorizedAmount ||
+                                        match.totalBudget ||
+                                        match.price ||
+                                        match.artistOfferBudget ||
+                                        0
+                                      );
+                                      if (foundBudget > 0) return foundBudget;
+                                    }
+                                  }
+                                }
+                              }
+                            } catch {}
+
+                            return 0;
+                          };
+
+                          const finalAgreedPrice = getBookingEffectivePrice(booking);
 
                           return (
                             <div key={booking.id} className="border border-slate-200/80 rounded-2xl bg-white p-5 shadow-sm space-y-4 hover:shadow-md transition duration-200">
                               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-slate-100 pb-3">
                                 <div>
                                   <h3 className="font-display text-lg font-black text-slate-900">
-                                    {booking.performanceType} with {booking.artistName || "Artist"}
+                                    {booking.performanceType || "Event"} with {booking.artistName || "Artist"}
                                   </h3>
                                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-stone-500">
                                     <span className="flex items-center gap-1">
@@ -966,7 +1062,7 @@ export default function UserProfile() {
                                     </span>
                                     <span className="flex items-center gap-1">
                                       <MapPin className="h-3.5 w-3.5 text-stone-400" />
-                                      {booking.counterOfferLocation || booking.venueLocation}
+                                      {booking.counterOfferLocation || booking.venueLocation || "Maharashtra"}
                                     </span>
                                   </div>
                                 </div>
@@ -988,15 +1084,15 @@ export default function UserProfile() {
                                   <span>{t("profile.bookings.gateway")} <strong className="text-stone-900 uppercase">{booking.paymentGateway || "Razorpay"}</strong></span>
                                 </div>
                                 <div>
-                                  <span>{booking.status === "PAYMENT_PENDING" || booking.status === "COUNTER_OFFER_SENT" ? "Final Agreed Price:" : "Offer/Budget:"} <strong className="text-[#FF6B00] text-sm font-black">Rs {finalAgreedPrice.toLocaleString("en-IN")}</strong></span>
+                                  <span>{["PAYMENT_PENDING", "COUNTER_OFFER_SENT", "quote_sent", "artist_confirmed"].includes(booking.status) ? "Final Agreed Price:" : "Offer/Budget:"} <strong className="text-[#FF6B00] text-sm font-black">{finalAgreedPrice > 0 ? `Rs ${finalAgreedPrice.toLocaleString("en-IN")}` : "चर्चाधीन (TBD)"}</strong></span>
                                 </div>
                                 <div>
-                                  <span>{t("profile.bookings.escrowPayout")} <strong className="text-stone-900 font-extrabold uppercase">{(booking.status === "PAYMENT_PENDING" || booking.status === "COUNTER_OFFER_SENT") ? "PAYMENT REQUIRED" : (booking.escrowState || "PENDING")}</strong></span>
+                                  <span>{t("profile.bookings.escrowPayout")} <strong className="text-stone-900 font-extrabold uppercase">{["PAYMENT_PENDING", "COUNTER_OFFER_SENT", "quote_sent", "artist_confirmed"].includes(booking.status) ? "PAYMENT REQUIRED" : (booking.escrowState || "PENDING")}</strong></span>
                                 </div>
                               </div>
 
                               {/* PENDING TELECALLER VERIFICATION BANNER */}
-                              {booking.status === "PENDING_TELECALLER_VERIFICATION" && (
+                              {["PENDING_TELECALLER_VERIFICATION", "new", "contacting_artists", "pending"].includes(booking.status) && (
                                 <div className="border border-amber-200 bg-amber-50/70 rounded-xl p-3.5 text-xs text-amber-950 font-semibold flex items-start gap-2.5">
                                   <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                                   <div>
@@ -1007,7 +1103,7 @@ export default function UserProfile() {
                               )}
 
                               {/* DEAL CONFIRMED / PAYMENT REQUIRED (TELECALLER VERIFIED) BANNER */}
-                              {(booking.status === "PAYMENT_PENDING" || booking.status === "COUNTER_OFFER_SENT") && (
+                              {["PAYMENT_PENDING", "COUNTER_OFFER_SENT", "quote_sent", "artist_confirmed"].includes(booking.status) && (
                                 <div className="border border-emerald-200 bg-emerald-50/90 rounded-2xl p-4 text-xs text-emerald-950 font-semibold space-y-3 shadow-xs">
                                   <div className="flex items-start gap-2.5">
                                     <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
@@ -1062,7 +1158,7 @@ export default function UserProfile() {
                                   </Button>
                                 )}
                                 {isPending && (
-                                  <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50 rounded-xl" onClick={() => triggerCancelCancellation(booking)}>
+                                  <Button variant="outline" size="sm" className="border-amber-300 text-amber-800 hover:bg-amber-50 rounded-xl font-bold" onClick={() => triggerCancelCancellation(booking)}>
                                     {t("profile.bookings.btnCancelRequest")}
                                   </Button>
                                 )}
@@ -1086,6 +1182,15 @@ export default function UserProfile() {
                                     </Button>
                                   </>
                                 )}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-xl font-bold flex items-center gap-1.5"
+                                  onClick={() => setBookingToDelete(booking)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  हटवा (Delete)
+                                </Button>
                               </div>
                             </div>
                           );
@@ -1130,6 +1235,40 @@ export default function UserProfile() {
         </motion.div>
       </main>
       <Footer />
+
+      {/* Delete Booking Confirmation Dialog */}
+      <Dialog open={Boolean(bookingToDelete)} onOpenChange={(open) => !open && setBookingToDelete(null)}>
+        <DialogContent className="max-w-md rounded-2xl p-6 bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black text-stone-900 flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-600" /> बुकिंग हटवा (Delete Booking)?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-stone-600 pt-2 font-medium">
+              तुम्ही नक्की <strong>{bookingToDelete?.performanceType || "Event"} with {bookingToDelete?.artistName || "Artist"}</strong> ही बुकिंग कायमची हटवू इच्छिता? ही कृती पूर्ववत केली जाऊ शकत नाही.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-4 sm:flex-row">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deletingBooking}
+              onClick={() => setBookingToDelete(null)}
+              className="rounded-xl font-bold flex-1"
+            >
+              रद्द करा (Cancel)
+            </Button>
+            <Button
+              size="sm"
+              disabled={deletingBooking}
+              onClick={confirmDeleteBooking}
+              className="rounded-xl font-black bg-red-600 hover:bg-red-700 text-white flex-1 flex items-center justify-center gap-1.5"
+            >
+              {deletingBooking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              कायमची हटवा (Delete)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Cancellation policy refund dialog */}
       <Dialog open={Boolean(cancelBookingTarget)} onOpenChange={(open) => !open && setCancelBookingTarget(null)}>
@@ -1238,7 +1377,7 @@ export default function UserProfile() {
                   <div className="flex items-center justify-between text-emerald-950 border-t border-emerald-200 pt-2 mt-1.5 font-black text-base">
                     <span>अंतिम मानधन (Total Amount):</span>
                     <span className="text-emerald-700 text-lg font-black">
-                      ₹{(checkoutBooking.confirmedPrice || checkoutBooking.counterOfferAmount || checkoutBooking.authorizedAmount || 15000).toLocaleString("en-IN")}
+                      ₹{(checkoutBooking.confirmedPrice || checkoutBooking.counterOfferAmount || checkoutBooking.authorizedAmount || checkoutBooking.budget || 0).toLocaleString("en-IN")}
                     </span>
                   </div>
                 </div>
@@ -1260,7 +1399,7 @@ export default function UserProfile() {
                         paymentConfig.qrImageUrl ||
                         `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
                           `upi://pay?pa=${paymentConfig.upiId || "mykalakar@icici"}&pn=MyKalakar&am=${
-                            checkoutBooking.confirmedPrice || checkoutBooking.counterOfferAmount || checkoutBooking.authorizedAmount || 15000
+                            checkoutBooking.confirmedPrice || checkoutBooking.counterOfferAmount || checkoutBooking.authorizedAmount || checkoutBooking.budget || 0
                           }&cu=INR`
                         )}`
                       }
@@ -1345,7 +1484,7 @@ export default function UserProfile() {
               {completingCheckout ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                `₹${(checkoutBooking?.confirmedPrice || checkoutBooking?.counterOfferAmount || checkoutBooking?.authorizedAmount || 15000).toLocaleString("en-IN")} भरा (Pay via Razorpay / UPI)`
+                `₹${(checkoutBooking?.confirmedPrice || checkoutBooking?.counterOfferAmount || checkoutBooking?.authorizedAmount || checkoutBooking?.budget || 0).toLocaleString("en-IN")} भरा (Pay via Razorpay / UPI)`
               )}
             </Button>
           </DialogFooter>

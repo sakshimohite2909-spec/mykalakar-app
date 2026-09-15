@@ -46,8 +46,8 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
       setEventTime(lead.eventTime || "06:00 PM - 09:00 PM");
       setEventLocation(lead.eventLocation || "");
       setVenueAddress(lead.venueAddress || "");
-      setBudget(lead.budget || 15000);
-      setArtistOfferBudget(lead.artistOfferBudget || Math.round((lead.budget || 15000) * 0.8));
+      setBudget(lead.budget ?? 0);
+      setArtistOfferBudget(lead.artistOfferBudget ?? (lead.budget ? Math.round(lead.budget * 0.8) : 0));
       setSoundRequired(
         lead.soundRequired === true ? "artist_bring" : lead.soundRequired === false ? "not_needed" : "venue_provided"
       );
@@ -250,7 +250,7 @@ export default function EditLeadModal({ open, onOpenChange, lead, onLeadUpdated 
                   }
                 }}
                 className="h-9 text-xs font-black text-emerald-700 bg-white rounded-xl mt-1"
-                placeholder="₹15000"
+                placeholder="उदा. ₹15000"
               />
               <span className="text-[10px] text-stone-500 font-medium">What customer agreed to pay</span>
             </div>

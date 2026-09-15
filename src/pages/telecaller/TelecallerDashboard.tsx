@@ -36,6 +36,13 @@ import {
   ArrowLeft,
   Share2,
   Send,
+  Trophy,
+  Target,
+  Flame,
+  Zap,
+  Award,
+  TrendingUp,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +59,8 @@ import {
   subscribeTelecallerLeads,
   updateLeadStatus,
   deleteLead,
+  getLeadDedupKey,
+  cleanId,
   logArtistCall,
   type TelecallerLead,
   type LeadStatus,
@@ -70,7 +79,9 @@ import {
   subscribeCommissionConfig,
   getLocalCommissionConfig,
   calculateCommissionSplit,
+  calculateTelecallerMonthlyStats,
   type CommissionConfig,
+  type TelecallerMonthlyStats,
 } from "@/services/commissionSettingsService";
 import ArtistReelViewerModal, { type ArtistReelItem } from "@/components/artist/ArtistReelViewerModal";
 import { MAIN_EVENT_CARDS } from "@/constants/artistSystem";
@@ -114,7 +125,12 @@ export default function TelecallerDashboard() {
       setActiveLead((prev) => {
         if (!prev && data.length > 0) return data[0];
         if (prev) {
-          const updatedCurrent = data.find((l) => l.id === prev.id || l.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "") === prev.id.replace(/^(booking_|brief_|lead_|inquiry_)/, ""));
+          const updatedCurrent = data.find(
+            (l) =>
+              l.id === prev.id ||
+              cleanId(l.id) === cleanId(prev.id) ||
+              (Boolean(getLeadDedupKey(prev)) && getLeadDedupKey(l) === getLeadDedupKey(prev))
+          );
           return updatedCurrent || (data.length > 0 ? data[0] : null);
         }
         return null;
@@ -133,27 +149,75 @@ export default function TelecallerDashboard() {
       setCommissionConfig(cfg);
     });
 
+    const handleLeadDeleted = (e: any) => {
+      const detail = e.detail;
+      if (detail) {
+        const delId = detail.leadId;
+        const delCid = detail.cleanId;
+        const delKey = detail.dedupKey;
+        const delBid = detail.bookingId;
+        setLeads((prev) =>
+          prev.filter((l) => {
+            if (delId && l.id === delId) return false;
+            if (delCid && cleanId(l.id) === delCid) return false;
+            if (delKey && getLeadDedupKey(l) === delKey) return false;
+            if (delBid && l.bookingId && cleanId(l.bookingId) === delBid) return false;
+            return true;
+          })
+        );
+      }
+    };
+    window.addEventListener("mykalakar_lead_deleted", handleLeadDeleted);
+
     return () => {
       unsubLeads();
       unsubArtists();
       unsubPayment();
       unsubCommission();
+      window.removeEventListener("mykalakar_lead_deleted", handleLeadDeleted);
     };
   }, []);
 
   const confirmDeleteLead = async () => {
     if (!leadToDelete) return;
+    const targetLead = leadToDelete;
+    const targetId = targetLead.id;
+    const targetCid = cleanId(targetId);
+    const targetDedup = getLeadDedupKey(targetLead);
+    const targetBid = targetLead.bookingId ? cleanId(targetLead.bookingId) : "";
+
     setDeletingLead(true);
     try {
-      await deleteLead(leadToDelete.id);
-      setLeads((prev) => prev.filter((l) => l.id !== leadToDelete.id));
-      if (activeLead?.id === leadToDelete.id) {
-        const remaining = leads.filter((l) => l.id !== leadToDelete.id);
+      // Optimistically remove immediately (removes duplicate representations at once)
+      setLeads((prev) =>
+        prev.filter((l) => {
+          if (l.id === targetId || cleanId(l.id) === targetCid) return false;
+          if (targetDedup && getLeadDedupKey(l) === targetDedup) return false;
+          if (targetBid && l.bookingId && cleanId(l.bookingId) === targetBid) return false;
+          return true;
+        })
+      );
+
+      if (
+        activeLead &&
+        (activeLead.id === targetId ||
+          cleanId(activeLead.id) === targetCid ||
+          (targetDedup && getLeadDedupKey(activeLead) === targetDedup))
+      ) {
+        const remaining = leads.filter(
+          (l) =>
+            l.id !== targetId &&
+            cleanId(l.id) !== targetCid &&
+            (!targetDedup || getLeadDedupKey(l) !== targetDedup)
+        );
         setActiveLead(remaining.length > 0 ? remaining[0] : null);
       }
+
+      await deleteLead(targetLead);
+
       toast({
-        title: "लीड हटवली! 🗑️",
-        description: `"${leadToDelete.customerName || "Customer"}" ची लीड यशस्वीरीत्या डिलीट केली.`,
+        title: "लीड कायमची हटवली! 🗑️",
+        description: `"${targetLead.customerName || "Customer"}" ची लीड हटवली आहे.`,
       });
       setLeadToDelete(null);
     } catch (err) {
@@ -168,14 +232,22 @@ export default function TelecallerDashboard() {
   };
 
   const formatLeadCategory = (lead: TelecallerLead): string => {
-    const event = String(lead.eventType || "").trim();
+    let event = String(lead.eventType || lead.category || "").trim();
     let sub = String(lead.subCategory || "").trim();
+    
+    // Clean generic prefixes
     sub = sub.replace(/Artist Booking\s*\([^)]*\)/gi, "").replace(/Artist Booking/gi, "").replace(/\([^)]*\)/g, "").trim();
+    if (event.toLowerCase() === "general event" || event.toLowerCase() === "general") {
+      event = "";
+    }
+    if (sub.toLowerCase() === "general inquiry" || sub.toLowerCase() === "event requirement") {
+      sub = "";
+    }
     
     if (event && sub && event.toLowerCase() !== sub.toLowerCase()) {
       return `${event} • ${sub}`;
     }
-    return event || sub || "इव्हेंट";
+    return event || sub || "कला सादरीकरण / संगीत कार्यक्रम";
   };
 
   const handleStatusChange = async (leadId: string, newStatus: LeadStatus, confirmedArtistData?: { artistId: string; artistName: string; price: number }) => {
@@ -226,13 +298,14 @@ export default function TelecallerDashboard() {
     }
   };
 
-  const handleWhatsAppArtist = (artist: any) => {
-    if (!activeLead) return;
-    const phone = (artist.phone || artist.contactNumber || "9876543210").replace(/[^0-9]/g, "");
-    const cleanPhone = phone.startsWith("91") && phone.length === 12 ? phone : phone.length === 10 ? `91${phone}` : phone;
-
+  const getArtistWhatsAppMessage = (artist: any): string => {
+    if (!activeLead) return "";
     const artistName = artist.name || "कलाकार";
-    const offerPrice = (activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8)).toLocaleString("en-IN");
+    const offerPrice = activeLead.artistOfferBudget && activeLead.artistOfferBudget > 0
+      ? `₹${activeLead.artistOfferBudget.toLocaleString("en-IN")}`
+      : activeLead.budget && activeLead.budget > 0
+      ? `₹${Math.round(activeLead.budget * 0.8).toLocaleString("en-IN")}`
+      : "चर्चाधीन";
     const categoryText = formatLeadCategory(activeLead);
     const dateText = activeLead.eventDate || "तारीख चर्चाधीन";
     const timeText = activeLead.eventTime || "सायं. ०६:०० ते ०९:००";
@@ -242,40 +315,55 @@ export default function TelecallerDashboard() {
         ? "कलाकाराने स्वतः साऊंड व माईक आणावे"
         : activeLead.soundRequired === false
         ? "साऊंड सिस्टीमची गरज नाही"
-        : "हॉल / आयोजकांकडून उपलब्ध असेल";
+        : "हॉल किंवा आयोजकांकडून उपलब्ध असेल";
 
     const lines = [
-      `*MyKalakar इव्हेंट बुकिंग अलर्ट* 🚩`,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      `*नमस्कार ${artistName} जी!* 🙏`,
+      `*MyKalakar - नवीन इव्हेंट बुकिंग*`,
       ``,
-      `MyKalakar कडून तुमच्यासाठी नवीन इव्हेंट बुकिंग उपलब्ध आहे:`,
+      `नमस्कार ${artistName} जी,`,
       ``,
-      `📋 *कार्यक्रमाचा तपशील:*`,
-      `• *कार्यक्रम:* ${categoryText}`,
-      `• *तारीख:* ${dateText}`,
-      `• *वेळ:* ${timeText}`,
-      `• *ठिकाण:* ${locText}`,
-      `• *ऑफर मानधन (Payout):* ₹${offerPrice}`,
-      `• *साऊंड सिस्टीम:* ${soundText}`,
-      ...(activeLead.telecallerNotes ? [`• *विशेष सूचना:* ${activeLead.telecallerNotes}`] : []),
+      `MyKalakar कडून तुमच्यासाठी नवीन इव्हेंट बुकिंग उपलब्ध आहे.`,
       ``,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      `👉 *कृपया तुमची उपलब्धता कळवण्यासाठी लगेच रिप्लाय करा:*`,
+      `*कार्यक्रमाचा तपशील:*`,
+      `- कार्यक्रम: ${categoryText}`,
+      `- तारीख: ${dateText}`,
+      `- वेळ: ${timeText}`,
+      `- ठिकाण: ${locText}`,
+      `- मानधन (Payout): ${offerPrice}`,
+      `- साऊंड सिस्टीम: ${soundText}`,
+      ...(activeLead.telecallerNotes ? [`- विशेष सूचना: ${activeLead.telecallerNotes}`] : []),
       ``,
-      `1️⃣ *YES* (होय, मी उपलब्ध आहे)`,
-      `2️⃣ *NO* (नाही, मी उपलब्ध नाही)`,
+      `*कृपया तुमची उपलब्धता कळवा:*`,
+      `1. YES (होय, मी उपलब्ध आहे)`,
+      `2. NO (नाही, मी उपलब्ध नाही)`,
       ``,
-      `_(टीप: सर्व मानधन MyKalakar द्वारे १००% सुरक्षित केले जाते.)_`,
-      `— *MyKalakar टीम*`,
+      `टीप: सर्व मानधन MyKalakar द्वारे 100% सुरक्षित केले जाते.`,
+      ``,
+      `— MyKalakar टीम`,
     ];
 
-    const message = lines.join("\n");
+    return lines.join("\n");
+  };
+
+  const handleWhatsAppArtist = (artist: any) => {
+    if (!activeLead) return;
+    const phone = (artist.phone || artist.contactNumber || "9876543210").replace(/[^0-9]/g, "");
+    const cleanPhone = phone.startsWith("91") && phone.length === 12 ? phone : phone.length === 10 ? `91${phone}` : phone;
+    const message = getArtistWhatsAppMessage(artist);
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
     toast({
-      title: "WhatsApp उघडले! 🟢",
-      description: `${artistName} यांना बुकिंग मेसेज पाठवला जात आहे.`,
+      title: "WhatsApp उघडले",
+      description: `${artist.name || "कलाकार"} यांना बुकिंग मेसेज पाठवला जात आहे.`,
+    });
+  };
+
+  const handleCopyArtistMessage = (artist: any) => {
+    const message = getArtistWhatsAppMessage(artist);
+    navigator.clipboard.writeText(message);
+    toast({
+      title: "मेसेज कॉपी केला",
+      description: "WhatsApp मेसेज क्लिपबोर्डवर कॉपी झाला आहे.",
     });
   };
 
@@ -290,47 +378,51 @@ export default function TelecallerDashboard() {
     const dateText = activeLead.eventDate || "तारीख चर्चाधीन";
     const timeText = activeLead.eventTime || "सायं. ०६:०० ते ०९:००";
     const locText = `${activeLead.eventLocation || "महाराष्ट्र"}${activeLead.venueAddress ? ` (${activeLead.venueAddress})` : ""}`;
-    const budgetText = (activeLead.budget || 15000).toLocaleString("en-IN");
+    const budgetText = activeLead.budget && activeLead.budget > 0
+      ? `₹${activeLead.budget.toLocaleString("en-IN")}`
+      : "चर्चाधीन";
 
     const lines = [
-      `*MyKalakar इव्हेंट मॅनेजमेंट* 🚩`,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      `*नमस्कार ${customerName} जी!* 🙏`,
+      `*MyKalakar - इव्हेंट बुकिंग अपडेट*`,
+      ``,
+      `नमस्कार ${customerName} जी,`,
       ``,
       `तुमच्या इव्हेंट नियोजनासाठी MyKalakar ला तुमची चौकशी प्राप्त झाली आहे.`,
       ``,
-      `📋 *कार्यक्रमाचा तपशील:*`,
-      `• *प्रकार:* ${categoryText}`,
-      ...(artistName ? [`• *पसंतीचे कलाकार:* ${artistName}`] : []),
-      `• *तारीख:* ${dateText}`,
-      `• *वेळ:* ${timeText}`,
-      `• *ठिकाण:* ${locText}`,
-      `• *अंदाजे बजेट:* ₹${budgetText}`,
-      ...(activeLead.telecallerNotes ? [`• *विशेष सूचना:* ${activeLead.telecallerNotes}`] : []),
+      `*कार्यक्रमाचा तपशील:*`,
+      `- प्रकार: ${categoryText}`,
+      ...(artistName ? [`- पसंतीचे कलाकार: ${artistName}`] : []),
+      `- तारीख: ${dateText}`,
+      `- वेळ: ${timeText}`,
+      `- ठिकाण: ${locText}`,
+      `- बजेट: ${budgetText}`,
+      ...(activeLead.telecallerNotes ? [`- विशेष सूचना: ${activeLead.telecallerNotes}`] : []),
       ``,
-      `✓ आम्ही योग्य व नामांकित कलाकारांशी संपर्क करत आहोत. लवकरच तुम्हाला अपडेट देऊ.`,
+      `आम्ही योग्य कलाकारांशी संपर्क करत आहोत. लवकरच तुम्हाला अपडेट देऊ.`,
       `काही बदल किंवा प्रश्न असल्यास कृपया येथे रिप्लाय करा.`,
       ``,
-      `— *MyKalakar सपोर्ट टीम*`,
+      `— MyKalakar सपोर्ट टीम`,
     ];
 
     const message = lines.join("\n");
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
     toast({
-      title: "ग्राहक WhatsApp अपडेट! 💬",
+      title: "ग्राहक WhatsApp अपडेट",
       description: `${customerName} यांना इव्हेंट अपडेट पाठवले.`,
     });
   };
 
-  const handleWhatsAppCustomerPaymentLink = () => {
+  const handleWhatsAppCustomerPaymentLink = async () => {
     if (!activeLead) return;
     const phone = (activeLead.customerPhone || "").replace(/[^0-9]/g, "");
     const cleanPhone = phone.startsWith("91") && phone.length === 12 ? phone : phone.length === 10 ? `91${phone}` : phone;
 
     const customerName = activeLead.customerName || "ग्राहक";
     const artistName = activeLead.confirmedArtistName || activeLead.requestedArtistName || "कलाकार";
-    const amount = (activeLead.budget || 15000).toLocaleString("en-IN");
+    const amount = activeLead.budget && activeLead.budget > 0
+      ? `₹${activeLead.budget.toLocaleString("en-IN")}`
+      : "चर्चाधीन";
     const dateText = activeLead.eventDate || "तारीख चर्चाधीन";
     const locText = activeLead.eventLocation || "महाराष्ट्र";
     const categoryText = formatLeadCategory(activeLead);
@@ -345,44 +437,61 @@ export default function TelecallerDashboard() {
     } else if (isLocalhost) {
       baseDomain = `http://lvh.me:${window.location.port || "8080"}`;
     }
-    const cleanProfileLink = `${baseDomain.replace(/\/$/, "")}/profile`;
+    const cleanBaseDomain = baseDomain
+      .trim()
+      .replace(/\/+$/, "")
+      .replace(/(\/profile)+$/i, "");
+    const cleanProfileLink = `${cleanBaseDomain}/profile`;
 
     const lines = [
-      `*MyKalakar बुकिंग कन्फर्मेशन* 🚩`,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      `*नमस्कार ${customerName} जी!* 🙏`,
+      `*MyKalakar - बुकिंग कन्फर्मेशन*`,
       ``,
-      `🎉 *आनंदाची बातमी!* तुमच्या इव्हेंटसाठी कलाकार *${artistName}* यांनी होकार दिला आहे.`,
+      `नमस्कार ${customerName} जी,`,
       ``,
-      `📋 *अंतिम तपशील:*`,
-      `• *कलाकार:* ${artistName}`,
-      `• *कार्यक्रम:* ${categoryText}`,
-      `• *तारीख:* ${dateText}`,
-      `• *ठिकाण:* ${locText}`,
-      `• *मानधन रक्कम:* ₹${amount}`,
+      `आनंदाची बातमी! तुमच्या इव्हेंटसाठी कलाकार *${artistName}* यांनी होकार दिला आहे.`,
       ``,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      `💳 *सुरक्षित पेमेंट पद्धत:*`,
+      `*अंतिम तपशील:*`,
+      `- कलाकार: ${artistName}`,
+      `- कार्यक्रम: ${categoryText}`,
+      `- तारीख: ${dateText}`,
+      `- ठिकाण: ${locText}`,
+      `- मानधन रक्कम: ${amount}`,
       ``,
-      `*१. थेट UPI द्वारे पेमेंट:*`,
-      `• *UPI ID:* \`${upiIdToSend}\``,
-      `• *नाव:* ${upiNameToSend}`,
-      `_(पेमेंट केल्यावर स्क्रीनशॉट याच WhatsApp वर पाठवा)_`,
+      `*सुरक्षित पेमेंट पद्धत:*`,
       ``,
-      `*२. १-क्लिक ऑनलाइन पेमेंट लिंक:*`,
+      `1. थेट UPI द्वारे पेमेंट:`,
+      `- UPI ID: ${upiIdToSend}`,
+      `- नाव: ${upiNameToSend}`,
+      `(पेमेंट केल्यावर स्क्रीनशॉट याच WhatsApp वर पाठवा)`,
+      ``,
+      `2. १-क्लिक ऑनलाइन पेमेंट लिंक:`,
       `${cleanProfileLink}`,
       ``,
-      `✓ *टीप:* तुमचे पैसे MyKalakar Escrow खात्यात कार्यक्रम पूर्ण होईपर्यंत १००% सुरक्षित राहतील.`,
+      `टीप: तुमचे पैसे MyKalakar Escrow खात्यात कार्यक्रम पूर्ण होईपर्यंत सुरक्षित राहतील.`,
       ``,
-      `— *MyKalakar टीम*`,
+      `— MyKalakar टीम`,
     ];
+
+    // Automatically advance lead status to quote_sent / PAYMENT_PENDING in database so customer sees the Pay button
+    try {
+      const newStatus: LeadStatus = activeLead.status === "artist_confirmed" ? "artist_confirmed" : "quote_sent";
+      await updateLeadStatus(activeLead.id, newStatus, {
+        artistId: activeLead.confirmedArtistId || artistName.replace(/\s+/g, "_").toLowerCase(),
+        artistName,
+        price: activeLead.confirmedPrice || activeLead.budget || 0,
+      });
+      setActiveLead((prev) => (prev ? { ...prev, status: newStatus } : null));
+      setLeads((prev) => prev.map((l) => (l.id === activeLead.id ? { ...l, status: newStatus } : l)));
+    } catch (e) {
+      console.warn("Status auto-advance notice:", e);
+    }
 
     const message = lines.join("\n");
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
     toast({
-      title: "पेमेंट लिंक पाठवली! 🟢",
-      description: `${customerName} यांच्यासाठी WhatsApp पेमेंट मेसेज उघडला.`,
+      title: "पेमेंट लिंक पाठवली",
+      description: `${customerName} यांच्या प्रोफाइलवर पेमेंट बटन ॲक्टिव्हेट झाले व WhatsApp उघडले.`,
     });
   };
 
@@ -392,9 +501,10 @@ export default function TelecallerDashboard() {
       await updateLeadStatus(lead.id, "booked");
       setActiveLead((prev) => (prev ? { ...prev, status: "booked" } : null));
       setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, status: "booked" } : l)));
+      const finalArtistPayout = lead.artistPayout || lead.artistOfferBudget || (lead.budget ? Math.round(lead.budget * 0.8) : 0);
       toast({
         title: "पे-आऊट मंजूर झाले! 💸",
-        description: `कलाकाराचे मानधन ₹${(lead.artistOfferBudget || Math.round((lead.budget || 15000) * 0.8)).toLocaleString("en-IN")} रिलीजसाठी क्लिअर केले.`,
+        description: `कलाकाराचे मानधन ₹${finalArtistPayout.toLocaleString("en-IN")} रिलीजसाठी क्लिअर केले.`,
       });
     } catch (e) {
       toast({ variant: "destructive", title: "Action Failed", description: "Could not release payout." });
@@ -443,19 +553,39 @@ export default function TelecallerDashboard() {
   };
 
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      const matchesSearch =
-        !searchQuery ||
-        lead.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.customerPhone.includes(searchQuery) ||
-        (lead.requestedArtistName && lead.requestedArtistName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        lead.subCategory.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.eventType.toLowerCase().includes(searchQuery.toLowerCase());
+    const seen = new Set<string>();
+    const q = searchQuery.toLowerCase().trim();
 
-      const matchesStatus = statusFilter === "all" || lead.status === statusFilter;
-      const matchesType = leadTypeFilter === "all" || lead.leadType === leadTypeFilter;
-      return matchesSearch && matchesStatus && matchesType;
-    });
+    return leads
+      .filter((lead) => {
+        if (!lead) return false;
+        const matchesSearch =
+          !q ||
+          (lead.customerName || "").toLowerCase().includes(q) ||
+          (lead.customerPhone || "").includes(q) ||
+          (lead.requestedArtistName || "").toLowerCase().includes(q) ||
+          (lead.confirmedArtistName || "").toLowerCase().includes(q) ||
+          (lead.subCategory || "").toLowerCase().includes(q) ||
+          (lead.eventType || "").toLowerCase().includes(q) ||
+          (lead.category || "").toLowerCase().includes(q) ||
+          (lead.eventLocation || "").toLowerCase().includes(q) ||
+          (lead.bookingId || "").toLowerCase().includes(q);
+
+        const matchesStatus = statusFilter === "all" || lead.status === statusFilter;
+        const isBookingLead = lead.leadType === "book_artist" || Boolean(lead.confirmedArtistName) || Boolean(lead.requestedArtistName);
+        const matchesType =
+          leadTypeFilter === "all" ||
+          (leadTypeFilter === "book_artist" && isBookingLead) ||
+          (leadTypeFilter === "post_requirement" && !isBookingLead);
+
+        return matchesSearch && matchesStatus && matchesType;
+      })
+      .filter((lead) => {
+        const key = getLeadDedupKey(lead) || cleanId(lead.id);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
   }, [leads, searchQuery, statusFilter, leadTypeFilter]);
 
   const matchingArtists = useMemo(() => {
@@ -520,6 +650,11 @@ export default function TelecallerDashboard() {
     };
   }, [leads, commissionConfig]);
 
+  // Monthly Target & Tiered Incentive Stats
+  const monthlyStats = useMemo(() => {
+    return calculateTelecallerMonthlyStats(leads, commissionConfig);
+  }, [leads, commissionConfig]);
+
   return (
     <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* Top Header & Fast Actions */}
@@ -577,6 +712,120 @@ export default function TelecallerDashboard() {
             <PlusCircle className="h-4 w-4" />
             <span>＋ नवीन कॉल लीड</span>
           </Button>
+        </div>
+      </div>
+
+      {/* MONTHLY TARGET & TIERED INCENTIVE GAMIFICATION TRACKER */}
+      <div className="bg-gradient-to-br from-slate-900 via-stone-900 to-amber-950 text-white p-4 sm:p-5 rounded-3xl border border-amber-500/30 shadow-lg relative overflow-hidden">
+        {/* Background decorative glow */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Left Column: Progress Info & Tier */}
+          <div className="space-y-2 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/20 border border-orange-400/40 text-orange-300 text-xs font-black uppercase tracking-wider">
+                <Target className="h-3.5 w-3.5 text-orange-400" />
+                <span>मासिक टार्गेट व इन्सेंटिव्ह ({monthlyStats.monthYear})</span>
+              </div>
+
+              {/* Active Tier Badge */}
+              <span className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-sm border ${
+                monthlyStats.appliedIncentivePct >= 20
+                  ? "bg-amber-400 text-amber-950 border-amber-300"
+                  : monthlyStats.appliedIncentivePct >= 10
+                  ? "bg-sky-400 text-sky-950 border-sky-300"
+                  : "bg-slate-200 text-slate-900 border-slate-300"
+              }`}>
+                {monthlyStats.appliedIncentivePct >= 20 ? (
+                  <Trophy className="h-3.5 w-3.5 text-amber-900" />
+                ) : monthlyStats.appliedIncentivePct >= 10 ? (
+                  <Award className="h-3.5 w-3.5 text-sky-950" />
+                ) : (
+                  <Zap className="h-3.5 w-3.5 text-slate-800" />
+                )}
+                {monthlyStats.activeTier.tierName} ({monthlyStats.appliedIncentivePct}%)
+              </span>
+            </div>
+
+            {/* Motivational message */}
+            <div className="text-sm font-bold text-stone-100 flex items-center gap-2">
+              {monthlyStats.nextTier ? (
+                <span className="flex items-center gap-1.5 text-amber-200">
+                  <Flame className="h-4 w-4 text-orange-400 shrink-0 animate-pulse" />
+                  आणखी <span className="text-white font-black px-1.5 py-0.5 bg-orange-600 rounded-md text-xs">{monthlyStats.remainingToNextTier}</span> यशस्वी बुकिंग्स करा आणि <span className="underline decoration-amber-400 font-black text-amber-300">{monthlyStats.nextTier.incentivePct}% {monthlyStats.nextTier.tierName}</span> मिळवा!
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-amber-300">
+                  <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
+                  अभिनंदन! तुम्ही सर्वोच्च <span className="font-black text-white">{monthlyStats.appliedIncentivePct}% Gold Super Tier</span> गाठले आहे!
+                </span>
+              )}
+            </div>
+
+            {/* Progress Bar with Milestones */}
+            <div className="pt-2 space-y-1.5">
+              <div className="flex justify-between items-center text-[11px] font-extrabold text-stone-300">
+                <span>प्रगती: <strong className="text-white text-xs">{monthlyStats.totalBookingsCount}</strong> बुकिंग्स पूर्ण</span>
+                <span>
+                  {monthlyStats.nextTier
+                    ? `पुढील टप्पा: ${monthlyStats.nextTier.minBookings} बुकिंग्स (${monthlyStats.progressPctToNextTier}%)`
+                    : "टार्गेट १००% पूर्ण! 🎯"}
+                </span>
+              </div>
+
+              {/* Bar */}
+              <div className="h-3.5 w-full bg-stone-800/90 rounded-full overflow-hidden p-0.5 border border-stone-700 relative">
+                <div
+                  className="h-full rounded-full transition-all duration-700 bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-300 shadow-sm"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      monthlyStats.totalBookingsCount >= 50
+                        ? 100
+                        : (monthlyStats.totalBookingsCount / 50) * 100
+                    )}%`,
+                  }}
+                />
+              </div>
+
+              {/* Milestones Labels */}
+              <div className="flex justify-between items-center text-[10px] font-black text-stone-400 px-1 pt-0.5">
+                <span className={monthlyStats.totalBookingsCount < 30 ? "text-amber-400 font-bold" : "text-stone-400"}>
+                  ० (५% Base)
+                </span>
+                <span className={monthlyStats.totalBookingsCount >= 30 && monthlyStats.totalBookingsCount < 50 ? "text-sky-300 font-bold" : "text-stone-400"}>
+                  ३० बुकिंग्स (१०% Silver)
+                </span>
+                <span className={monthlyStats.totalBookingsCount >= 50 ? "text-amber-300 font-bold" : "text-stone-400"}>
+                  ५०+ बुकिंग्स (२०% Gold)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Earnings Summary Box */}
+          <div className="lg:w-72 bg-white/10 backdrop-blur-md border border-white/15 p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between gap-2 shrink-0">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-stone-300 flex items-center gap-1">
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+                अंदाजे मासिक इन्सेंटिव्ह
+              </span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black">
+                {monthlyStats.appliedIncentivePct}% दर
+              </span>
+            </div>
+
+            <div className="text-2xl sm:text-3xl font-black text-emerald-400 tracking-tight">
+              ₹{monthlyStats.estimatedIncentiveAmount.toLocaleString("en-IN")}
+            </div>
+
+            <div className="text-[11px] text-stone-300 font-medium flex items-center justify-between border-t border-white/10 pt-1.5">
+              <span>एकूण नफा: ₹{monthlyStats.totalGrossMarginGenerated.toLocaleString("en-IN")}</span>
+              <span className="text-stone-400">({monthlyStats.totalBookingsCount} डील्स)</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -690,7 +939,10 @@ export default function TelecallerDashboard() {
               ) : (
                 <div className="space-y-2.5 max-h-[620px] overflow-y-auto pr-1">
                   {filteredLeads.map((lead) => {
-                    const isSelected = activeLead?.id === lead.id || activeLead?.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "") === lead.id.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
+                    const isSelected =
+                      activeLead?.id === lead.id ||
+                      cleanId(activeLead?.id || "") === cleanId(lead.id) ||
+                      (Boolean(activeLead) && getLeadDedupKey(activeLead!) === getLeadDedupKey(lead));
                     const targetArtist = lead.confirmedArtistName || lead.requestedArtistName || (lead.matchedArtists && lead.matchedArtists[0]?.artistName);
                     const isBookArtist = lead.leadType === "book_artist" || Boolean(targetArtist);
 
@@ -754,7 +1006,7 @@ export default function TelecallerDashboard() {
                             {lead.customerName || "Customer"}
                           </h4>
                           <span className="text-xs font-black text-emerald-700">
-                            ₹{lead.budget?.toLocaleString("en-IN") || "N/A"}
+                            {lead.budget && lead.budget > 0 ? `₹${lead.budget.toLocaleString("en-IN")}` : (lead.artistOfferBudget && lead.artistOfferBudget > 0 ? `₹${Math.round(lead.artistOfferBudget / 0.8).toLocaleString("en-IN")}` : "बजेट चर्चाधीन")}
                           </span>
                         </div>
 
@@ -768,7 +1020,7 @@ export default function TelecallerDashboard() {
 
                         <p className="flex items-center gap-1 text-xs font-bold text-stone-700 mt-1 truncate">
                           <Sparkles className="h-3 w-3 text-orange-500 shrink-0" />
-                          <span className="truncate">{lead.eventType} • {lead.subCategory}</span>
+                          <span className="truncate">{formatLeadCategory(lead)}</span>
                         </p>
 
                         <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium mt-1.5 pt-1.5 border-t border-stone-100">
@@ -896,7 +1148,7 @@ export default function TelecallerDashboard() {
                           )}
                         </div>
                         <p className="text-xs font-bold text-stone-600 mt-0.5">
-                          {activeLead.eventType} • <span className="text-orange-600 font-black">{activeLead.subCategory}</span>
+                          {formatLeadCategory(activeLead)}
                         </p>
                       </div>
 
@@ -936,10 +1188,10 @@ export default function TelecallerDashboard() {
                         📍 {activeLead.eventLocation || "महाराष्ट्र"}{activeLead.venueAddress ? ` • ${activeLead.venueAddress}` : ""}
                       </span>
                       <span className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl font-black text-emerald-800 flex items-center gap-1">
-                        💰 ग्राहक बजेट: ₹{activeLead.budget?.toLocaleString("en-IN") || "N/A"}
+                        💰 ग्राहक बजेट: {activeLead.budget && activeLead.budget > 0 ? `₹${activeLead.budget.toLocaleString("en-IN")}` : "चर्चाधीन"}
                       </span>
                       <span className="bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-xl font-bold text-orange-800 flex items-center gap-1">
-                        आर्टिस्ट मानधन: ₹{(activeLead.artistOfferBudget || Math.round((activeLead.budget || 15000) * 0.8)).toLocaleString("en-IN")}
+                        आर्टिस्ट मानधन: {activeLead.artistOfferBudget && activeLead.artistOfferBudget > 0 ? `₹${activeLead.artistOfferBudget.toLocaleString("en-IN")}` : (activeLead.budget && activeLead.budget > 0) ? `₹${Math.round(activeLead.budget * 0.8).toLocaleString("en-IN")}` : "चर्चाधीन"}
                       </span>
                     </div>
 
@@ -1122,6 +1374,16 @@ export default function TelecallerDashboard() {
                                 <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
                               </Button>
 
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleCopyArtistMessage(artist)}
+                                className="h-9 w-9 p-0 rounded-xl border-stone-200 text-stone-600 hover:bg-stone-100 flex items-center justify-center shadow-2xs"
+                                title="मेसेज कॉपी करा (Copy Text)"
+                              >
+                                <Copy className="h-3.5 w-3.5 text-stone-600" />
+                              </Button>
+
                               <a
                                 href={`tel:${phoneNum}`}
                                 className="h-9 px-3 rounded-xl bg-white border border-stone-200 text-xs font-bold text-stone-800 hover:bg-stone-100 inline-flex items-center gap-1 shadow-2xs active:scale-95"
@@ -1135,7 +1397,7 @@ export default function TelecallerDashboard() {
                                   handleStatusChange(activeLead.id, "artist_confirmed", {
                                     artistId: artist.id || artist.name,
                                     artistName: artist.name,
-                                    price: artist.startingPrice || activeLead.artistOfferBudget || 15000,
+                                    price: artist.startingPrice || activeLead.artistOfferBudget || activeLead.budget || 0,
                                   });
                                 }}
                                 className={`h-9 px-3.5 rounded-xl text-xs font-black shadow-2xs ${

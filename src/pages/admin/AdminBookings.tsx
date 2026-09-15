@@ -77,6 +77,8 @@ export default function AdminBookings() {
   // Custom Telecaller Commission Dialog State
   const [commissionLead, setCommissionLead] = useState<TelecallerLead | null>(null);
   const [customPct, setCustomPct] = useState<number>(20);
+  const [customSplitType, setCustomSplitType] = useState<"margin_percentage" | "total_booking_percentage">("margin_percentage");
+  const [customArtistPayout, setCustomArtistPayout] = useState<number>(0);
   const [customNotes, setCustomNotes] = useState<string>("");
   const [savingCommission, setSavingCommission] = useState(false);
 
@@ -254,8 +256,19 @@ export default function AdminBookings() {
       typeof lead.telecallerCommissionPct === "number"
         ? lead.telecallerCommissionPct
         : commissionConfig.telecallerPercentage;
+    const b = Number(lead.budget || 0);
+    const initialArtist = Number(
+      lead.artistPayout ||
+      lead.confirmedPrice ||
+      lead.artistOfferBudget ||
+      (b > 0 ? Math.round(b * 0.8) : 0)
+    );
     setCustomPct(initialPct);
-    setCustomNotes(lead.specialNotes || "");
+    setCustomArtistPayout(initialArtist);
+    setCustomSplitType(
+      (lead.commissionSplitType as any) || commissionConfig.splitType || "margin_percentage"
+    );
+    setCustomNotes(lead.adminCommissionNotes || lead.specialNotes || "");
   };
 
   const handleSaveLeadCommission = async () => {
@@ -263,9 +276,10 @@ export default function AdminBookings() {
     setSavingCommission(true);
     try {
       const b = Number(commissionLead.budget || 0);
-      const a = Number(commissionLead.confirmedPrice || commissionLead.artistOfferBudget || (b > 0 ? Math.round(b * 0.8) : 0));
+      const a = Number(customArtistPayout) || 0;
       const margin = Math.max(0, b - a);
-      const calculatedComm = Math.round((margin * customPct) / 100);
+      const baseAmount = customSplitType === "total_booking_percentage" ? b : margin;
+      const calculatedComm = Math.round((baseAmount * customPct) / 100);
       const calculatedOwnerProfit = Math.max(0, margin - calculatedComm);
 
       await updateLeadCustomCommission(commissionLead.id, {
@@ -273,6 +287,9 @@ export default function AdminBookings() {
         telecallerCommissionPct: customPct,
         ownerProfit: calculatedOwnerProfit,
         ownerProfitPct: 100 - customPct,
+        commissionSplitType: customSplitType,
+        artistPayout: a,
+        grossMargin: margin,
         customCommissionOverride: true,
         adminCommissionNotes: customNotes,
       });
@@ -287,7 +304,11 @@ export default function AdminBookings() {
                 telecallerCommissionPct: customPct,
                 ownerProfit: calculatedOwnerProfit,
                 ownerProfitPct: 100 - customPct,
+                commissionSplitType: customSplitType,
+                artistPayout: a,
+                grossMargin: margin,
                 customCommissionOverride: true,
+                adminCommissionNotes: customNotes,
               }
             : l
         )
@@ -765,15 +786,16 @@ export default function AdminBookings() {
 
           {commissionLead && (() => {
             const b = Number(commissionLead.budget || 0);
-            const a = Number(commissionLead.confirmedPrice || commissionLead.artistOfferBudget || (b > 0 ? Math.round(b * 0.8) : 0));
+            const a = Number(customArtistPayout) || 0;
             const margin = Math.max(0, b - a);
-            const previewComm = Math.round((margin * customPct) / 100);
+            const baseAmount = customSplitType === "total_booking_percentage" ? b : margin;
+            const previewComm = Math.round((baseAmount * customPct) / 100);
             const previewProfit = Math.max(0, margin - previewComm);
 
             return (
               <div className="space-y-4 text-xs font-semibold py-2">
                 {/* Lead Summary Card */}
-                <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-3 space-y-1.5">
+                <div className="rounded-xl border border-stone-200 bg-stone-50/80 p-3 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-stone-500 text-[11px]">ग्राहक / इव्हेंट:</span>
                     <span className="font-bold text-stone-900">{commissionLead.customerName} ({commissionLead.eventType})</span>
@@ -782,14 +804,69 @@ export default function AdminBookings() {
                     <span className="text-stone-500 text-[11px]">एकूण बजेट (Client Paid):</span>
                     <span className="font-black text-emerald-700">₹{b.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-stone-500 text-[11px]">कलाकार मानधन (Artist Payout):</span>
-                    <span className="font-bold text-stone-800">₹{a.toLocaleString("en-IN")}</span>
+
+                  {/* Artist Payout editable field */}
+                  <div className="flex justify-between items-center pt-1 border-t border-stone-200">
+                    <span className="text-stone-600 text-[11px] font-bold flex items-center gap-1">
+                      कलाकार मानधन (Artist Payout):
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-stone-500 text-xs font-bold">₹</span>
+                      <Input
+                        type="number"
+                        value={customArtistPayout || ""}
+                        onChange={(e) => setCustomArtistPayout(Math.max(0, Number(e.target.value) || 0))}
+                        className="h-7 w-28 text-xs font-black text-stone-900 bg-white border-stone-300 rounded-lg text-right"
+                        placeholder="मानधन टाका"
+                      />
+                    </div>
                   </div>
+
                   <div className="flex justify-between items-center pt-1 border-t border-stone-200">
                     <span className="text-stone-600 text-[11px] font-bold">प्लॅटफॉर्म ग्रॉस मार्जिन:</span>
-                    <span className="font-black text-purple-700">₹{margin.toLocaleString("en-IN")}</span>
+                    <span className={`font-black ${margin > 0 ? "text-purple-700" : "text-stone-400"}`}>
+                      ₹{margin.toLocaleString("en-IN")}
+                    </span>
                   </div>
+                </div>
+
+                {/* Calculation Basis Toggle */}
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-stone-700 block">
+                    कमिशन हिशोब पद्धत (Commission Basis):
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCustomSplitType("margin_percentage")}
+                      className={`p-2 rounded-xl text-xs font-bold border transition text-left flex flex-col gap-0.5 cursor-pointer ${
+                        customSplitType === "margin_percentage"
+                          ? "bg-purple-50 border-purple-400 text-purple-950 ring-2 ring-purple-200"
+                          : "bg-white border-stone-200 text-stone-600 hover:bg-stone-50"
+                      }`}
+                    >
+                      <span className="font-black text-[11px]">मार्जिनवर % (Margin)</span>
+                      <span className="text-[9px] text-stone-400 font-normal">नफ्याच्या (Gross Margin) {customPct}%</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomSplitType("total_booking_percentage")}
+                      className={`p-2 rounded-xl text-xs font-bold border transition text-left flex flex-col gap-0.5 cursor-pointer ${
+                        customSplitType === "total_booking_percentage"
+                          ? "bg-blue-50 border-blue-400 text-blue-950 ring-2 ring-blue-200"
+                          : "bg-white border-stone-200 text-stone-600 hover:bg-stone-50"
+                      }`}
+                    >
+                      <span className="font-black text-[11px]">एकूण बजेटवर % (Total)</span>
+                      <span className="text-[9px] text-stone-400 font-normal">एकूण ₹{b.toLocaleString("en-IN")} चे {customPct}%</span>
+                    </button>
+                  </div>
+
+                  {customSplitType === "margin_percentage" && margin <= 0 && (
+                    <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-[10px] text-amber-900 leading-tight">
+                      ⚠️ <strong>टीप:</strong> एकूण बजेट आणि कलाकार मानधन सारखेच (₹{b.toLocaleString("en-IN")}) असल्याने ग्रॉस मार्जिन ₹0 आहे. एकतर वर कलाकार मानधन कमी करा किंवा <strong>"एकूण बजेटवर %"</strong> निवडा.
+                    </div>
+                  )}
                 </div>
 
                 {/* Percentage Selector */}
@@ -839,7 +916,9 @@ export default function AdminBookings() {
                     <div className="p-2 rounded-lg bg-white border border-blue-100 shadow-2xs">
                       <p className="text-[10px] text-stone-500 font-bold">📞 टेलिकॉलरला मिळेल</p>
                       <p className="text-sm font-black text-blue-700">₹{previewComm.toLocaleString("en-IN")}</p>
-                      <p className="text-[9px] text-stone-400">({customPct}% मार्जिन हिस्सा)</p>
+                      <p className="text-[9px] text-stone-400">
+                        ({customPct}% {customSplitType === "total_booking_percentage" ? "एकूण बजेट" : "मार्जिन"} हिस्सा)
+                      </p>
                     </div>
                     <div className="p-2 rounded-lg bg-white border border-emerald-100 shadow-2xs">
                       <p className="text-[10px] text-stone-500 font-bold">🏢 मायकलाकार ओनर नफा</p>

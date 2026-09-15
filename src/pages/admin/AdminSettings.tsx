@@ -396,6 +396,66 @@ export default function AdminSettings() {
                       </div>
                     </div>
                   </div>
+
+                  {/* 3. Monthly Volume-Based Tiered Incentives (टार्गेटनुसार इन्सेंटिव्ह) */}
+                  <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-[#FF6B00]" />
+                        <Label className="text-xs font-black uppercase tracking-wider text-amber-950 dark:text-amber-300">
+                          ३. मासिक टार्गेट इन्सेंटिव्ह स्लॅब्स (Monthly Volume Tiers)
+                        </Label>
+                      </div>
+                      <Badge className="bg-amber-500 text-white font-bold text-[10px]">
+                        Active Rules
+                      </Badge>
+                    </div>
+
+                    <p className="text-xs text-amber-900/80 dark:text-amber-400">
+                      महिनाभरातील यशस्वी बुकिंग्सच्या संख्येनुसार Telecaller ला मिळणारी इन्सेंटिव्ह टक्केवारी:
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                      {/* Tier 1: Base */}
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-500">Base Tier</span>
+                          <Badge variant="outline" className="text-[10px] font-black text-slate-700">० - २९ डील्स</Badge>
+                        </div>
+                        <div className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-1">
+                          <span>५%</span>
+                          <span className="text-[10px] font-normal text-slate-500">इन्सेंटिव्ह</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500">प्रारंभिक स्लॅब (Base)</p>
+                      </div>
+
+                      {/* Tier 2: Silver */}
+                      <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 shadow-2xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-sky-700 dark:text-sky-300">Silver Tier</span>
+                          <Badge className="bg-sky-600 text-white text-[10px] font-black">३० - ४९ डील्स</Badge>
+                        </div>
+                        <div className="text-lg font-black text-sky-900 dark:text-sky-200 flex items-center gap-1">
+                          <span>१०%</span>
+                          <span className="text-[10px] font-normal text-sky-600">इन्सेंटिव्ह</span>
+                        </div>
+                        <p className="text-[10px] text-sky-700 dark:text-sky-400">टार्गेट १ पूर्ण झाल्यावर</p>
+                      </div>
+
+                      {/* Tier 3: Gold */}
+                      <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 shadow-2xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300">Gold Super Tier</span>
+                          <Badge className="bg-amber-600 text-white text-[10px] font-black">५०+ डील्स</Badge>
+                        </div>
+                        <div className="text-lg font-black text-amber-950 dark:text-amber-100 flex items-center gap-1">
+                          <span>२०%</span>
+                          <span className="text-[10px] font-normal text-amber-700">इन्सेंटिव्ह</span>
+                        </div>
+                        <p className="text-[10px] text-amber-800 dark:text-amber-400">कमाल सुपर टार्गेट</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Save Button */}

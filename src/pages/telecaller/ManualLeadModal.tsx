@@ -26,7 +26,7 @@ export default function ManualLeadModal({ open, onOpenChange, onLeadCreated }: P
   const [eventDate, setEventDate] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [district, setDistrict] = useState("Pune");
-  const [budget, setBudget] = useState(15000);
+  const [budget, setBudget] = useState<number | "">("");
   const [specialNotes, setSpecialNotes] = useState("");
 
   const selectedEventData = (EVENT_CATEGORY_HIERARCHY as any)[eventType] || (EVENT_CATEGORY_HIERARCHY as any)["Varkari Sampraday"];
@@ -68,6 +68,7 @@ export default function ManualLeadModal({ open, onOpenChange, onLeadCreated }: P
       setEventDate("");
       setEventLocation("");
       setSpecialNotes("");
+      setBudget("");
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Failed to log phone lead." });
     } finally {
@@ -191,8 +192,9 @@ export default function ManualLeadModal({ open, onOpenChange, onLeadCreated }: P
               <Label className="text-xs font-bold text-stone-700">Budget (₹)</Label>
               <Input
                 type="number"
+                placeholder="e.g. 15000"
                 value={budget}
-                onChange={(e) => setBudget(Number(e.target.value))}
+                onChange={(e) => setBudget(e.target.value === "" ? "" : Number(e.target.value))}
                 className="mt-1 rounded-xl border-stone-200"
               />
             </div>

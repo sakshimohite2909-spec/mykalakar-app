@@ -100,11 +100,15 @@ export default function TelecallerQRModal({
 
     setSaving(true);
     try {
+      const sanitizedUrl = (websiteUrl.trim() || "https://mykalakar-app.vercel.app")
+        .replace(/\/+$/, "")
+        .replace(/(\/profile)+$/i, "");
+
       const updated = await updatePaymentConfig({
         upiId: upiId.trim(),
         upiName: upiName.trim() || "MyKalakar",
         qrImageUrl: qrImageUrl || config.qrImageUrl,
-        websiteUrl: websiteUrl.trim() || "https://mykalakar.com",
+        websiteUrl: sanitizedUrl,
         notes: notes.trim(),
       });
 

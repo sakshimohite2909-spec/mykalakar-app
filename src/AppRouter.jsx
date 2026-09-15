@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import MainLayout from "@/MainLayout";
 import ArtistProtectedRoute from "@/components/ArtistProtectedRoute";
@@ -100,6 +100,10 @@ const router = createBrowserRouter([
             <UserProfile />
           </ProtectedRoute>
         ),
+      },
+      {
+        path: "profile/profile",
+        element: <Navigate to="/profile" replace />,
       },
       { path: "antigravity", element: <AntiGravity /> },
       {

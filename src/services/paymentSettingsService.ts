@@ -19,7 +19,7 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   upiId: "mykalakar@icici",
   upiName: "MyKalakar Events & Entertainment",
   qrImageUrl: "https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=upi%3A%2F%2Fpay%3Fpa%3Dmykalakar%40icici%26pn%3DMyKalakar%26cu%3DINR",
-  websiteUrl: "https://mykalakar.com",
+  websiteUrl: "https://mykalakar-app.vercel.app",
   notes: "अधिकृत कंपनी खात्यावर पेमेंट करा.",
 };
 
