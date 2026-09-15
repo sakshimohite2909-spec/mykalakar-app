@@ -210,8 +210,13 @@ export default function AdminBookings() {
     let totalOwnerProfit = 0;
 
     closedLeads.forEach((l) => {
-      const b = Number(l.budget || 0);
-      const a = Number(l.confirmedPrice || l.artistOfferBudget || (b > 0 ? Math.round(b * 0.8) : 0));
+      const b = Number(l.budget || l.bookingAmount || 0);
+      const a = Number(
+        (typeof l.artistPayout === "number" && l.artistPayout > 0 ? l.artistPayout : undefined) ||
+        (typeof l.artistOfferBudget === "number" && l.artistOfferBudget > 0 ? l.artistOfferBudget : undefined) ||
+        (typeof l.confirmedPrice === "number" && l.confirmedPrice > 0 && l.confirmedPrice < b ? l.confirmedPrice : undefined) ||
+        (b > 0 ? Math.round(b * 0.8) : 0)
+      );
       const split = calculateCommissionSplit(b, a, commissionConfig);
 
       const comm = typeof l.telecallerCommission === "number" ? l.telecallerCommission : split.telecallerCommission;
@@ -256,11 +261,11 @@ export default function AdminBookings() {
       typeof lead.telecallerCommissionPct === "number"
         ? lead.telecallerCommissionPct
         : commissionConfig.telecallerPercentage;
-    const b = Number(lead.budget || 0);
+    const b = Number(lead.budget || lead.bookingAmount || 0);
     const initialArtist = Number(
-      lead.artistPayout ||
-      lead.confirmedPrice ||
-      lead.artistOfferBudget ||
+      (typeof lead.artistPayout === "number" && lead.artistPayout > 0 ? lead.artistPayout : undefined) ||
+      (typeof lead.artistOfferBudget === "number" && lead.artistOfferBudget > 0 ? lead.artistOfferBudget : undefined) ||
+      (typeof lead.confirmedPrice === "number" && lead.confirmedPrice > 0 && lead.confirmedPrice < b ? lead.confirmedPrice : undefined) ||
       (b > 0 ? Math.round(b * 0.8) : 0)
     );
     setCustomPct(initialPct);
@@ -429,10 +434,15 @@ export default function AdminBookings() {
                     </TableRow>
                   ) : (
                     closedLeads.map((lead) => {
-                      const b = Number(lead.budget || 0);
-                      const a = Number(lead.confirmedPrice || lead.artistOfferBudget || (b > 0 ? Math.round(b * 0.8) : 0));
+                      const b = Number(lead.budget || lead.bookingAmount || 0);
+                      const a = Number(
+                        (typeof lead.artistPayout === "number" && lead.artistPayout > 0 ? lead.artistPayout : undefined) ||
+                        (typeof lead.artistOfferBudget === "number" && lead.artistOfferBudget > 0 ? lead.artistOfferBudget : undefined) ||
+                        (typeof lead.confirmedPrice === "number" && lead.confirmedPrice > 0 && lead.confirmedPrice < b ? lead.confirmedPrice : undefined) ||
+                        (b > 0 ? Math.round(b * 0.8) : 0)
+                      );
                       const split = calculateCommissionSplit(b, a, commissionConfig);
-
+                      const grossMargin = typeof lead.grossMargin === "number" && lead.grossMargin > 0 ? lead.grossMargin : split.grossMargin;
                       const comm = typeof lead.telecallerCommission === "number" ? lead.telecallerCommission : split.telecallerCommission;
                       const profit = typeof lead.ownerProfit === "number" ? lead.ownerProfit : split.ownerProfit;
                       const isPaid = lead.commissionPayoutStatus === "paid";
@@ -455,7 +465,7 @@ export default function AdminBookings() {
                             ₹{a.toLocaleString("en-IN")}
                           </TableCell>
                           <TableCell className="font-bold text-xs text-purple-700">
-                            ₹{split.grossMargin.toLocaleString("en-IN")}
+                            ₹{grossMargin.toLocaleString("en-IN")}
                           </TableCell>
                           <TableCell>
                             <div>
