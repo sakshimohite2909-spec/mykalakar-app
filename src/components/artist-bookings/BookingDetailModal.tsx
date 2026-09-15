@@ -315,8 +315,10 @@ export function BookingDetailModal({
                 <p className="font-extrabold uppercase mt-0.5 text-stone-800">{booking.paymentGateway || "Stripe"}</p>
               </div>
               <div className="rounded-xl bg-slate-50 p-2.5">
-                <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Authorized Offer</p>
-                <p className="font-extrabold mt-0.5 text-[#FF6B00]">Rs {(booking.authorizedAmount || 0).toLocaleString("en-IN")}</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Artist Payout Offer</p>
+                <p className="font-extrabold mt-0.5 text-[#FF6B00]">
+                  Rs {(booking.artistPayout || booking.artistOfferBudget || booking.quotedPrice || (booking.confirmedPrice && booking.confirmedPrice < (booking.authorizedAmount || Infinity) ? booking.confirmedPrice : undefined) || (booking.authorizedAmount ? Math.round(booking.authorizedAmount * 0.8) : 0)).toLocaleString("en-IN")}
+                </p>
               </div>
               <div className="rounded-xl bg-slate-50 p-2.5">
                 <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Escrow Released</p>

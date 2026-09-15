@@ -295,14 +295,21 @@ export function useArtistBookings() {
     let paid = 0;
 
     bookings.forEach((b) => {
-      const amt = Number(b.authorizedAmount || b.quotedPrice || (b as any).amount || (b as any).budget || 0);
+      const amt = Number(
+        b.artistPayout ||
+        b.artistOfferBudget ||
+        b.quotedPrice ||
+        (b.confirmedPrice && b.confirmedPrice < (b.authorizedAmount || b.budget || Infinity) ? b.confirmedPrice : undefined) ||
+        (b.authorizedAmount ? Math.round(b.authorizedAmount * 0.8) : 0) ||
+        (b.budget ? Math.round(b.budget * 0.8) : 0) ||
+        0
+      );
       if (["EVENT_COMPLETED", "PAYOUT_RELEASED", "completed"].includes(b.status)) {
         paid += amt;
-        total += amt;
-      } else if (["CONFIRMED", "confirmed", "booked", "artist_confirmed", "SOFT_HOLD_ACTIVE", "PAYMENT_AUTHORIZED", "PENDING_ARTIST_RESPONSE"].includes(b.status)) {
+      } else if (!["CANCELLED_BY_ARTIST", "CANCELLED_BY_CLIENT", "REJECTED", "cancelled"].includes(b.status)) {
         pending += amt;
-        total += amt;
       }
+      total += amt;
     });
 
     return { total, pending, paid };

@@ -56,6 +56,8 @@ export interface BookingEvent {
   authorizedAmount?: number;
   confirmedPrice?: number;
   quotedPrice?: number;
+  artistOfferBudget?: number;
+  artistPayout?: number;
   amount?: number;
   budget?: number;
   telecallerStatus?: string;
