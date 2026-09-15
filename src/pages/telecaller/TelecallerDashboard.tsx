@@ -1418,6 +1418,7 @@ export default function TelecallerDashboard() {
                           : (bookingAmt > 0 ? Math.round(bookingAmt * 0.8) : 0);
                     const split = calculateCommissionSplit(bookingAmt, artistAmt, commissionConfig);
                     const myComm = split.telecallerCommission;
+                    const isPayoutDone = activeLead.status === "booked";
 
                     return (
                       <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-50/80 via-white to-blue-50/80 border border-orange-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1432,30 +1433,37 @@ export default function TelecallerDashboard() {
                           </div>
                           <div className="pl-3 border-l-2 border-blue-300">
                             <span className="text-blue-600 block text-[10px] uppercase font-black">
-                              📞 तुमचे कमिशन ({commissionConfig.telecallerPercentage}%)
+                              📞 तुमचे कमिशन ({split.commissionPct || commissionConfig.telecallerPercentage}%)
                             </span>
                             <span className="text-blue-800 font-black text-sm">₹{myComm.toLocaleString("en-IN")}</span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            disabled={processingStatus === `payout_${activeLead.id}`}
-                            onClick={() => handleReleasePayout(activeLead)}
-                            className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm"
-                          >
-                            {processingStatus === `payout_${activeLead.id}` ? (
-                              <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                            ) : null}
-                            💸 पे-आऊट रिलीज करा
-                          </Button>
+                          {isPayoutDone ? (
+                            <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-black shadow-2xs">
+                              <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                              <span>✓ पे-आऊट रिलीज झाले (पूर्ण)</span>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              disabled={processingStatus === `payout_${activeLead.id}`}
+                              onClick={() => handleReleasePayout(activeLead)}
+                              className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm"
+                            >
+                              {processingStatus === `payout_${activeLead.id}` ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                              ) : null}
+                              💸 पे-आऊट रिलीज करा
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={processingStatus === `refund_${activeLead.id}`}
+                            disabled={processingStatus === `refund_${activeLead.id}` || isPayoutDone}
                             onClick={() => handleProcessRefund(activeLead)}
-                            className="h-9 px-3 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold"
+                            className="h-9 px-3 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold disabled:opacity-40"
                           >
                             {processingStatus === `refund_${activeLead.id}` ? (
                               <Loader2 className="h-4 w-4 animate-spin mr-1" />
