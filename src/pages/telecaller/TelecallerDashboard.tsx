@@ -234,7 +234,7 @@ export default function TelecallerDashboard() {
   const formatLeadCategory = (lead: TelecallerLead): string => {
     let event = String(lead.eventType || lead.category || "").trim();
     let sub = String(lead.subCategory || "").trim();
-    
+
     // Clean generic prefixes
     sub = sub.replace(/Artist Booking\s*\([^)]*\)/gi, "").replace(/Artist Booking/gi, "").replace(/\([^)]*\)/g, "").trim();
     if (event.toLowerCase() === "general event" || event.toLowerCase() === "general") {
@@ -243,7 +243,7 @@ export default function TelecallerDashboard() {
     if (sub.toLowerCase() === "general inquiry" || sub.toLowerCase() === "event requirement") {
       sub = "";
     }
-    
+
     if (event && sub && event.toLowerCase() !== sub.toLowerCase()) {
       return `${event} • ${sub}`;
     }
@@ -253,7 +253,7 @@ export default function TelecallerDashboard() {
   const handleStatusChange = async (leadId: string, newStatus: LeadStatus, confirmedArtistData?: { artistId: string; artistName: string; price: number }) => {
     setProcessingStatus(leadId);
     const cleanTargetId = leadId.replace(/^(booking_|brief_|lead_|inquiry_)/, "");
-    
+
     // 1. Immediate optimistic UI update
     setLeads((prev) =>
       prev.map((l) => {
@@ -275,12 +275,12 @@ export default function TelecallerDashboard() {
       setActiveLead((prev) =>
         prev
           ? {
-              ...prev,
-              status: newStatus,
-              confirmedArtistName: confirmedArtistData?.artistName || prev.confirmedArtistName,
-              confirmedArtistId: confirmedArtistData?.artistId || prev.confirmedArtistId,
-              confirmedPrice: confirmedArtistData?.price || prev.confirmedPrice,
-            }
+            ...prev,
+            status: newStatus,
+            confirmedArtistName: confirmedArtistData?.artistName || prev.confirmedArtistName,
+            confirmedArtistId: confirmedArtistData?.artistId || prev.confirmedArtistId,
+            confirmedPrice: confirmedArtistData?.price || prev.confirmedPrice,
+          }
           : null
       );
     }
@@ -304,8 +304,8 @@ export default function TelecallerDashboard() {
     const offerPrice = activeLead.artistOfferBudget && activeLead.artistOfferBudget > 0
       ? `₹${activeLead.artistOfferBudget.toLocaleString("en-IN")}`
       : activeLead.budget && activeLead.budget > 0
-      ? `₹${Math.round(activeLead.budget * 0.8).toLocaleString("en-IN")}`
-      : "चर्चाधीन";
+        ? `₹${Math.round(activeLead.budget * 0.8).toLocaleString("en-IN")}`
+        : "चर्चाधीन";
     const categoryText = formatLeadCategory(activeLead);
     const dateText = activeLead.eventDate || "तारीख चर्चाधीन";
     const timeText = activeLead.eventTime || "सायं. ०६:०० ते ०९:००";
@@ -314,8 +314,8 @@ export default function TelecallerDashboard() {
       activeLead.soundRequired === true
         ? "कलाकाराने स्वतः साऊंड व माईक आणावे"
         : activeLead.soundRequired === false
-        ? "साऊंड सिस्टीमची गरज नाही"
-        : "हॉल किंवा आयोजकांकडून उपलब्ध असेल";
+          ? "साऊंड सिस्टीमची गरज नाही"
+          : "हॉल किंवा आयोजकांकडून उपलब्ध असेल";
 
     const lines = [
       `*MyKalakar - नवीन इव्हेंट बुकिंग*`,
@@ -534,8 +534,8 @@ export default function TelecallerDashboard() {
     const rawList = Array.isArray(artist.reels)
       ? artist.reels
       : Array.isArray(artist.media?.reels)
-      ? artist.media.reels
-      : [];
+        ? artist.media.reels
+        : [];
 
     const parsed: ArtistReelItem[] = rawList.map((item: any, idx: number) => {
       if (typeof item === "string") {
@@ -731,13 +731,12 @@ export default function TelecallerDashboard() {
               </div>
 
               {/* Active Tier Badge */}
-              <span className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-sm border ${
-                monthlyStats.appliedIncentivePct >= 20
+              <span className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-sm border ${monthlyStats.appliedIncentivePct >= 20
                   ? "bg-amber-400 text-amber-950 border-amber-300"
                   : monthlyStats.appliedIncentivePct >= 10
-                  ? "bg-sky-400 text-sky-950 border-sky-300"
-                  : "bg-slate-200 text-slate-900 border-slate-300"
-              }`}>
+                    ? "bg-sky-400 text-sky-950 border-sky-300"
+                    : "bg-slate-200 text-slate-900 border-slate-300"
+                }`}>
                 {monthlyStats.appliedIncentivePct >= 20 ? (
                   <Trophy className="h-3.5 w-3.5 text-amber-900" />
                 ) : monthlyStats.appliedIncentivePct >= 10 ? (
@@ -836,22 +835,20 @@ export default function TelecallerDashboard() {
           <div className="grid grid-cols-2 gap-1.5 p-1 bg-stone-200/80 rounded-2xl lg:hidden shadow-inner">
             <button
               onClick={() => setMobileTab("leads")}
-              className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-                mobileTab === "leads"
+              className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${mobileTab === "leads"
                   ? "bg-white text-stone-950 shadow-sm"
                   : "text-stone-600 hover:text-stone-900"
-              }`}
+                }`}
             >
               <FileText className="h-4 w-4 text-orange-600" />
               <span>📋 लीड्स ({filteredLeads.length})</span>
             </button>
             <button
               onClick={() => setMobileTab("workbench")}
-              className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-                mobileTab === "workbench"
+              className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${mobileTab === "workbench"
                   ? "bg-orange-600 text-white shadow-sm"
                   : "text-stone-600 hover:text-stone-900"
-              }`}
+                }`}
             >
               <PhoneCall className="h-4 w-4" />
               <span>⚡ कॉलिंग व ॲक्शन</span>
@@ -869,21 +866,19 @@ export default function TelecallerDashboard() {
                     setLeadTypeFilter("all");
                     setStatusFilter("all");
                   }}
-                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 ${
-                    leadTypeFilter === "all" && statusFilter === "all"
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 ${leadTypeFilter === "all" && statusFilter === "all"
                       ? "bg-white text-stone-900 shadow-2xs"
                       : "text-stone-600 hover:text-stone-900"
-                  }`}
+                    }`}
                 >
                   सर्व ({leads.length})
                 </button>
                 <button
                   onClick={() => setStatusFilter("new")}
-                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 ${
-                    statusFilter === "new"
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 ${statusFilter === "new"
                       ? "bg-amber-500 text-white shadow-2xs"
                       : "text-amber-800 hover:bg-amber-100/60"
-                  }`}
+                    }`}
                 >
                   नवीन ({leads.filter((l) => l.status === "new").length})
                 </button>
@@ -892,11 +887,10 @@ export default function TelecallerDashboard() {
                     setLeadTypeFilter("book_artist");
                     setStatusFilter("all");
                   }}
-                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 flex items-center gap-1 ${
-                    leadTypeFilter === "book_artist"
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 flex items-center gap-1 ${leadTypeFilter === "book_artist"
                       ? "bg-purple-600 text-white shadow-2xs"
                       : "text-purple-800 hover:bg-purple-100/60"
-                  }`}
+                    }`}
                 >
                   <UserCheck className="h-3 w-3" />
                   बुकिंग ({leads.filter((l) => l.leadType === "book_artist").length})
@@ -906,11 +900,10 @@ export default function TelecallerDashboard() {
                     setLeadTypeFilter("post_requirement");
                     setStatusFilter("all");
                   }}
-                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 flex items-center gap-1 ${
-                    leadTypeFilter === "post_requirement"
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all shrink-0 flex items-center gap-1 ${leadTypeFilter === "post_requirement"
                       ? "bg-stone-800 text-white shadow-2xs"
                       : "text-stone-700 hover:bg-stone-200"
-                  }`}
+                    }`}
                 >
                   रिक्वायरमेंट ({leads.filter((l) => l.leadType === "post_requirement").length})
                 </button>
@@ -953,32 +946,30 @@ export default function TelecallerDashboard() {
                           setActiveLead(lead);
                           setMobileTab("workbench");
                         }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
-                          isSelected
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${isSelected
                             ? "bg-orange-50/90 border-orange-400 shadow-sm ring-2 ring-orange-200"
                             : "bg-white border-stone-200/90 hover:border-orange-300 hover:bg-stone-50/60 shadow-2xs"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span
-                              className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                                lead.status === "new"
+                              className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${lead.status === "new"
                                   ? "bg-amber-100 text-amber-900 border-amber-300"
                                   : lead.status === "artist_confirmed" || lead.status === "booked"
-                                  ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                                  : "bg-sky-100 text-sky-900 border-sky-300"
-                              }`}
+                                    ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                                    : "bg-sky-100 text-sky-900 border-sky-300"
+                                }`}
                             >
                               {lead.status === "new"
                                 ? "नवीन (New)"
                                 : lead.status === "contacting_artists"
-                                ? "कॉलिंग चालू"
-                                : lead.status === "artist_confirmed"
-                                ? "कलाकार नक्की"
-                                : lead.status === "booked"
-                                ? "पूर्ण / पे-आऊट"
-                                : lead.status}
+                                  ? "कॉलिंग चालू"
+                                  : lead.status === "artist_confirmed"
+                                    ? "कलाकार नक्की"
+                                    : lead.status === "booked"
+                                      ? "पूर्ण / पे-आऊट"
+                                      : lead.status}
                             </span>
                             {isBookArtist && (
                               <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200">
@@ -1061,12 +1052,12 @@ export default function TelecallerDashboard() {
                         {activeLead.status === "new"
                           ? "पायरी १: ग्राहकाशी संपर्क"
                           : activeLead.status === "contacting_artists"
-                          ? "पायरी २: कलाकाराला पाठवा"
-                          : activeLead.status === "artist_confirmed"
-                          ? "पायरी ३: बुकिंग कन्फर्म"
-                          : activeLead.status === "booked"
-                          ? "पायरी ४: पे-आऊट पूर्ण"
-                          : activeLead.status}
+                            ? "पायरी २: कलाकाराला पाठवा"
+                            : activeLead.status === "artist_confirmed"
+                              ? "पायरी ३: बुकिंग कन्फर्म"
+                              : activeLead.status === "booked"
+                                ? "पायरी ४: पे-आऊट पूर्ण"
+                                : activeLead.status}
                       </span>
                     </div>
 
@@ -1075,11 +1066,10 @@ export default function TelecallerDashboard() {
                       <button
                         type="button"
                         onClick={() => handleStatusChange(activeLead.id, "new")}
-                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${
-                          activeLead.status === "new"
+                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${activeLead.status === "new"
                             ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
                             : "bg-black/25 text-white/90 hover:bg-black/40"
-                        }`}
+                          }`}
                       >
                         <Phone className="h-3.5 w-3.5 mb-0.5" />
                         <span className="font-extrabold">१. ग्राहक कॉल</span>
@@ -1089,11 +1079,10 @@ export default function TelecallerDashboard() {
                       <button
                         type="button"
                         onClick={() => handleStatusChange(activeLead.id, "contacting_artists")}
-                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${
-                          activeLead.status === "contacting_artists"
+                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${activeLead.status === "contacting_artists"
                             ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
                             : "bg-black/25 text-white/90 hover:bg-black/40"
-                        }`}
+                          }`}
                       >
                         <MessageCircle className="h-3.5 w-3.5 mb-0.5 text-emerald-400" />
                         <span className="font-extrabold">२. WhatsApp</span>
@@ -1103,11 +1092,10 @@ export default function TelecallerDashboard() {
                       <button
                         type="button"
                         onClick={() => handleStatusChange(activeLead.id, "artist_confirmed")}
-                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${
-                          activeLead.status === "artist_confirmed"
+                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${activeLead.status === "artist_confirmed"
                             ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
                             : "bg-black/25 text-white/90 hover:bg-black/40"
-                        }`}
+                          }`}
                       >
                         <CheckCircle2 className="h-3.5 w-3.5 mb-0.5 text-emerald-400" />
                         <span className="font-extrabold">३. कन्फर्म</span>
@@ -1117,11 +1105,10 @@ export default function TelecallerDashboard() {
                       <button
                         type="button"
                         onClick={() => handleStatusChange(activeLead.id, "booked")}
-                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${
-                          activeLead.status === "booked"
+                        className={`p-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center ${activeLead.status === "booked"
                             ? "bg-white text-stone-900 font-black shadow-md ring-2 ring-white/80"
                             : "bg-black/25 text-white/90 hover:bg-black/40"
-                        }`}
+                          }`}
                       >
                         <Wallet className="h-3.5 w-3.5 mb-0.5 text-emerald-400" />
                         <span className="font-extrabold">४. पे-आऊट</span>
@@ -1331,11 +1318,10 @@ export default function TelecallerDashboard() {
                         return (
                           <div
                             key={artist.name}
-                            className={`p-3 sm:p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
-                              isConfirmed
+                            className={`p-3 sm:p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${isConfirmed
                                 ? "bg-emerald-50/90 border-emerald-400 shadow-sm ring-1 ring-emerald-200"
                                 : "bg-stone-50/80 border-stone-200 hover:border-orange-300"
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
                               <div className="h-10 w-10 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-black text-sm shrink-0 shadow-2xs">
@@ -1400,11 +1386,10 @@ export default function TelecallerDashboard() {
                                     price: artist.startingPrice || activeLead.artistOfferBudget || activeLead.budget || 0,
                                   });
                                 }}
-                                className={`h-9 px-3.5 rounded-xl text-xs font-black shadow-2xs ${
-                                  isConfirmed
+                                className={`h-9 px-3.5 rounded-xl text-xs font-black shadow-2xs ${isConfirmed
                                     ? "bg-emerald-700 text-white ring-2 ring-emerald-300"
                                     : "bg-stone-900 hover:bg-stone-800 text-white"
-                                }`}
+                                  }`}
                               >
                                 {isConfirmed ? "✓ नक्की झाले" : "नक्की करा"}
                               </Button>
@@ -1518,13 +1503,12 @@ export default function TelecallerDashboard() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-sm font-black text-stone-950">{lead.customerName}</h3>
                     <span
-                      className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
-                        lead.status === "new"
+                      className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${lead.status === "new"
                           ? "bg-amber-100 text-amber-800"
                           : lead.status === "artist_confirmed"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-sky-100 text-sky-800"
-                      }`}
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-sky-100 text-sky-800"
+                        }`}
                     >
                       {lead.status}
                     </span>
