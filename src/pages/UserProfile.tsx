@@ -25,6 +25,10 @@ import {
   QrCode,
   Copy,
   Trash2,
+  Printer,
+  Download,
+  CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -337,6 +341,255 @@ export default function UserProfile() {
 
   // Agreement modal state
   const [agreementBooking, setAgreementBooking] = useState<BookingEvent | null>(null);
+
+  const handleDownloadAgreementPDF = (booking: BookingEvent) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>MyKalakar_Agreement_${booking.id.slice(0, 8).toUpperCase()}</title>
+        <meta charset="utf-8" />
+        <style>
+          @page { size: A4; margin: 15mm; }
+          * { box-sizing: border-box; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #1c1917;
+            background: #ffffff;
+            margin: 0;
+            padding: 24px;
+            font-size: 13px;
+            line-height: 1.6;
+          }
+          .header {
+            border-bottom: 2px solid #ea580c;
+            padding-bottom: 16px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #c2410c;
+            margin: 0;
+          }
+          .subtitle {
+            font-size: 12px;
+            color: #78716c;
+            margin-top: 4px;
+          }
+          .contract-badge {
+            background: #fff7ed;
+            border: 1px solid #fdba74;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-weight: bold;
+            color: #9a3412;
+            font-size: 12px;
+          }
+          .parties-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+          }
+          .party-card {
+            background: #fafaf9;
+            border: 1px solid #e7e5e4;
+            border-radius: 10px;
+            padding: 12px 16px;
+          }
+          .party-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: bold;
+            color: #ea580c;
+            margin-bottom: 4px;
+          }
+          .party-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1917;
+          }
+          .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            background: #ffffff;
+            border: 1px solid #e7e5e4;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 20px;
+          }
+          .detail-item {
+            padding: 6px 0;
+          }
+          .detail-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: #78716c;
+            font-weight: bold;
+          }
+          .detail-value {
+            font-size: 13px;
+            font-weight: bold;
+            color: #1c1917;
+            margin-top: 2px;
+          }
+          .clause-box {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 14px;
+          }
+          .clause-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #14532d;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+          }
+          .clause-text {
+            font-size: 11px;
+            color: #166534;
+            margin: 0;
+          }
+          .terms-box {
+            background: #fafaf9;
+            border: 1px solid #e7e5e4;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 20px;
+          }
+          .footer-seal {
+            border: 1px dashed #d6d3d1;
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            color: #047857;
+            background: #fafaf9;
+            margin-top: 24px;
+          }
+          .signature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 36px;
+            padding-top: 20px;
+            border-top: 1px solid #e7e5e4;
+          }
+          .signature-line {
+            border-top: 1px solid #78716c;
+            margin-top: 40px;
+            padding-top: 6px;
+            font-size: 11px;
+            color: #78716c;
+            text-align: center;
+          }
+          @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1 class="title">MyKalakar Official Performance Agreement</h1>
+            <div class="subtitle">कलाकार सादरीकरण आणि सहभाग करार (Binding Engagement Contract)</div>
+          </div>
+          <div class="contract-badge">
+            CONTRACT-${booking.id.slice(0, 8).toUpperCase()}
+          </div>
+        </div>
+
+        <div class="parties-grid">
+          <div class="party-card">
+            <div class="party-label">ग्राहक / Party A (Client)</div>
+            <div class="party-name">${booking.clientName || "Client"}</div>
+            ${booking.clientPhone ? `<div style="font-size: 11px; color: #78716c; margin-top: 4px;">Phone: ${booking.clientPhone}</div>` : ""}
+          </div>
+          <div class="party-card">
+            <div class="party-label">कलाकार / Party B (Kalakar)</div>
+            <div class="party-name">${booking.artistName || "Artist"}</div>
+            <div style="font-size: 11px; color: #78716c; margin-top: 4px;">Category: ${booking.performanceType || "Artist"}</div>
+          </div>
+        </div>
+
+        <div class="details-grid">
+          <div class="detail-item">
+            <div class="detail-label">Event Date / तारीख</div>
+            <div class="detail-value">${booking.eventDate || "N/A"}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Performance Time / वेळ</div>
+            <div class="detail-value">${booking.eventStartTime || ""} - ${booking.eventEndTime || ""}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Venue & Location / ठिकाण</div>
+            <div class="detail-value">${booking.venueLocation || "N/A"}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Art Category / प्रकार</div>
+            <div class="detail-value">${booking.performanceType || "Performance"}</div>
+          </div>
+        </div>
+
+        <div class="clause-box">
+          <div class="clause-title">
+            <span>1. Escrow Protection & Fees / एस्क्रो सुरक्षा आणि मानधन</span>
+            <span style="background: #dcfce7; padding: 2px 8px; border-radius: 4px;">₹${(booking.authorizedAmount || booking.confirmedPrice || booking.budget || 0).toLocaleString("en-IN")}</span>
+          </div>
+          <p class="clause-text">
+            The total agreed performance fee of ₹${(booking.authorizedAmount || booking.confirmedPrice || booking.budget || 0).toLocaleString("en-IN")} is secured in MyKalakar platform Escrow. Payout will be released to the Artist post successful performance completion.
+          </p>
+        </div>
+
+        <div class="terms-box">
+          <div style="font-size: 12px; font-weight: bold; color: #1c1917; margin-bottom: 6px;">2. Cancellation & Dispute Rules / रद्दीकरण नियम</div>
+          <p style="font-size: 11px; color: #57534e; margin: 0; line-height: 1.5;">
+            Cancellations are subject to standard MyKalakar platform policies. Standard refunds apply if cancelled prior to the cutoff window. 24/7 dedicated dispute mediation is guaranteed.
+          </p>
+        </div>
+
+        <div class="footer-seal">
+          ✔ Digitally Verified & Secured by MyKalakar Escrow • Approved via ${booking.paymentGateway?.toUpperCase() || "RAZORPAY"}
+        </div>
+
+        <div class="signature-grid">
+          <div>
+            <div class="signature-line">Client Authorized Signature / ग्राहक स्वाक्षरी</div>
+          </div>
+          <div>
+            <div class="signature-line">Artist / MyKalakar Platform Verified Signature</div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
 
   // Admin access request state
   const [adminRequestStatus, setAdminRequestStatus] = useState<"none" | "pending" | null>(null);
@@ -1152,9 +1405,9 @@ export default function UserProfile() {
 
                               {/* Customer Action buttons */}
                               <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-                                {booking.status === "CONFIRMED" && (
-                                  <Button size="sm" variant="outline" className="border-stone-200 rounded-xl mr-auto font-bold text-stone-600" onClick={() => setAgreementBooking(booking)}>
-                                    <FileText className="mr-1.5 h-4 w-4" /> {t("profile.bookings.btnViewAgreement")}
+                                {["CONFIRMED", "confirmed", "EVENT_COMPLETED", "completed", "PAYOUT_RELEASED"].includes(booking.status) && (
+                                  <Button size="sm" variant="outline" className="border-stone-200 rounded-xl mr-auto font-bold text-stone-600 hover:bg-stone-100 hover:text-stone-900" onClick={() => setAgreementBooking(booking)}>
+                                    <FileText className="mr-1.5 h-4 w-4 text-orange-600" /> {t("profile.bookings.btnViewAgreement", "करार पहा")}
                                   </Button>
                                 )}
                                 {isPending && (
@@ -1493,60 +1746,194 @@ export default function UserProfile() {
 
       {/* Booking Agreement modal */}
       <Dialog open={Boolean(agreementBooking)} onOpenChange={(open) => !open && setAgreementBooking(null)}>
-        <DialogContent className="max-w-lg rounded-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl font-black text-stone-900 flex items-center gap-1.5 border-b border-slate-100 pb-2.5">
-              <FileText className="h-5 w-5 text-orange-600" /> {t("profile.agreementDialog.title")}
-            </DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full rounded-3xl p-0 overflow-hidden border border-stone-200 bg-white shadow-2xl max-h-[90vh] flex flex-col">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 px-6 py-4.5 text-white shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-md shadow-inner text-white shrink-0">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-display text-lg font-black tracking-tight text-white leading-tight">
+                    {t("profile.agreement.title", "अधिकृत सादरीकरण करार")}
+                  </h2>
+                  <p className="text-xs text-orange-100 font-medium">
+                    {t("profile.agreement.contractHeader", "कलाकार सादरीकरण आणि सहभाग करार")}
+                  </p>
+                </div>
+              </div>
+              {agreementBooking && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => handleDownloadAgreementPDF(agreementBooking)}
+                    className="hidden sm:inline-flex bg-white/20 hover:bg-white/30 text-white font-bold border border-white/30 rounded-xl text-xs gap-1.5 backdrop-blur-sm"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    PDF
+                  </Button>
+                  <div className="hidden md:flex flex-col items-end">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-orange-200">
+                      {t("profile.agreement.contractId", "करार आयडी:")}
+                    </span>
+                    <span className="font-mono text-xs font-black bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-white border border-white/30">
+                      CONTRACT-{agreementBooking.id.slice(0, 8).toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {agreementBooking && (
-            <div className="space-y-4 py-2 text-xs font-semibold text-stone-600 leading-relaxed">
-              <div className="text-center bg-stone-50 border rounded-xl p-3 mb-4 space-y-1">
-                <h3 className="font-display text-sm font-black text-stone-900">{t("profile.agreementDialog.contractHeader")}</h3>
-                <p className="text-[10px] text-stone-400">{t("profile.agreementDialog.contractId")} CONTRACT-{agreementBooking.id.slice(0, 8).toUpperCase()}</p>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 text-xs text-stone-700 leading-relaxed print:max-h-none">
+              {/* Mobile Contract ID badge */}
+              <div className="sm:hidden flex items-center justify-between bg-stone-100 px-3 py-2 rounded-xl border border-stone-200 text-[11px] font-semibold text-stone-600">
+                <span>{t("profile.agreement.contractId", "करार आयडी:")}</span>
+                <span className="font-mono font-bold text-stone-900">CONTRACT-{agreementBooking.id.slice(0, 8).toUpperCase()}</span>
               </div>
 
-              <p>{t("profile.agreementDialog.introText").replace("{{client}}", agreementBooking.clientName || "Client").replace("{{artist}}", agreementBooking.artistName || "Artist")}</p>
+              {/* Intro clause */}
+              <div className="rounded-2xl bg-stone-50/90 border border-stone-200/80 p-4">
+                <p className="font-medium text-stone-700 leading-normal">
+                  {t("profile.agreement.intro", {
+                    client: agreementBooking.clientName || "Client",
+                    artist: agreementBooking.artistName || "Artist",
+                    defaultValue: "हा दस्तऐवज ग्राहक आणि कलाकार यांच्यातील MyKalakar प्लॅटफॉर्मच्या मान्य अटींनुसार अधिकृत करार म्हणून काम करतो.",
+                  })}
+                </p>
+              </div>
 
-              <div className="grid grid-cols-2 gap-4 bg-stone-50/70 p-3 rounded-xl border border-stone-100">
-                <div>
-                  <p className="text-[10px] font-black uppercase text-stone-400">{t("profile.agreementDialog.dateLabel")}</p>
-                  <p className="font-bold text-stone-800">{formatDate(agreementBooking.eventDate)}</p>
+              {/* Parties summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-orange-50/60 border border-orange-100 rounded-2xl p-3.5 space-y-1">
+                  <p className="text-[10px] font-black uppercase text-orange-600 tracking-wider">ग्राहक / Party A (Client)</p>
+                  <p className="font-bold text-sm text-stone-900">{agreementBooking.clientName || "Client"}</p>
+                  {agreementBooking.clientPhone && (
+                    <p className="text-[11px] text-stone-500 font-medium">📞 {agreementBooking.clientPhone}</p>
+                  )}
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase text-stone-400">{t("profile.agreementDialog.hoursLabel")}</p>
-                  <p className="font-bold text-stone-800">{agreementBooking.eventStartTime} - {agreementBooking.eventEndTime}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase text-stone-400">{t("profile.agreementDialog.locationLabel")}</p>
-                  <p className="font-bold text-stone-800">{agreementBooking.venueLocation}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase text-stone-400">{t("profile.agreementDialog.typeLabel")}</p>
-                  <p className="font-bold text-stone-800">{agreementBooking.performanceType}</p>
+                <div className="bg-amber-50/60 border border-amber-100 rounded-2xl p-3.5 space-y-1">
+                  <p className="text-[10px] font-black uppercase text-amber-700 tracking-wider">कलाकार / Party B (Kalakar)</p>
+                  <p className="font-bold text-sm text-stone-900">{agreementBooking.artistName || "Artist"}</p>
+                  <p className="text-[11px] text-amber-800 font-medium">🎭 {agreementBooking.performanceType || "Artist"}</p>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <h4 className="font-bold text-stone-800">{t("profile.agreementDialog.escrowLabel")}</h4>
-                <p>{t("profile.agreementDialog.escrowText").replace("{{amount}}", agreementBooking.authorizedAmount?.toLocaleString("en-IN") || "0")}</p>
+              {/* 4 Details Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm">
+                <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-100">
+                  <div className="flex items-center gap-1.5 text-stone-400 mb-1">
+                    <Calendar className="h-3.5 w-3.5 text-orange-500" />
+                    <p className="text-[10px] font-black uppercase tracking-wider">{t("profile.agreement.date")}</p>
+                  </div>
+                  <p className="font-bold text-stone-900 text-xs sm:text-sm">{formatDate(agreementBooking.eventDate)}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-100">
+                  <div className="flex items-center gap-1.5 text-stone-400 mb-1">
+                    <Clock className="h-3.5 w-3.5 text-orange-500" />
+                    <p className="text-[10px] font-black uppercase tracking-wider">{t("profile.agreement.hours")}</p>
+                  </div>
+                  <p className="font-bold text-stone-900 text-xs sm:text-sm">
+                    {agreementBooking.eventStartTime} - {agreementBooking.eventEndTime}
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-100">
+                  <div className="flex items-center gap-1.5 text-stone-400 mb-1">
+                    <MapPin className="h-3.5 w-3.5 text-orange-500" />
+                    <p className="text-[10px] font-black uppercase tracking-wider">{t("profile.agreement.location")}</p>
+                  </div>
+                  <p className="font-bold text-stone-900 text-xs sm:text-sm break-words">{agreementBooking.venueLocation}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-100">
+                  <div className="flex items-center gap-1.5 text-stone-400 mb-1">
+                    <Sparkles className="h-3.5 w-3.5 text-orange-500" />
+                    <p className="text-[10px] font-black uppercase tracking-wider">{t("profile.agreement.type")}</p>
+                  </div>
+                  <p className="font-bold text-stone-900 text-xs sm:text-sm">{agreementBooking.performanceType}</p>
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <h4 className="font-bold text-stone-800">{t("profile.agreementDialog.cancelLabel")}</h4>
-                <p>{t("profile.agreementDialog.cancelText")}</p>
+              {/* Clause 1: Escrow & Fees */}
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-xs text-emerald-950 flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                    {t("profile.agreement.escrowTitle")}
+                  </h4>
+                  <span className="font-black text-sm text-emerald-700 bg-emerald-100/80 px-2.5 py-0.5 rounded-lg border border-emerald-300">
+                    ₹{(agreementBooking.authorizedAmount || agreementBooking.confirmedPrice || agreementBooking.budget || 0).toLocaleString("en-IN")}
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-900/90 leading-relaxed font-medium">
+                  {t("profile.agreement.escrowBody", {
+                    amount: (agreementBooking.authorizedAmount || agreementBooking.confirmedPrice || agreementBooking.budget || 0).toLocaleString("en-IN"),
+                  })}
+                </p>
               </div>
 
-              <div className="border-t border-slate-100 pt-3 text-center space-y-1">
-                <p className="font-extrabold text-stone-800">{t("profile.agreementDialog.authorizedText")}</p>
-                <p className="text-[10px] text-stone-400">{t("profile.agreementDialog.approvedViaText").replace("{{gateway}}", agreementBooking.paymentGateway?.toUpperCase() || "STRIPE")}</p>
+              {/* Clause 2: Cancellation Policy */}
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4 space-y-1.5">
+                <h4 className="font-bold text-xs text-stone-900 flex items-center gap-1.5">
+                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                  {t("profile.agreement.cancelTitle")}
+                </h4>
+                <p className="text-[11px] text-stone-600 leading-relaxed font-medium">
+                  {t("profile.agreement.cancelBody")}
+                </p>
+              </div>
+
+              {/* Security & Verification Footer Seal */}
+              <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/50 p-3.5 text-center flex flex-col items-center justify-center gap-1">
+                <div className="flex items-center gap-1.5 text-emerald-700 font-extrabold text-[11px]">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  {t("profile.agreement.authFooter")}
+                </div>
+                <p className="text-[10px] text-stone-400 font-medium">
+                  {t("profile.agreement.authGateway", {
+                    gateway: agreementBooking.paymentGateway?.toUpperCase() || "RAZORPAY",
+                  })}
+                </p>
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAgreementBooking(null)}>{t("profile.agreementDialog.btnClose")}</Button>
-            <Button className="bg-orange-600 text-white font-bold" onClick={() => window.print()}>{t("profile.agreementDialog.btnPrint")}</Button>
-          </DialogFooter>
+
+          {/* Fixed Sticky Action Buttons Footer */}
+          {agreementBooking && (
+            <div className="bg-stone-50/95 backdrop-blur-sm border-t border-stone-200 px-6 py-3.5 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAgreementBooking(null)}
+                className="w-full sm:w-auto rounded-xl px-4 py-2 font-bold border-stone-300 text-stone-700 hover:bg-stone-100"
+              >
+                {t("profile.agreement.btnClose", "बंद करा")}
+              </Button>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => window.print()}
+                  className="w-full sm:w-auto rounded-xl px-4 py-2 font-bold border-stone-300 text-stone-700 hover:bg-stone-100 flex items-center justify-center gap-1.5"
+                >
+                  <Printer className="h-4 w-4 text-stone-500" />
+                  {t("profile.agreement.btnPrint", "मुद्रित करा")}
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() => handleDownloadAgreementPDF(agreementBooking)}
+                  className="w-full sm:w-auto rounded-xl px-5 py-2 font-bold bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white shadow-md shadow-orange-500/20 flex items-center justify-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  {t("profile.agreement.btnDownload", "करार डाउनलोड करा (PDF)")}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -9,7 +9,7 @@ export type Locale = "en-IN" | "mr-IN" | "hi-IN"; // ADDED FOR i18n
 
 type Messages = Record<string, string>;
 
-type TranslateOptions = Record<string, string | number>;
+export type TranslateOptions = Record<string, any> | string;
 
 interface LanguageOption {
   code: Language;
@@ -86,7 +86,7 @@ function detectLanguage(): Language {
   return "en";
 }
 
-function interpolate(text: string, options?: TranslateOptions) {
+function interpolate(text: string, options?: Record<string, any>) {
   if (!options) return text;
   return text.replace(/\{\{(\w+)\}\}/g, (_, key) => String(options[key] ?? ""));
 }
@@ -106,13 +106,16 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     setLanguageState(nextLanguage);
   }, []);
 
-  const messages = allMessages[language];
-  const fallbackMessages = allMessages.en;
+  const messages = allMessages[language] || {};
+  const fallbackMessages = allMessages.en || {};
 
   const t = useCallback(
     (key: string, options?: TranslateOptions) => {
-      const value = messages[key] ?? fallbackMessages[key] ?? key;
-      return interpolate(value, options);
+      const isStringFallback = typeof options === "string";
+      const fallbackStr = isStringFallback ? options : (options && typeof options === "object" && "defaultValue" in options ? String(options.defaultValue) : undefined);
+      const optObj = !isStringFallback && typeof options === "object" ? options : undefined;
+      const value = messages[key] ?? fallbackMessages[key] ?? fallbackStr ?? key;
+      return interpolate(value, optObj);
     },
     [fallbackMessages, messages],
   );

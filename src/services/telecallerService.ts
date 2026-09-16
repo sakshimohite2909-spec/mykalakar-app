@@ -163,29 +163,46 @@ export function recordDeletedLeadId(id: string) {
 
 export function isDummyLeadRecord(lead: any): boolean {
   if (!lead) return true;
-  const rawPhone = lead.customerPhone || lead.clientPhone || lead.postedByPhone || "";
-  const cleanPhone = rawPhone.replace(/\D/g, "").slice(-10);
-  const name = (lead.customerName || lead.clientName || lead.postedByName || "").toLowerCase().trim();
-  const artist = (
+  const rawPhone = lead.customerPhone || lead.clientPhone || lead.postedByPhone || lead.phone || lead.mobile || "";
+  const cleanPhone = String(rawPhone).replace(/\D/g, "").slice(-10);
+  const hasValidPhone = cleanPhone.length >= 7;
+
+  const name = String(lead.customerName || lead.clientName || lead.postedByName || "").toLowerCase().trim();
+  const artist = String(
     lead.confirmedArtistName ||
     lead.requestedArtistName ||
     lead.artistName ||
     (lead.matchedArtists && lead.matchedArtists[0]?.artistName) ||
     ""
   ).toLowerCase().trim();
-  const eventType = (lead.eventType || lead.category || lead.subCategory || "").toLowerCase().trim();
-  const budget = Number(lead.budget || lead.amount || lead.price || 0);
+  const eventType = String(lead.eventType || lead.category || lead.subCategory || "").toLowerCase().trim();
 
-  // If there's an actual phone number, or a customer name, or an artist, or an event type, or a budget > 0, it's valid
-  if (cleanPhone && cleanPhone.length >= 7) return false;
-  if (name && name !== "customer" && name !== "ग्राहक" && name.length >= 2) return false;
-  if (artist && artist !== "कलाकार" && artist !== "artist" && artist.length >= 2) return false;
-  if (budget > 0) return false;
-  if (eventType && !eventType.includes("general") && eventType.length >= 3) return false;
+  const isGenericName = !name || name === "customer" || name === "ग्राहक" || name === "general" || name === "user" || name === "admin" || name.startsWith("customer");
+  const isGenericArtist = !artist || artist === "कलाकार" || artist === "artist" || artist === "artist booking" || artist === "general event";
+  const isGenericEvent = !eventType || eventType === "general event" || eventType === "general" || eventType === "इव्हेंट" || eventType === "artist booking" || eventType === "event requirement";
 
-  const isGenericName = !name || name === "customer" || name === "ग्राहक";
-  const isGenericArtist = !artist || artist === "कलाकार" || artist === "artist";
-  return isGenericName && isGenericArtist && (!cleanPhone || cleanPhone.length < 5);
+  // Case 1: If there is no valid phone and the customer name is generic -> it's a dummy record
+  if (!hasValidPhone && isGenericName) {
+    return true;
+  }
+
+  // Case 2: If there is no valid phone and the artist is generic -> it's a dummy record
+  if (!hasValidPhone && isGenericArtist) {
+    return true;
+  }
+
+  // Case 3: No valid phone and generic event
+  if (!hasValidPhone && isGenericEvent) {
+    return true;
+  }
+
+  // Case 4: Explicit dummy flags or IDs
+  const rawId = String(lead.id || "").toLowerCase();
+  if (rawId.includes("dummy") || rawId.includes("placeholder") || rawId.includes("sample")) {
+    return true;
+  }
+
+  return false;
 }
 
 function getLocalLeads(): TelecallerLead[] {
@@ -527,12 +544,6 @@ export function cleanId(id: string): string {
 export function getLeadDedupKey(lead: Partial<TelecallerLead> & { id?: string }): string {
   if (!lead) return "";
 
-  const rawBookingId = lead.bookingId || (lead as any).artistBookingId;
-  const bid = rawBookingId ? cleanId(String(rawBookingId)) : (lead.id?.startsWith("booking_") ? cleanId(lead.id) : "");
-  if (bid) {
-    return `booking_${bid}`;
-  }
-
   const rawPhone = lead.customerPhone || (lead as any).clientPhone || (lead as any).postedByPhone || (lead as any).phone || (lead as any).mobile || "";
   const phone = rawPhone.replace(/\D/g, "").slice(-10);
 
@@ -555,6 +566,12 @@ export function getLeadDedupKey(lead: Partial<TelecallerLead> & { id?: string })
     if (artist) return `ph_${phone}_art_${artist}`;
     if (date) return `ph_${phone}_dt_${date}`;
     return `ph_${phone}`;
+  }
+
+  const rawBookingId = lead.bookingId || (lead as any).artistBookingId;
+  const bid = rawBookingId ? cleanId(String(rawBookingId)) : (lead.id?.startsWith("booking_") ? cleanId(lead.id) : "");
+  if (bid) {
+    return `booking_${bid}`;
   }
 
   if (name && name.length >= 3) {
@@ -745,6 +762,32 @@ export function subscribeTelecallerLeads(callback: (leads: TelecallerLead[]) => 
           }
         });
 
+        const effectiveCommissionStatus =
+          l.commissionPayoutStatus === "paid" || existing.commissionPayoutStatus === "paid"
+            ? "paid"
+            : l.commissionPayoutStatus || existing.commissionPayoutStatus || "pending";
+
+        const effectiveArtistPayoutStatus =
+          l.artistPayoutStatus === "paid" || existing.artistPayoutStatus === "paid"
+            ? "paid"
+            : l.artistPayoutStatus || existing.artistPayoutStatus || "pending";
+
+        const effectiveArtistPayoutUtr = l.artistPayoutUtr || existing.artistPayoutUtr;
+        const effectiveArtistPayoutSettledAt = l.artistPayoutSettledAt || existing.artistPayoutSettledAt;
+        const effectiveCommissionSettledAt = l.commissionSettledAt || existing.commissionSettledAt;
+        const effectiveTelecallerCommission =
+          typeof l.telecallerCommission === "number" && l.customCommissionOverride
+            ? l.telecallerCommission
+            : typeof existing.telecallerCommission === "number" && existing.customCommissionOverride
+            ? existing.telecallerCommission
+            : l.telecallerCommission ?? existing.telecallerCommission;
+        const effectiveOwnerProfit =
+          typeof l.ownerProfit === "number" && l.customCommissionOverride
+            ? l.ownerProfit
+            : typeof existing.ownerProfit === "number" && existing.customCommissionOverride
+            ? existing.ownerProfit
+            : l.ownerProfit ?? existing.ownerProfit;
+
         map.set(targetKey, {
           ...existing,
           ...l,
@@ -771,6 +814,14 @@ export function subscribeTelecallerLeads(callback: (leads: TelecallerLead[]) => 
           telecallerNotes: l.telecallerNotes || existing.telecallerNotes,
           specialNotes: l.specialNotes || existing.specialNotes,
           isVerifiedByTelecaller: Boolean(l.isVerifiedByTelecaller || existing.isVerifiedByTelecaller),
+          commissionPayoutStatus: effectiveCommissionStatus,
+          artistPayoutStatus: effectiveArtistPayoutStatus,
+          artistPayoutUtr: effectiveArtistPayoutUtr,
+          artistPayoutSettledAt: effectiveArtistPayoutSettledAt,
+          commissionSettledAt: effectiveCommissionSettledAt,
+          telecallerCommission: effectiveTelecallerCommission,
+          ownerProfit: effectiveOwnerProfit,
+          customCommissionOverride: Boolean(l.customCommissionOverride || existing.customCommissionOverride),
           matchedArtists: Array.from(uniqueArtistsMap.values()),
         });
       }

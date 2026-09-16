@@ -127,6 +127,8 @@ const router = createBrowserRouter([
       { path: "event/:id", element: <EventDetails /> },
       { path: "location-select", element: <LocationSelection /> },
       { path: "event-requirements", element: <EventRequirements /> },
+      { path: "artist", element: <Navigate to="/artists" replace /> },
+      { path: "arist", element: <Navigate to="/artists" replace /> },
       { path: "artist/:id", element: <ArtistProfile /> },
       { path: "artist-response/:leadId", element: <ArtistBookingResponsePage /> },
       { path: "booking-response/:leadId", element: <ArtistBookingResponsePage /> },

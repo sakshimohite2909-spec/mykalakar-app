@@ -20,6 +20,9 @@ import {
   settleLeadCommission,
   settleArtistPayout,
   updateLeadCustomCommission,
+  getLeadDedupKey,
+  cleanId,
+  isDummyLeadRecord,
   type TelecallerLead,
 } from "@/services/telecallerService";
 import {
@@ -211,11 +214,38 @@ export default function AdminBookings() {
   const activeBookings = bookings.filter(b => b.status !== "DISPUTE_OPENED");
   const disputeBookings = bookings.filter(b => b.status === "DISPUTE_OPENED");
 
-  // Telecaller Leads with closed deals or financial activity
+  // Telecaller Leads with closed deals or financial activity - deduplicated
   const closedLeads = useMemo(() => {
-    return telecallerLeads.filter(
-      (l) => l.status === "booked" || l.status === "artist_confirmed" || l.confirmedPrice || l.telecallerCommission
+    const rawFiltered = telecallerLeads.filter(
+      (l) => !isDummyLeadRecord(l) && (l.status === "booked" || l.status === "artist_confirmed" || l.confirmedPrice || l.telecallerCommission)
     );
+
+    const map = new Map<string, TelecallerLead>();
+    rawFiltered.forEach((l) => {
+      const key = getLeadDedupKey(l) || cleanId(l.id);
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, l);
+      } else {
+        map.set(key, {
+          ...existing,
+          ...l,
+          commissionPayoutStatus:
+            l.commissionPayoutStatus === "paid" || existing.commissionPayoutStatus === "paid"
+              ? "paid"
+              : l.commissionPayoutStatus || existing.commissionPayoutStatus || "pending",
+          artistPayoutStatus:
+            l.artistPayoutStatus === "paid" || existing.artistPayoutStatus === "paid"
+              ? "paid"
+              : l.artistPayoutStatus || existing.artistPayoutStatus || "pending",
+          artistPayoutUtr: l.artistPayoutUtr || existing.artistPayoutUtr,
+          artistPayoutSettledAt: l.artistPayoutSettledAt || existing.artistPayoutSettledAt,
+          commissionSettledAt: l.commissionSettledAt || existing.commissionSettledAt,
+        });
+      }
+    });
+
+    return Array.from(map.values());
   }, [telecallerLeads]);
 
   const commissionStats = useMemo(() => {
